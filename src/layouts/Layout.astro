@@ -1,0 +1,176 @@
+---
+/**
+ * Layout.astro — Plantilla base de la Plataforma SED-360
+ *
+ * Propósito: Proveer la estructura visual común para todas las páginas
+ * del Sistema de Evaluación Docente 360°. Implementa el concepto
+ * "Modern Institutional" con fondos dinámicos, formas orgánicas y
+ * tarjetas con elevación.
+ *
+ * Dependencias: Tailwind CSS 3 con paleta institucional.
+ *
+ * Características:
+ * - Fondo con gradientes y formas geométricas (no blanco sólido)
+ * - Modo Enfoque para formularios (oculta navbar/footer)
+ * - Diseño Mobile-First optimizado para cuestionarios táctiles
+ * - Preparado para autenticación Supabase
+ */
+
+export interface Props {
+  titulo?: string;
+  descripcion?: string;
+  /** Oculta la barra de navegación para modo enfoque (ej: formulario Likert) */
+  modoEnfoque?: boolean;
+}
+
+const {
+  titulo = 'SED-360 — Sistema de Evaluación Docente',
+  descripcion = 'Plataforma integral de evaluación docente 360° del Tecnológico Universitario Playacar',
+  modoEnfoque = false,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="generator" content={Astro.generator} />
+
+    <!-- SEO y Accesibilidad -->
+    <title>{titulo}</title>
+    <meta name="description" content={descripcion} />
+    <meta name="theme-color" content="#1B396A" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content={titulo} />
+    <meta property="og:description" content={descripcion} />
+    <meta property="og:type" content="website" />
+  </head>
+
+  <body class="min-h-screen bg-fondo-dashboard font-sans antialiased text-slate-800">
+    <!--
+      Formas geométricas orgánicas de fondo.
+      Aportan profundidad visual sin distraer del contenido.
+      Opacidad 2-5% como indica la guía UI/UX.
+    -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
+      <!-- Círculo superior derecho -->
+      <div class="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-institucional opacity-[0.03] blur-3xl"></div>
+      <!-- Círculo inferior izquierdo -->
+      <div class="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full bg-accion opacity-[0.04] blur-3xl"></div>
+      <!-- Polígono decorativo central -->
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-br from-institucional/5 to-accion/5 rounded-[40%_60%_70%_30%/40%_50%_60%_50%] blur-2xl opacity-50"></div>
+      <!-- Patrón de puntos sutil (rompe la sobriedad) -->
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(27,57,106,0.03)_1px,transparent_1px)] bg-[length:40px_40px]" style="background-size: 40px 40px;"></div>
+    </div>
+
+    <!-- Contenedor principal -->
+    <div class="relative flex flex-col min-h-screen">
+      {
+        !modoEnfoque && (
+          <header class="sticky top-0 z-40 backdrop-blur-md bg-white/70 border-b border-slate-200/50">
+            <nav class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between" aria-label="Navegación principal">
+              <!-- Logo / Identidad -->
+              <a href="/" class="flex items-center gap-3 group" aria-label="Ir al inicio">
+                <div class="w-9 h-9 rounded-lg bg-hero-institucional flex items-center justify-center shadow-tarjeta group-hover:shadow-tarjeta-hover transition-shadow">
+                  <span class="text-white font-bold text-xs">360</span>
+                </div>
+                <span class="hidden sm:inline font-semibold text-institucional text-lg">
+                  SED-360
+                </span>
+              </a>
+
+              <!-- Espacio para avatar / botón de salir (futuro) -->
+              <div class="flex items-center gap-4">
+                <slot name="acciones-nav" />
+              </div>
+            </nav>
+          </header>
+        )
+      }
+
+      <!-- Contenido principal -->
+      <main class="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <slot />
+      </main>
+
+      {
+        !modoEnfoque && (
+          <footer class="border-t border-slate-200/50 bg-white/50 backdrop-blur-sm">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 text-center text-xs text-slate-400">
+              <p>SED-360 &copy; {new Date().getFullYear()} — Tecnológico Universitario Playacar</p>
+              <p class="mt-1">Sistema de Evaluación Docente 360° · v0.1.0</p>
+            </div>
+          </footer>
+        )
+      }
+    </div>
+  </body>
+</html>
+
+<style is:global>
+  /* Estilos globales base — Mobile-First */
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+
+  @media (max-width: 640px) {
+    html {
+      font-size: 15px;
+    }
+  }
+
+  /* Tamaño mínimo de toque (44px) — Accesibilidad táctil */
+  button,
+  a[role='button'],
+  input[type='submit'],
+  input[type='button'] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Transiciones suaves para elementos interactivos */
+  a,
+  button,
+  input,
+  select,
+  textarea {
+    transition-property: color, background-color, border-color, box-shadow, transform;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Selección de texto institucional */
+  ::selection {
+    background-color: rgba(27, 57, 106, 0.2);
+    color: #1B396A;
+  }
+
+  /* Scrollbar estilizada (desktop) */
+  @media (min-width: 768px) {
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background-color: rgba(27, 57, 106, 0.2);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(27, 57, 106, 0.35);
+    }
+  }
+</style>
