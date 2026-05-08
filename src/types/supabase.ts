@@ -90,6 +90,38 @@ export const PESOS_TOTALES = Object.values(PONDERACION_360).reduce(
   0
 ); // Debe ser 1.0
 
+// ─── Tabla: periodos ──────────────────────────────────────────────
+
+/** Periodo académico */
+export interface Periodo {
+  id_periodo: string;
+  nombre: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  activo: boolean;
+  created_at?: string;
+}
+
+// ─── Vista Materializada: resultados_agregados ───────────────────
+
+/** Resultado agregado por carga académica desde la MV */
+export interface ResultadoAgregado {
+  id_carga: number;
+  id_docente: string;
+  id_materia: string;
+  id_periodo: string;
+  promedio_alumno: number | null;
+  total_alumno: number;
+  promedio_coordinador: number | null;
+  total_coordinador: number;
+  promedio_tecnico: number | null;
+  total_tecnico: number;
+  promedio_calidad: number | null;
+  total_calidad: number;
+  promedio_auto: number | null;
+  total_auto: number;
+}
+
 /** Etiquetas legibles para cada tipo de actor */
 export const ETIQUETAS_ACTOR: Record<TipoActor, string> = {
   ALUMNO: 'Evaluación Estudiantil',
