@@ -85,7 +85,29 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return redirigirAlLogin(cookies, redirect);
     }
 
-    // Email válido: continuar con la petición
+    // ─── Autorización por rol para rutas administrativas ─────────
+    if (url.pathname.startsWith('/admin')) {
+      const { data: usuario, error: errorRol } = await cliente
+        .from('usuarios')
+        .select('rol')
+        .eq('id', data.user.id)
+        .single();
+
+      if (errorRol || !usuario) {
+        console.error('[SED-360 Middleware] Error al obtener rol:', errorRol?.message);
+        return redirect('/evaluador');
+      }
+
+      const rolesPermitidos = ['admin', 'coordinador', 'calidad'];
+      if (!rolesPermitidos.includes(usuario.rol)) {
+        console.warn(
+          `[SED-360 Middleware] Acceso denegado a /admin: ${data.user.email} con rol ${usuario.rol}`
+        );
+        return redirect('/evaluador');
+      }
+    }
+
+    // Email válido y autorización aprobada: continuar con la petición
     return next();
   } catch (err) {
     console.error('[SED-360 Middleware] Error inesperado:', err);
