@@ -1,0 +1,340 @@
+---
+/**
+ * Página: Formulario de Evaluación — Modo Enfoque (SED-360)
+ *
+ * Ruta: /evaluador/evaluar/[id]
+ *
+ * Propósito: Presentar el formulario de evaluación Likert en modo
+ * enfoque (sin navbar ni footer) para una carga académica específica.
+ *
+ * Protección:
+ *   1. Verifica sesión via cookies (sb-access-token)
+ *   2. Verifica que la carga NO haya sido evaluada ya por este usuario
+ *   3. Previene salida accidental con beforeunload
+ *
+ * Flujo:
+ *   1. Lee cookies y establece sesión Supabase
+ *   2. Obtiene id_carga del parámetro de ruta
+ *   3. Obtiene el rol del usuario para determinar tipo_actor
+ *   4. Verifica que no exista evaluación previa
+ *   5. Obtiene datos del docente y materia
+ *   6. Renderiza formulario con 5 escalas Likert + comentario + botón
+ */
+
+import Layout from '../../../layouts/Layout.astro';
+import EscalaLikert from '../../../components/EscalaLikert.astro';
+import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { ETIQUETAS_LIKERT } from '../../../types/supabase';
+
+// ─── Verificar sesión ─────────────────────────────────────────────
+
+const tokenAcceso = Astro.cookies.get('sb-access-token')?.value;
+const tokenRefresco = Astro.cookies.get('sb-refresh-token')?.value;
+
+if (!tokenAcceso || !tokenRefresco) {
+  return Astro.redirect('/auth');
+}
+
+const cliente = obtenerClienteSuperbase();
+const { data: datosSesion, error: errorSesion } =
+  await cliente.auth.setSession({
+    access_token: tokenAcceso,
+    refresh_token: tokenRefresco,
+  });
+
+if (errorSesion || !datosSesion.user) {
+  return Astro.redirect('/auth');
+}
+
+const idEvaluador = datosSesion.user.id;
+
+// ─── Parámetro de ruta ────────────────────────────────────────────
+
+const idCarga = parseInt(Astro.params.id ?? '', 10);
+if (isNaN(idCarga) || idCarga <= 0) {
+  return Astro.redirect('/evaluador');
+}
+
+// ─── Obtener rol del usuario → TipoActor ─────────────────────────
+
+const { data: usuario, error: errorUsuario } = await cliente
+  .from('usuarios')
+  .select('rol')
+  .eq('id', idEvaluador)
+  .single();
+
+if (errorUsuario || !usuario) {
+  return Astro.redirect('/evaluador');
+}
+
+const ROL_A_TIPO_ACTOR: Record<string, string> = {
+  alumno: 'ALUMNO',
+  docente: 'AUTO',
+  coordinador: 'COORDINADOR',
+  tecnico: 'TECNICO',
+  calidad: 'CALIDAD',
+};
+const tipoActor = ROL_A_TIPO_ACTOR[usuario.rol] ?? 'ALUMNO';
+
+// ─── Verificar que la carga NO haya sido evaluada ─────────────────
+
+const { data: evaluacionPrevia } = await cliente
+  .from('evaluaciones')
+  .select('id_evaluacion')
+  .eq('id_evaluador', idEvaluador)
+  .eq('id_carga', idCarga)
+  .maybeSingle();
+
+if (evaluacionPrevia) {
+  return Astro.redirect('/evaluador?evaluacion=duplicada');
+}
+
+// ─── Obtener datos de la carga y el docente ───────────────────────
+
+const { data: carga, error: errorCarga } = await cliente
+  .from('cargas_academicas')
+  .select('id_materia, id_docente')
+  .eq('id_carga', idCarga)
+  .single();
+
+if (errorCarga || !carga) {
+  return Astro.redirect('/evaluador');
+}
+
+// Obtener nombre del docente (usamos email como identificador visible)
+const { data: docente } = await cliente
+  .from('usuarios')
+  .select('email')
+  .eq('id', carga.id_docente)
+  .single();
+
+// Extraer nombre legible del email (parte antes del @)
+const nombreDocente = docente?.email
+  ? docente.email.split('@')[0].replace(/[._]/g, ' ')
+  : 'Docente';
+
+// ─── Preguntas predefinidas ──────────────────────────────────────
+
+const PREGUNTAS: string[] = [
+  'El docente explica con claridad los temas',
+  'El docente fomenta la participación en clase',
+  'El docente demuestra dominio de la materia',
+  'El docente es puntual y respeta el horario',
+  'El docente utiliza recursos didácticos adecuados',
+];
+---
+
+<Layout titulo="Evaluar Docente — SED-360" modoEnfoque={true}>
+  <div class="animate-flotar-entrada max-w-2xl mx-auto">
+    <!-- ═══ Header ═══ -->
+    <header class="text-center mb-8">
+      <h1 class="text-2xl sm:text-3xl font-bold text-institucional">
+        Evaluación Docente
+      </h1>
+      <p class="text-slate-700 mt-2 text-lg font-medium">
+        {nombreDocente}
+      </p>
+      <p class="text-slate-500 text-sm">
+        {carga.id_materia}
+      </p>
+      <p class="text-slate-400 mt-4 text-sm max-w-md mx-auto leading-relaxed">
+        Responde honestamente. Tus respuestas son anónimas.
+      </p>
+    </header>
+
+    <!-- ═══ Formulario ═══ -->
+    <form id="form-evaluacion" class="space-y-6">
+      {
+        PREGUNTAS.map((pregunta, i) => (
+          <section
+            class="bg-white rounded-2xl p-5 sm:p-6 shadow-tarjeta"
+            aria-label={`Pregunta ${i + 1}`}
+          >
+            <EscalaLikert
+              pregunta={pregunta}
+              nombre={`p${i + 1}`}
+              etiquetas={ETIQUETAS_LIKERT}
+            />
+          </section>
+        ))
+      }
+
+      <!-- Comentario opcional -->
+      <section class="bg-white rounded-2xl p-5 sm:p-6 shadow-tarjeta">
+        <label
+          for="comentario"
+          class="block text-sm font-medium text-slate-700 mb-2"
+        >
+          Comentario adicional (opcional)
+        </label>
+        <textarea
+          id="comentario"
+          name="comentario"
+          rows={4}
+          maxlength={1000}
+          placeholder="Escribe aquí cualquier comentario adicional…"
+          class="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accion focus:border-accion transition-all resize-none"
+        ></textarea>
+        <p class="text-xs text-slate-400 mt-1.5 text-right">
+          Máximo 1000 caracteres
+        </p>
+      </section>
+
+      <!-- Botón Enviar -->
+      <button
+        id="btn-enviar"
+        type="submit"
+        class="w-full bg-accion text-white font-semibold text-lg py-4 px-6 rounded-2xl shadow-tarjeta hover:shadow-tarjeta-hover hover:bg-accion/90 active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+      >
+        Enviar Evaluación
+      </button>
+    </form>
+
+    <!-- Contenedor de toast para notificaciones -->
+    <div
+      id="toast"
+      class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"
+      role="alert"
+    ></div>
+  </div>
+</Layout>
+
+<script define:vars={{ idCarga, idEvaluador, tipoActor }}>
+  (function () {
+    // ─── Referencias DOM ──────────────────────────────────────────
+    const formulario = /** @type {HTMLFormElement} */ (
+      document.getElementById('form-evaluacion')
+    );
+    const btnEnviar = /** @type {HTMLButtonElement} */ (
+      document.getElementById('btn-enviar')
+    );
+    const toast = /** @type {HTMLDivElement} */ (
+      document.getElementById('toast')
+    );
+    const comentarioInput = /** @type {HTMLTextAreaElement} */ (
+      document.getElementById('comentario')
+    );
+
+    /** @type {Record<string, number>} */
+    const respuestas = {};
+
+    let formularioModificado = false;
+
+    // ─── Escuchar eventos likert-change ───────────────────────────
+    document.addEventListener(
+      'likert-change',
+      /** @param {CustomEvent} e */
+      function (e) {
+        const detail = e.detail;
+        if (detail && typeof detail.nombre === 'string') {
+          respuestas[detail.nombre] = detail.valor;
+          formularioModificado = true;
+        }
+      }
+    );
+
+    // ─── Marcar modificado al escribir en textarea ────────────────
+    comentarioInput.addEventListener('input', function () {
+      formularioModificado = true;
+    });
+
+    // ─── Prevenir salida accidental ──────────────────────────────
+    window.addEventListener('beforeunload', function (e) {
+      if (formularioModificado) {
+        e.preventDefault();
+        // En navegadores modernos se requiere returnValue
+        e.returnValue = '';
+      }
+    });
+
+    // ─── Mostrar toast ───────────────────────────────────────────
+    function mostrarToast(mensaje, esError) {
+      toast.textContent = mensaje;
+      toast.className =
+        'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal animate-flotar-entrada ' +
+        (esError
+          ? 'bg-red-600 text-white'
+          : 'bg-slate-800 text-white');
+      toast.classList.remove('hidden');
+
+      setTimeout(function () {
+        toast.classList.add('hidden');
+      }, 5000);
+    }
+
+    // ─── Enviar formulario ────────────────────────────────────────
+    formulario.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      // Validar que haya al menos una respuesta
+      var claves = Object.keys(respuestas);
+      if (claves.length === 0) {
+        mostrarToast(
+          'Por favor responde al menos una pregunta.',
+          true
+        );
+        return;
+      }
+
+      // Deshabilitar botón y mostrar estado de carga
+      btnEnviar.disabled = true;
+      btnEnviar.textContent = 'Enviando…';
+
+      try {
+        var payload = {
+          id_evaluador: idEvaluador,
+          id_carga: idCarga,
+          tipo_actor: tipoActor,
+          respuestas: respuestas,
+          comentario: comentarioInput.value.trim() || null,
+        };
+
+        var res = await fetch('/api/evaluar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.status === 201) {
+          // Marcar como no modificado para que beforeunload no moleste
+          formularioModificado = false;
+          window.location.href = '/evaluador?evaluacion=exitosa';
+        } else if (res.status === 409) {
+          mostrarToast(
+            'Esta carga ya fue evaluada.',
+            true
+          );
+          btnEnviar.disabled = false;
+          btnEnviar.textContent = 'Enviar Evaluación';
+        } else if (res.status === 400) {
+          try {
+            var data = await res.json();
+            var mensaje =
+              data.detalles?.[0]?.message ||
+              data.error ||
+              'Datos inválidos.';
+            mostrarToast(mensaje, true);
+          } catch (_) {
+            mostrarToast('Datos inválidos.', true);
+          }
+          btnEnviar.disabled = false;
+          btnEnviar.textContent = 'Enviar Evaluación';
+        } else {
+          mostrarToast(
+            'Error al enviar la evaluación. Intenta nuevamente.',
+            true
+          );
+          btnEnviar.disabled = false;
+          btnEnviar.textContent = 'Enviar Evaluación';
+        }
+      } catch (_err) {
+        mostrarToast(
+          'Error de conexión. Verifica tu internet.',
+          true
+        );
+        btnEnviar.disabled = false;
+        btnEnviar.textContent = 'Enviar Evaluación';
+      }
+    });
+  })();
+</script>
