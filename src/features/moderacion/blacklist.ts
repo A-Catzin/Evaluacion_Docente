@@ -56,22 +56,30 @@ function escaparRegex(texto: string): string {
 // ─── Función Pública ───────────────────────────────────────────
 
 /**
+ * Resultado de la moderación de un comentario.
+ * - aprobado: true si el texto pasó el filtro
+ * - motivo: palabras detectadas (solo si aprobado === false)
+ */
+export interface ResultadoModeracion {
+  aprobado: boolean;
+  motivo?: string;
+}
+
+/**
  * Modera un comentario contra la blacklist de palabras prohibidas.
  *
  * @param texto - El texto del comentario a evaluar.
- * @returns Objeto con `esApropiado` (boolean) y `palabrasDetectadas` (string[]).
+ * @returns ResultadoModeracion con `aprobado` (boolean) y `motivo` opcional.
  *
  * Casos:
- *   - Vacío o solo espacios → apropiado (campo opcional)
- *   - Sin palabras prohibidas → apropiado
- *   - Con palabras prohibidas → inapropiado + lista de palabras
+ *   - Vacío o solo espacios → aprobado (campo opcional)
+ *   - Sin palabras prohibidas → aprobado: true
+ *   - Con palabras prohibidas → aprobado: false + motivo con palabras detectadas
  */
-export function moderarComentario(
-  texto: string
-): { esApropiado: boolean; palabrasDetectadas: string[] } {
+export function moderarComentario(texto: string): ResultadoModeracion {
   // Texto vacío o solo espacios se considera apropiado
   if (!texto || texto.trim().length === 0) {
-    return { esApropiado: true, palabrasDetectadas: [] };
+    return { aprobado: true };
   }
 
   const normalizado = texto.toLowerCase();
@@ -85,8 +93,28 @@ export function moderarComentario(
     }
   }
 
+  if (palabrasDetectadas.length === 0) {
+    return { aprobado: true };
+  }
+
   return {
-    esApropiado: palabrasDetectadas.length === 0,
-    palabrasDetectadas,
+    aprobado: false,
+    motivo: `El comentario contiene lenguaje inapropiado: ${palabrasDetectadas.join(', ')}`,
+  };
+}
+
+/**
+ * @deprecated Usar `moderarComentario` que retorna `ResultadoModeracion`.
+ * Mantenido por compatibilidad con código existente.
+ */
+export function moderarComentarioLegado(
+  texto: string
+): { esApropiado: boolean; palabrasDetectadas: string[] } {
+  const resultado = moderarComentario(texto);
+  return {
+    esApropiado: resultado.aprobado,
+    palabrasDetectadas: resultado.motivo
+      ? resultado.motivo.replace('El comentario contiene lenguaje inapropiado: ', '').split(', ')
+      : [],
   };
 }

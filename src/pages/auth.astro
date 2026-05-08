@@ -5,8 +5,30 @@
  * Redirige al flujo OAuth de Google (Supabase).
  * Fase 1: Placeholder con botón de login.
  * Fase 2+: Integración real con Supabase Auth UI.
+ *
+ * Maneja parámetros de error en la URL:
+ *   ?error=oauth      → Falló la autenticación con Google
+ *   ?error=dominio    → El correo no pertenece al dominio institucional
+ *   ?error=sesion     → La sesión expiró o es inválida
  */
 import Layout from '../layouts/Layout.astro';
+
+const codigoError = Astro.url.searchParams.get('error');
+
+const MENSAJES_ERROR: Record<string, { titulo: string; descripcion: string }> = {
+  oauth: {
+    titulo: 'Error de autenticación',
+    descripcion: 'No se pudo completar el inicio de sesión con Google. Intenta nuevamente.',
+  },
+  dominio: {
+    titulo: 'Dominio no autorizado',
+    descripcion: 'Tu correo no pertenece al dominio @tecplayacar.edu.mx. Solo se permiten cuentas institucionales.',
+  },
+  sesion: {
+    titulo: 'Sesión expirada',
+    descripcion: 'Tu sesión ha expirado o no es válida. Por favor inicia sesión nuevamente.',
+  },
+};
 ---
 
 <Layout
@@ -29,6 +51,25 @@ import Layout from '../layouts/Layout.astro';
           Usa tu cuenta institucional de Google
         </p>
       </div>
+
+      <!-- Banner de error (si existe) -->
+      {
+        codigoError && MENSAJES_ERROR[codigoError] && (
+          <div class="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-left">
+            <p class="text-sm font-semibold text-red-800 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {MENSAJES_ERROR[codigoError].titulo}
+            </p>
+            <p class="text-xs text-red-600 mt-1 ml-6">
+              {MENSAJES_ERROR[codigoError].descripcion}
+            </p>
+          </div>
+        )
+      }
 
       <!-- Aviso de dominio -->
       <div class="mb-6 p-3 rounded-xl bg-blue-50 border border-blue-100">

@@ -98,15 +98,37 @@ const valores = [1, 2, 3, 4, 5] as const;
         seleccionar(btn);
       });
 
-      // ─── Teclado: Enter / Space ───────────────────────────────
+      // ─── Teclado: Enter / Space / Flechas ─────────────────────
       contenedor.addEventListener('keydown', (e: KeyboardEvent) => {
         const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(
           '.likert-btn'
         );
         if (!btn) return;
+
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           seleccionar(btn);
+          return;
+        }
+
+        // Navegación con flechas: ArrowRight → siguiente, ArrowLeft → anterior
+        const botonesArray = Array.from(botones);
+        const indiceActual = botonesArray.indexOf(btn);
+
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const siguiente = botonesArray[indiceActual + 1];
+          if (siguiente) {
+            siguiente.focus();
+            seleccionar(siguiente);
+          }
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const anterior = botonesArray[indiceActual - 1];
+          if (anterior) {
+            anterior.focus();
+            seleccionar(anterior);
+          }
         }
       });
 

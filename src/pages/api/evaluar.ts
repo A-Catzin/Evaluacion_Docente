@@ -100,7 +100,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     let marcadoInapropiado = false;
     if (comentario && comentario.trim().length > 0) {
       const moderacion = moderarComentario(comentario);
-      marcadoInapropiado = !moderacion.esApropiado;
+      marcadoInapropiado = !moderacion.aprobado;
     }
 
     // ─── 5. Normalizar respuestas ────────────────────────────────

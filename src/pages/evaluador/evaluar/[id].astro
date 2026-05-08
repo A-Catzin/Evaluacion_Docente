@@ -266,11 +266,11 @@ const PREGUNTAS: string[] = [
     formulario.addEventListener('submit', async function (e) {
       e.preventDefault();
 
-      // Validar que haya al menos una respuesta
+      // Validar que TODAS las preguntas tengan respuesta
       var claves = Object.keys(respuestas);
-      if (claves.length === 0) {
+      if (claves.length < 5) {
         mostrarToast(
-          'Por favor responde al menos una pregunta.',
+          'Por favor responde todas las preguntas antes de enviar.',
           true
         );
         return;
