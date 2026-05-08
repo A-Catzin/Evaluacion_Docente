@@ -26,6 +26,9 @@ import { obtenerClienteSuperbase } from '../lib/supabaseClient';
  * @param evaluacion - Datos de la evaluación a insertar (sin id ni fecha)
  * @returns La evaluación insertada con id y fecha generados
  * @throws Error si el CONSTRAINT unique_vote rechaza la inserción
+ *
+ * @nota `marcado_inapropiado` se agregó en PR 3 (Fase 2) para soportar
+ *       moderación de comentarios vía blacklist. Default: false.
  */
 export async function enviarEvaluacion(evaluacion: {
   id_evaluador: string;
@@ -33,6 +36,7 @@ export async function enviarEvaluacion(evaluacion: {
   tipo_actor: TipoActor;
   puntaje_promedio: number;
   comentario?: string | null;
+  marcado_inapropiado?: boolean;
 }): Promise<Evaluacion> {
   const cliente = obtenerClienteSuperbase();
 
@@ -44,6 +48,7 @@ export async function enviarEvaluacion(evaluacion: {
       tipo_actor: evaluacion.tipo_actor,
       puntaje_promedio: evaluacion.puntaje_promedio,
       comentario: evaluacion.comentario ?? null,
+      marcado_inapropiado: evaluacion.marcado_inapropiado ?? false,
     })
     .select()
     .single();
