@@ -99,6 +99,7 @@ export interface Periodo {
   fecha_inicio: string;
   fecha_fin: string;
   activo: boolean;
+  created_at?: string;
 }
 
 // ─── Vista Materializada: resultados_agregados ───────────────────

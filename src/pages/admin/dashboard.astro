@@ -147,32 +147,46 @@ function nombreDocente(email: string): string {
       </div>
 
       <!-- Selector de periodo -->
-      {
-        periodos.length > 0 && (
-          <form method="GET" class="flex items-center gap-2">
-            <label for="periodo" class="text-sm text-slate-500 font-medium">
-              Periodo:
-            </label>
-            <select
-              id="periodo"
-              name="periodo"
-              class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-accion focus:border-accion shadow-tarjeta"
-              onchange="this.form.submit()"
-            >
-              {
-                periodos.map((p) => (
-                  <option
-                    value={p.id_periodo}
-                    selected={p.id_periodo === idPeriodo}
-                  >
-                    {p.nombre}
-                  </option>
-                ))
-              }
-            </select>
-          </form>
-        )
-      }
+      <div class="flex items-center gap-3">
+        {
+          periodos.length > 0 && (
+            <form method="GET" class="flex items-center gap-2">
+              <label for="periodo" class="text-sm text-slate-500 font-medium">
+                Periodo:
+              </label>
+              <select
+                id="periodo"
+                name="periodo"
+                class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-accion focus:border-accion shadow-tarjeta"
+                onchange="this.form.submit()"
+              >
+                {
+                  periodos.map((p) => (
+                    <option
+                      value={p.id_periodo}
+                      selected={p.id_periodo === idPeriodo}
+                    >
+                      {p.nombre}
+                    </option>
+                  ))
+                }
+              </select>
+            </form>
+          )
+        }
+
+        <!-- Botón Actualizar Resultados -->
+        <a
+          href={`/api/admin/refrescar-resultados?periodo=${idPeriodo ?? ''}`}
+          class="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-tarjeta"
+          title="Refresca la vista materializada de resultados agregados"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Actualizar
+        </a>
+      </div>
     </header>
 
     <!-- ═══ Error de periodos ═══ -->
@@ -364,7 +378,7 @@ function nombreDocente(email: string): string {
                                     ))}
                                   </div>
                                   <span class="text-xs text-slate-500 ml-1">
-                                    {actoresEvaluados}/5
+                                    {Math.round((actoresEvaluados / 5) * 100)}%
                                   </span>
                                 </div>
                               </td>

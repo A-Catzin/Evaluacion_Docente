@@ -145,6 +145,8 @@ export async function obtenerProgresoEvaluacion(
  *
  * NUNCA expone metadatos del evaluador. Solo retorna el texto del
  * comentario, sin id_evaluador, tipo_actor ni fecha_creacion.
+ * Los comentarios se devuelven en orden aleatorio para reforzar
+ * el anonimato (orden no determinístico).
  *
  * @param idCarga - ID de la carga académica
  * @returns Lista de comentarios anónimos en orden aleatorio
@@ -159,8 +161,7 @@ export async function obtenerComentariosAnonimos(
     .select('comentario')
     .eq('id_carga', idCarga)
     .not('comentario', 'is', null)
-    .or('marcado_inapropiado.is.null,marcado_inapropiado.eq.false')
-    .order('id_evaluacion', { ascending: false });
+    .or('marcado_inapropiado.is.null,marcado_inapropiado.eq.false');
 
   if (error) {
     console.error(
@@ -172,8 +173,37 @@ export async function obtenerComentariosAnonimos(
     );
   }
 
-  // Retornar SOLO el texto del comentario, sin metadatos
-  return data
+  // Extraer solo el texto y filtrar vacíos
+  const comentarios = data
     .map((e) => e.comentario)
     .filter((c): c is string => c !== null && c.trim().length > 0);
+
+  // Mezclar aleatoriamente (shuffle Fisher-Yates)
+  // Supabase JS no soporta ORDER BY RANDOM() en el cliente
+  for (let i = comentarios.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [comentarios[i], comentarios[j]] = [comentarios[j], comentarios[i]];
+  }
+
+  return comentarios;
+}
+
+/**
+ * Refresca la vista materializada de resultados agregados.
+ * Solo puede ser ejecutada por usuarios con rol admin (RLS).
+ */
+export async function refrescarResultadosAgregados(): Promise<void> {
+  const cliente = obtenerClienteSuperbase();
+
+  const { error } = await cliente.rpc('refrescar_resultados');
+
+  if (error) {
+    console.error(
+      '[Servicio Agregación] Error al refrescar MV:',
+      error
+    );
+    throw new Error(
+      'Error al actualizar los resultados. Intente nuevamente.'
+    );
+  }
 }
