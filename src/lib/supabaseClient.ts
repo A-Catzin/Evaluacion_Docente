@@ -1,4 +1,10 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import WebSocketPolyfill from 'ws';
+
+// Polyfill para Node < 22
+if (typeof globalThis.WebSocket === 'undefined') {
+  (globalThis as Record<string, unknown>).WebSocket = WebSocketPolyfill;
+}
 
 let _cliente: SupabaseClient | null = null;
 

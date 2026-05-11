@@ -18,6 +18,7 @@
     "@supabase/supabase-js": "^2.105.3",
     "astro": "^4.16.18",
     "tailwindcss": "^3.4.17",
+    "ws": "^8.20.0",
     "zod": "^3.25.76"
   }
 }
