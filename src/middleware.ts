@@ -12,7 +12,7 @@ const ROLES_POR_RUTA: Record<string, string[]> = {
   '/admin': ['superadmin'],
   '/coordinador': ['coordinador', 'superadmin'],
   '/docente': ['docente', 'superadmin', 'coordinador'],
-  '/estudiante': ['estudiante'],
+  '/estudiante': ['estudiante', 'superadmin'],
 };
 
 function esRutaPublica(p: string): boolean {
