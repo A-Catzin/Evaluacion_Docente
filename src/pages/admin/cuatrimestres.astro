@@ -1,0 +1,19 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { obtenerCuatrimestres } from '../../services/catalogos';
+
+const cuatrimestres = await obtenerCuatrimestres();
+---
+<LayoutAdmin titulo="Cuatrimestres — Admin">
+  <div class="animate-flotar-entrada">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-3xl font-bold text-tup">Cuatrimestres</h1>
+    </div>
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Fechas</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Estado</th></tr></thead>
+        <tbody class="divide-y">{cuatrimestres.map(c => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{c.clave}</td><td class="px-4 py-3">{c.nombre}</td><td class="px-4 py-3 text-slate-600">{c.fecha_inicio} → {c.fecha_fin}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${c.cerrado ? 'bg-slate-100 text-slate-500' : c.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{c.cerrado ? 'Cerrado' : c.activo ? 'Activo' : 'Inactivo'}</span></td></tr>))}</tbody>
+      </table>
+    </div>
+  </div>
+</LayoutAdmin>

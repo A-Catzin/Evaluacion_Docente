@@ -1,0 +1,24 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { obtenerDocentes } from '../../services/docentes';
+
+const docentes = await obtenerDocentes();
+---
+<LayoutAdmin titulo="Docentes — Admin">
+  <div class="animate-flotar-entrada">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-3xl font-bold text-tup">Gestión de Docentes</h1>
+      <button class="px-4 py-2 rounded-xl bg-tup text-white text-sm font-medium hover:bg-tup/90">+ Nuevo Docente</button>
+    </div>
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      {docentes.length === 0 ? (
+        <div class="p-12 text-center text-slate-400">No hay docentes registrados.</div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Núm. Empleado</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Estado</th></tr></thead>
+          <tbody class="divide-y">{docentes.map(d => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{d.nombre} {d.apellidos}</td><td class="px-4 py-3 text-slate-600">{d.email}</td><td class="px-4 py-3 text-slate-600">{d.num_empleado || '—'}</td><td class="px-4 py-3"><span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700">Activo</span></td></tr>))}</tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</LayoutAdmin>
