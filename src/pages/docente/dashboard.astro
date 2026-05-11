@@ -1,13 +1,35 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
+import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+
+const cuatrimestre = await obtenerCuatrimestreActivo();
+const cerrado = cuatrimestre?.cerrado ?? false;
 ---
 <LayoutDocente titulo="Mi Evaluación — Docente">
   <div class="animate-flotar-entrada">
     <h1 class="text-3xl font-bold text-tup mb-2">Mi Evaluación</h1>
-    <p class="text-slate-500 mb-8">Resultados de tu desempeño docente</p>
-    <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center text-slate-400">
-      <p class="text-lg">Tus resultados aparecerán aquí</p>
-      <p class="text-sm mt-1">Cuando el cuatrimestre esté cerrado podrás ver tu calificación.</p>
+    <p class="text-slate-500 mb-8">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'}</p>
+
+    {!cerrado ? (
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center mb-6">
+        <p class="text-amber-800 font-medium">Cuatrimestre en curso</p>
+        <p class="text-amber-600 text-sm mt-1">Los resultados se publicarán al cierre del cuatrimestre.</p>
+      </div>
+    ) : (
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center text-slate-400">
+        <p class="text-lg">Tus resultados aparecerán aquí</p>
+      </div>
+    )}
+
+    <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <a href="/docente/autoevaluacion" class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
+        <p class="text-lg font-semibold text-tup">Auto-evaluación</p>
+        <p class="text-sm text-slate-500 mt-1">Responde los 10 ítems de reflexión</p>
+      </a>
+      <a href="/docente/mis-grupos" class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
+        <p class="text-lg font-semibold text-tup">Mis Grupos</p>
+        <p class="text-sm text-slate-500 mt-1">Consulta tus asignaturas y encuestas</p>
+      </a>
     </div>
   </div>
 </LayoutDocente>

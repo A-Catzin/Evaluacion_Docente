@@ -1,13 +1,41 @@
 ---
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
+import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+import { obtenerDocentes } from '../../services/docentes';
+
+const cuatrimestre = await obtenerCuatrimestreActivo();
+const docentes = await obtenerDocentes();
 ---
 <LayoutCoordinador titulo="Dashboard — Coordinador">
   <div class="animate-flotar-entrada">
     <h1 class="text-3xl font-bold text-tup mb-2">Panel de Coordinación</h1>
-    <p class="text-slate-500 mb-8">Gestión de evaluaciones de tu área</p>
-    <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center text-slate-400">
-      <p class="text-lg">Dashboard del Coordinador</p>
-      <p class="text-sm mt-1">Las evaluaciones de tu área aparecerán aquí.</p>
+    <p class="text-slate-500 mb-6">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'} · {docentes.length} docentes en tu área</p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes</p><p class="text-3xl font-bold text-tup mt-1">{docentes.length}</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Pendientes</p><p class="text-3xl font-bold text-aprobado mt-1">{docentes.length}</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Completados</p><p class="text-3xl font-bold text-sobresaliente mt-1">0</p></div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100"><h2 class="font-semibold text-slate-700">Docentes en tu área</h2></div>
+      {docentes.length === 0 ? (
+        <div class="p-12 text-center text-slate-400">No hay docentes asignados a tu área.</div>
+      ) : (
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+          {docentes.map(doc => (
+            <a href={`/coordinador/docentes/${doc.id}`} class="block bg-slate-50 rounded-xl p-4 hover:bg-tup/5 transition-colors border border-slate-100">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{doc.nombre.charAt(0)}</div>
+                <div><p class="font-medium text-slate-800 text-sm">{doc.nombre} {doc.apellidos}</p><p class="text-xs text-slate-400">{doc.email}</p></div>
+              </div>
+              <div class="flex gap-1">
+                {['EE','CA','PD','OC','AE'].map(i => (<span class="w-6 h-6 rounded bg-slate-200 flex items-center justify-center text-[10px] text-slate-500" title={i}>{i}</span>))}
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   </div>
 </LayoutCoordinador>
