@@ -30,6 +30,15 @@ import Layout from '../layouts/Layout.astro';
     var at = params.access_token, rt = params.refresh_token;
     if (!at || !rt) return;
     fetch('/api/auth/guardar-sesion', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({access_token:at,refresh_token:rt}) })
-      .then(function () { window.location.href = '/estudiante/dashboard'; });
+      .then(function () {
+        return fetch('/api/auth/rol').then(function (r) { return r.json(); });
+      })
+      .then(function (data) {
+        var rol = data.rol || 'estudiante';
+        if (rol === 'superadmin') window.location.href = '/admin/dashboard';
+        else if (rol === 'coordinador') window.location.href = '/coordinador/dashboard';
+        else if (rol === 'docente') window.location.href = '/docente/dashboard';
+        else window.location.href = '/estudiante/dashboard';
+      });
   })();
 </script>
