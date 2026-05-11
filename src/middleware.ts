@@ -2,65 +2,44 @@ import { defineMiddleware } from 'astro:middleware';
 import { obtenerClienteSuperbase } from './lib/supabaseClient';
 
 /**
- * Middleware de Protección de Dominio — Plataforma SED-360
- *
- * Propósito: Validar que el usuario autenticado tenga un correo del
- * dominio institucional @tecplayacar.edu.mx. Si el correo no pertenece
- * al dominio, cierra la sesión y redirige al login.
- *
- * Dependencias:
- *   - Supabase Auth (cookies: sb-access-token, sb-refresh-token)
- *   - Cliente: src/lib/supabaseClient.ts
- *
- * Restricciones: Implementa la política de "Dominio Cerrado" definida
- * en docs/requerimientos.md. Las rutas públicas están exentas.
- *
- * Flujo:
- *   1. Obtiene la sesión desde las cookies de Supabase
- *   2. Verifica que el email termine en @tecplayacar.edu.mx
- *   3. Si no es válido, destruye la sesión y redirige a /auth
+ * Middleware SED-360 v2 — Dominio + Autorización por 4 Roles
  */
 
-/** Dominio institucional permitido */
 const DOMINIO_PERMITIDO = '@tecplayacar.edu.mx';
 
-/** Rutas públicas que no requieren autenticación */
 const RUTAS_PUBLICAS = [
-  '/api/auth/callback',
+  '/api/auth/guardar-sesion',
   '/api/auth/signout',
   '/auth',
-  '/',               // Landing page
+  '/',
   '/favicon.ico',
   '/favicon.svg',
 ];
 
-/**
- * Verifica si una ruta es pública (no requiere autenticación)
- */
+/** Mapa de prefijo de ruta → rol requerido */
+const ROLES_POR_RUTA: Record<string, string[]> = {
+  '/admin': ['superadmin'],
+  '/coordinador': ['coordinador', 'superadmin'],
+  '/docente': ['docente', 'superadmin', 'coordinador'],
+  '/estudiante': ['estudiante'],
+  '/evaluador': ['estudiante'], // ruta legacy → redirige a /estudiante/dashboard
+};
+
 function esRutaPublica(pathname: string): boolean {
-  return RUTAS_PUBLICAS.some((ruta) => pathname === ruta || pathname.startsWith(ruta + '/'));
+  return RUTAS_PUBLICAS.some((r) => pathname === r || pathname.startsWith(r + '/'));
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { url, cookies, redirect } = context;
 
-  // Permitir rutas públicas sin validación
-  if (esRutaPublica(url.pathname)) {
-    return next();
-  }
+  if (esRutaPublica(url.pathname)) return next();
 
-  // Obtener los tokens de sesión desde las cookies de Supabase
   const tokenAcceso = cookies.get('sb-access-token')?.value;
   const tokenRefresco = cookies.get('sb-refresh-token')?.value;
 
-  // Si no hay sesión, redirigir al login
-  if (!tokenAcceso || !tokenRefresco) {
-    console.warn('[SED-360 Middleware] Sin sesión activa, redirigiendo a /auth');
-    return redirect('/auth');
-  }
+  if (!tokenAcceso || !tokenRefresco) return redirect('/auth');
 
   try {
-    // Establecer la sesión con los tokens de las cookies
     const cliente = obtenerClienteSuperbase();
     const { data, error } = await cliente.auth.setSession({
       access_token: tokenAcceso,
@@ -68,34 +47,36 @@ export const onRequest = defineMiddleware(async (context, next) => {
     });
 
     if (error || !data.user?.email) {
-      console.error('[SED-360 Middleware] Error de sesión:', error?.message);
       return redirigirAlLogin(cookies, redirect);
     }
 
-    const email = data.user.email;
-
-    // Validar que el correo pertenezca al dominio institucional
-    if (!email.endsWith(DOMINIO_PERMITIDO)) {
-      console.warn(
-        `[SED-360 Middleware] Acceso denegado: ${email} no pertenece a ${DOMINIO_PERMITIDO}`
-      );
-
-      // Cerrar sesión para prevenir accesos no autorizados
+    if (!data.user.email.endsWith(DOMINIO_PERMITIDO)) {
       await cliente.auth.signOut();
       return redirigirAlLogin(cookies, redirect);
     }
 
-    // Email válido: continuar con la petición
+    // Autorización por rol
+    for (const [prefijo, roles] of Object.entries(ROLES_POR_RUTA)) {
+      if (url.pathname.startsWith(prefijo)) {
+        const { data: usuario } = await cliente
+          .from('usuarios')
+          .select('rol')
+          .eq('id', data.user.id)
+          .maybeSingle();
+
+        if (!usuario || !roles.includes(usuario.rol)) {
+          return redirect('/?error=no-autorizado');
+        }
+        break;
+      }
+    }
+
     return next();
-  } catch (err) {
-    console.error('[SED-360 Middleware] Error inesperado:', err);
+  } catch {
     return redirigirAlLogin(cookies, redirect);
   }
 });
 
-/**
- * Limpia las cookies de sesión y redirige al login
- */
 function redirigirAlLogin(
   cookies: { delete: (name: string) => void },
   redirect: (path: string) => Response

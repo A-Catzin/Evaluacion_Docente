@@ -1,100 +1,202 @@
 /**
- * Tipos TypeScript — Plataforma SED-360
+ * Tipos TypeScript — SED-360 v2
  *
- * Refleja el esquema SQL definido en docs/requerimientos.md v2.0
- *
- * Tablas core:
- * - usuarios (sincronizado con auth.users de Supabase)
- * - cargas_academicas (nexo docente-materia-periodo)
- * - evaluaciones (captura de evaluaciones con constraint unique_vote)
+ * Refleja el nuevo esquema de 4 roles, 5 instrumentos y calificación final.
  */
 
-// ─── Roles de Usuario ───────────────────────────────────────────
+// ─── Roles ──────────────────────────────────────────────────────
 
-/** Roles del sistema según el flujo 360° */
-export type RolUsuario =
-  | 'alumno'
-  | 'docente'
-  | 'coordinador'
-  | 'tecnico'
-  | 'calidad'
-  | 'admin';
+export type RolUsuario = 'superadmin' | 'coordinador' | 'docente' | 'estudiante';
 
-// ─── Tabla: usuarios ────────────────────────────────────────────
+// ─── Catálogo ──────────────────────────────────────────────────
 
-/** Usuario del sistema sincronizado con auth.users de Supabase */
+export interface Cuatrimestre {
+  id: number;
+  clave: string;
+  nombre: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  activo: boolean;
+  cerrado: boolean;
+}
+
+export interface Licenciatura {
+  id: number;
+  clave: string;
+  nombre: string;
+  facultad: string | null;
+  activa: boolean;
+}
+
+export interface Docente {
+  id: number;
+  nombre: string;
+  apellidos: string;
+  email: string;
+  num_empleado: string | null;
+  licenciatura_id: number | null;
+  foto_url: string | null;
+  activo: boolean;
+}
+
+export interface Asignatura {
+  id: number;
+  clave: string;
+  nombre: string;
+  licenciatura_id: number | null;
+  cuatrimestre_num: number | null;
+  creditos: number;
+  activa: boolean;
+}
+
+export interface Grupo {
+  id: number;
+  clave: string;
+  asignatura_id: number | null;
+  docente_id: number | null;
+  cuatrimestre_id: number | null;
+  num_alumnos: number;
+  activo: boolean;
+}
+
+export interface Estudiante {
+  id: number;
+  nombre: string;
+  apellidos: string;
+  email: string;
+  matricula: string;
+  licenciatura_id: number | null;
+  cuatrimestre_actual: number | null;
+  activo: boolean;
+}
+
+export interface Inscripcion {
+  id: number;
+  estudiante_id: number;
+  grupo_id: number;
+  cuatrimestre_id: number;
+  fecha: string;
+}
+
 export interface Usuario {
-  id: string; // UUID → auth.users
+  id: string;
   email: string;
   rol: RolUsuario;
+  entidad_id: number | null;
+  activo: boolean;
+  ultimo_acceso: string | null;
 }
 
-// ─── Tabla: cargas_academicas ───────────────────────────────────
+// ─── Instrumentos ───────────────────────────────────────────────
 
-/** Carga académica: relación docente-materia en un periodo */
-export interface CargaAcademica {
-  id_carga: number; // SERIAL
-  id_docente: string; // UUID → usuarios.id
-  id_materia: string;
-  id_periodo: string; // Ej: "2025-1"
+export interface EncuestaEstudiantilRespuesta {
+  id: number;
+  docente_id: number;
+  grupo_id: number;
+  cuatrimestre_id: number;
+  calidad_general: number; // 1-6
+  item_plan_estudio: number | null;
+  item_trato_respeto: number | null;
+  item_asistencia: number | null;
+  item_puntualidad: number | null;
+  item_participacion: number | null;
+  item_dominio_materia: number | null;
+  item_plataforma_moodle: number | null;
+  item_pensamiento_critico: number | null;
+  item_desafio_intelectual: number | null;
+  item_claridad_objetivos: number | null;
+  item_lecturas_aprendizaje: number | null;
+  item_respeto_reglas: number | null;
+  item_interes_materia: number | null;
+  item_apoyos_didacticos: number | null;
+  item_actitudes_valores: number | null;
+  item_retroalimentacion: number | null;
+  item_criterios_evaluacion: number | null;
+  item_receptividad: number | null;
+  comentario_abierto: string | null;
+  clasificacion_comentario: string;
 }
 
-// ─── Tabla: evaluaciones ───────────────────────────────────────
-
-/** Tipos de actor evaluador (coincide con el CHECK SQL) */
-export type TipoActor = 'ALUMNO' | 'COORDINADOR' | 'TECNICO' | 'CALIDAD' | 'AUTO';
-
-/** Evaluación capturada por un actor sobre una carga académica */
-export interface Evaluacion {
-  id_evaluacion: number; // SERIAL
-  id_evaluador: string; // UUID → usuarios.id
-  id_carga: number; // → cargas_academicas.id_carga
-  tipo_actor: TipoActor;
-  puntaje_promedio: number; // DECIMAL(5,2)
-  comentario: string | null;
-  marcado_inapropiado: boolean;
-  fecha_creacion: string; // TIMESTAMP
+export interface EvaluacionCoordinacion {
+  id: number;
+  docente_id: number;
+  coordinador_id: string;
+  cuatrimestre_id: number;
+  puntos_obtenidos: number; // 0-75
+  categoria: string;
+  score_normalizado: number;
+  observaciones: string | null;
 }
 
-// ─── Escala Likert ──────────────────────────────────────────────
+export interface EvaluacionPlaneacion {
+  id: number;
+  docente_id: number;
+  evaluador_id: string;
+  cuatrimestre_id: number;
+  asignatura_id: number;
+  puntos_totales: number; // 0-22 (generado)
+  categoria: string | null;
+  score_normalizado: number;
+}
 
-/** Valores de la escala Likert (1 a 5) */
-export type ValorLikert = 1 | 2 | 3 | 4 | 5;
+export interface ObservacionClase {
+  id: number;
+  docente_id: number;
+  observador_id: string;
+  cuatrimestre_id: number;
+  grupo_id: number;
+  puntuacion_total: number; // 0-10
+  categoria: string;
+  score_normalizado: number;
+  observaciones: string | null;
+  recomendaciones: string | null;
+}
 
-/** Etiquetas descriptivas de la escala Likert */
-export const ETIQUETAS_LIKERT: Record<ValorLikert, string> = {
-  1: 'Totalmente en desacuerdo',
-  2: 'En desacuerdo',
-  3: 'Neutral',
-  4: 'De acuerdo',
-  5: 'Totalmente de acuerdo',
-};
+export interface AutoevaluacionDocente {
+  id: number;
+  docente_id: number;
+  cuatrimestre_id: number;
+  score_normalizado: number;
+  categoria: string | null;
+  reflexion_personal: string | null;
+}
 
-// ─── Ponderación 360° ──────────────────────────────────────────
+export interface CalificacionFinal {
+  id: number;
+  docente_id: number;
+  cuatrimestre_id: number;
+  score_encuesta_estudiantil: number | null;
+  score_coordinacion: number | null;
+  score_planeacion: number | null;
+  score_observacion: number | null;
+  score_autoevaluacion: number | null;
+  calificacion_final: number;
+  categoria_final: string | null;
+  num_instrumentos_completados: number;
+}
 
-/**
- * Pesos del algoritmo de Ponderación 360°.
- * Definidos por el manual institucional (docs/contexto.md).
- */
-export const PONDERACION_360 = {
-  ALUMNO: 0.35, // Evaluación Estudiantil
-  TECNICO: 0.25, // Observación de Clase
-  COORDINADOR: 0.2, // Evaluación por Coordinación
-  CALIDAD: 0.15, // Evaluación de Planeación
-  AUTO: 0.05, // Autoevaluación del Docente
+// ─── Constantes ─────────────────────────────────────────────────
+
+export const PONDERACION_V2 = {
+  EE: 0.40, // Encuesta Estudiantil
+  CA: 0.25, // Coordinación Académica
+  PD: 0.15, // Planeación Docente
+  OC: 0.15, // Observación de Clase
+  AE: 0.05, // Auto-evaluación
 } as const;
 
-/** Verifica que los pesos sumen 1.0 (100%) */
-export const PESOS_TOTALES = Object.values(PONDERACION_360).reduce(
-  (suma, peso) => suma + peso,
-  0
-); // Debe ser 1.0
+export const CATEGORIAS_FINAL = {
+  SOBRESALIENTE: { min: 90, max: 100, color: '#22c55e', label: 'Sobresaliente' },
+  DISTINGUIDO: { min: 80, max: 89, color: '#3b82f6', label: 'Distinguido' },
+  BUENO: { min: 70, max: 79, color: '#a855f7', label: 'Bueno' },
+  APROBADO: { min: 60, max: 69, color: '#f59e0b', label: 'Aprobado' },
+  A_MEJORAR: { min: 50, max: 59, color: '#f97316', label: 'A mejorar' },
+  INSUFICIENTE: { min: 0, max: 49, color: '#ef4444', label: 'Insuficiente' },
+} as const;
 
-/** Etiquetas legibles para cada tipo de actor */
-export const ETIQUETAS_ACTOR: Record<TipoActor, string> = {
-  ALUMNO: 'Evaluación Estudiantil',
-  COORDINADOR: 'Evaluación por Coordinación',
-  TECNICO: 'Observación de Clase',
-  CALIDAD: 'Evaluación de Planeación',
-  AUTO: 'Autoevaluación',
-};
+export function obtenerCategoria(puntaje: number): { label: string; color: string } {
+  for (const [, cat] of Object.entries(CATEGORIAS_FINAL)) {
+    if (puntaje >= cat.min && puntaje <= cat.max) return cat;
+  }
+  return CATEGORIAS_FINAL.INSUFICIENTE;
+}
