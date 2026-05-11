@@ -47,10 +47,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
     });
 
     if (error || !data.user?.email) {
+      console.error('[SED-360] Error sesión:', error?.message);
       return redirigirAlLogin(cookies, redirect);
     }
 
+    const email = data.user.email;
+    console.log('[SED-360] Sesión OK:', email);
+
     if (!data.user.email.endsWith(DOMINIO_PERMITIDO)) {
+      console.warn('[SED-360] Dominio rechazado:', email);
       await cliente.auth.signOut();
       return redirigirAlLogin(cookies, redirect);
     }
@@ -58,13 +63,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Autorización por rol
     for (const [prefijo, roles] of Object.entries(ROLES_POR_RUTA)) {
       if (url.pathname.startsWith(prefijo)) {
-        const { data: usuario } = await cliente
+        console.log('[SED-360] Verificando rol para', url.pathname, 'prefijo:', prefijo);
+        const { data: usuario, error: errorRol } = await cliente
           .from('usuarios')
           .select('rol')
           .eq('id', data.user.id)
           .maybeSingle();
 
-        if (!usuario || !roles.includes(usuario.rol)) {
+        console.log('[SED-360] Usuario:', usuario, 'Error:', errorRol?.message);
+
+        if (errorRol || !usuario) {
+          console.error('[SED-360] Error al obtener rol:', errorRol?.message || 'usuario no encontrado en BD');
+          return redirect('/?error=sin-perfil');
+        }
+
+        console.log('[SED-360] Rol:', usuario.rol, 'Requerido:', roles);
+
+        if (!roles.includes(usuario.rol)) {
+          console.warn('[SED-360] Rol no autorizado:', usuario.rol);
           return redirect('/?error=no-autorizado');
         }
         break;
