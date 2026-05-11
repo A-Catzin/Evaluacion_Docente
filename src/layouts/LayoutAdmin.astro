@@ -1,0 +1,56 @@
+---
+/**
+ * LayoutAdmin.astro — Sidebar fijo para SuperAdmin
+ */
+import BaseLayout from './BaseLayout.astro';
+import { obtenerClienteSuperbase } from '../lib/supabaseClient';
+
+export interface Props {
+  titulo?: string;
+}
+
+const { titulo = 'Admin — SED-360' } = Astro.props;
+---
+
+<BaseLayout titulo={titulo}>
+  <div class="flex min-h-screen">
+    <!-- Sidebar fijo -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex-shrink-0 hidden lg:flex flex-col">
+      <div class="p-6 border-b border-slate-100">
+        <a href="/admin/dashboard" class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-hero-tup flex items-center justify-center shadow-tarjeta">
+            <span class="text-white font-bold text-xs">360</span>
+          </div>
+          <span class="font-semibold text-tup text-lg">SED-360</span>
+        </a>
+      </div>
+      <nav class="flex-1 p-4 space-y-1">
+        <a href="/admin/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
+          📊 Dashboard
+        </a>
+        <a href="/admin/docentes" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
+          👨‍🏫 Docentes
+        </a>
+        <a href="/admin/instrumentos" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
+          📋 Instrumentos
+        </a>
+        <a href="/admin/cuatrimestres" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
+          📅 Cuatrimestres
+        </a>
+        <a href="/admin/configuracion" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
+          ⚙️ Configuración
+        </a>
+      </nav>
+      <div class="p-4 border-t border-slate-100">
+        <a href="/api/auth/signout" class="flex items-center gap-2 text-xs text-slate-400 hover:text-red-500 transition-colors">
+          🚪 Cerrar Sesión
+        </a>
+      </div>
+    </aside>
+
+    <!-- Contenido -->
+    <main class="flex-1 p-6 lg:p-8 overflow-auto">
+      <slot />
+    </main>
+  </div>
+</BaseLayout>

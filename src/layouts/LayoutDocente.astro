@@ -1,0 +1,21 @@
+---
+import BaseLayout from './BaseLayout.astro';
+export interface Props { titulo?: string; }
+const { titulo = 'Docente — SED-360' } = Astro.props;
+---
+<BaseLayout titulo={titulo}>
+  <div class="min-h-screen">
+    <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/50 px-6 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <a href="/docente/dashboard" class="font-semibold text-tup">SED-360 · Docente</a>
+        <nav class="hidden sm:flex gap-1">
+          <a href="/docente/dashboard" class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mi Evaluación</a>
+          <a href="/docente/autoevaluacion" class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Auto-evaluación</a>
+          <a href="/docente/mis-grupos" class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mis Grupos</a>
+        </nav>
+      </div>
+      <a href="/api/auth/signout" class="text-xs text-slate-400 hover:text-red-500">Salir</a>
+    </header>
+    <main class="p-6 max-w-4xl mx-auto"><slot /></main>
+  </div>
+</BaseLayout>

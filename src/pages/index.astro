@@ -1,63 +1,35 @@
 ---
-/**
- * Página de inicio — Plataforma SED-360
- *
- * Muestra el hero institucional con las ponderaciones del algoritmo 360°.
- * Redirige al flujo de autenticación.
- */
 import Layout from '../layouts/Layout.astro';
 ---
-
 <Layout titulo="SED-360 — Inicio">
   <div class="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
-    <!-- Hero -->
-    <div class="w-full max-w-2xl mx-auto p-8 sm:p-12 rounded-3xl bg-hero-institucional shadow-modal animate-flotar-entrada">
-      <h1 class="text-3xl sm:text-4xl font-bold text-white mb-4">
-        SED-360
-      </h1>
-      <p class="text-blue-100 text-lg sm:text-xl mb-2">
-        Sistema de Evaluación Docente 360°
-      </p>
-      <p class="text-blue-200/80 text-sm sm:text-base max-w-lg mx-auto">
-        Tecnológico Universitario Playacar — Plataforma integral para la evaluación del desempeño docente desde múltiples perspectivas.
-      </p>
+    <div class="w-full max-w-2xl mx-auto p-8 sm:p-12 rounded-3xl bg-hero-tup shadow-modal animate-flotar-entrada">
+      <h1 class="text-3xl sm:text-4xl font-bold text-white mb-4">SED-360</h1>
+      <p class="text-blue-100 text-lg sm:text-xl mb-2">Sistema de Evaluación Docente 360°</p>
+      <p class="text-blue-200/80 text-sm sm:text-base max-w-lg mx-auto">Tecnológico Universitario Playacar</p>
     </div>
-
-    <!-- Botón de acceso -->
-    <a
-      href="/auth"
-      class="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-white border border-slate-200 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-institucional font-semibold text-lg"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-        <polyline points="10 17 15 12 10 7" />
-        <line x1="15" y1="12" x2="3" y2="12" />
-      </svg>
+    <a href="/auth" class="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-white border border-slate-200 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-tup font-semibold text-lg">
       Iniciar Sesión
     </a>
-
-    <!-- Ponderaciones 360° -->
     <div class="mt-8 grid grid-cols-2 sm:grid-cols-5 gap-3 w-full max-w-3xl">
-      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta">
-        <p class="text-2xl font-bold text-institucional">35%</p>
-        <p class="text-xs text-slate-500 mt-1">Alumnos</p>
-      </div>
-      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta">
-        <p class="text-2xl font-bold text-accion">25%</p>
-        <p class="text-xs text-slate-500 mt-1">Observación</p>
-      </div>
-      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta">
-        <p class="text-2xl font-bold text-emerald-600">20%</p>
-        <p class="text-xs text-slate-500 mt-1">Coordinación</p>
-      </div>
-      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta">
-        <p class="text-2xl font-bold text-amber-600">15%</p>
-        <p class="text-xs text-slate-500 mt-1">Planeación</p>
-      </div>
-      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta">
-        <p class="text-2xl font-bold text-slate-400">5%</p>
-        <p class="text-xs text-slate-500 mt-1">Auto</p>
-      </div>
+      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta"><p class="text-2xl font-bold text-tup">40%</p><p class="text-xs text-slate-500 mt-1">Encuesta</p></div>
+      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta"><p class="text-2xl font-bold text-distinguido">25%</p><p class="text-xs text-slate-500 mt-1">Coordinación</p></div>
+      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta"><p class="text-2xl font-bold text-sobresaliente">15%</p><p class="text-xs text-slate-500 mt-1">Planeación</p></div>
+      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta"><p class="text-2xl font-bold text-aprobado">15%</p><p class="text-xs text-slate-500 mt-1">Observación</p></div>
+      <div class="p-4 rounded-2xl bg-white/60 backdrop-blur-sm border border-slate-100 shadow-tarjeta"><p class="text-2xl font-bold text-slate-400">5%</p><p class="text-xs text-slate-500 mt-1">Auto</p></div>
     </div>
   </div>
 </Layout>
+
+<script is:inline>
+  (function () {
+    var hash = window.location.hash.substring(1);
+    if (!hash || !hash.includes('access_token')) return;
+    var params = {};
+    hash.split('&').forEach(function (p) { var kv = p.split('='); params[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || ''); });
+    var at = params.access_token, rt = params.refresh_token;
+    if (!at || !rt) return;
+    fetch('/api/auth/guardar-sesion', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({access_token:at,refresh_token:rt}) })
+      .then(function () { window.location.href = '/estudiante/dashboard'; });
+  })();
+</script>

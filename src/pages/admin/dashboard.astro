@@ -1,0 +1,21 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+---
+<LayoutAdmin titulo="Dashboard — Admin">
+  <div class="animate-flotar-entrada">
+    <h1 class="text-3xl font-bold text-tup mb-2">Dashboard Administrativo</h1>
+    <p class="text-slate-500 mb-8">Panel de control institucional SED-360</p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup mt-1">—</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup mt-1">—</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Sobresaliente</p><p class="text-3xl font-bold text-sobresaliente mt-1">—</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Focos Rojos</p><p class="text-3xl font-bold text-foco-rojo mt-1">—</p></div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center text-slate-400">
+      <p class="text-lg">No hay datos disponibles todavía.</p>
+      <p class="text-sm mt-1">Carga docentes, grupos y cuatrimestres para comenzar.</p>
+    </div>
+  </div>
+</LayoutAdmin>

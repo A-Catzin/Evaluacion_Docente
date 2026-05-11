@@ -1,0 +1,10 @@
+---
+import BaseLayout from './BaseLayout.astro';
+export interface Props { titulo?: string; }
+const { titulo = 'Estudiante — SED-360' } = Astro.props;
+---
+<BaseLayout titulo={titulo}>
+  <div class="min-h-screen flex flex-col items-center justify-center p-4">
+    <slot />
+  </div>
+</BaseLayout>

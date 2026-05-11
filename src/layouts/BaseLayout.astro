@@ -1,0 +1,50 @@
+---
+/**
+ * BaseLayout.astro — Shell HTML base del SED-360 v2
+ *
+ * Adaptado del Layout v1. Provee el HTML shell, meta tags,
+ * fondo con gradientes y formas orgánicas.
+ * Las variantes por rol (Admin, Coordinador, Docente, Estudiante)
+ * extienden este layout.
+ */
+export interface Props {
+  titulo?: string;
+  descripcion?: string;
+}
+
+const {
+  titulo = 'SED-360 — Sistema de Evaluación Docente',
+  descripcion = 'Plataforma integral de evaluación docente 360° — TUP',
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{titulo}</title>
+    <meta name="description" content={descripcion} />
+    <meta name="theme-color" content="#1e3a5f" />
+    <meta property="og:title" content={titulo} />
+    <meta property="og:description" content={descripcion} />
+  </head>
+  <body class="min-h-screen bg-fondo-dashboard font-sans antialiased text-slate-800">
+    <div class="fixed inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
+      <div class="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-tup opacity-[0.03] blur-3xl"></div>
+      <div class="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full bg-dorado opacity-[0.04] blur-3xl"></div>
+    </div>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+  body { min-height: 100dvh; }
+  @media (max-width: 640px) { html { font-size: 15px; } }
+  button, a[role='button'] { min-height: 44px; min-width: 44px; }
+  ::selection { background-color: rgba(30, 58, 95, 0.2); color: #1e3a5f; }
+</style>
