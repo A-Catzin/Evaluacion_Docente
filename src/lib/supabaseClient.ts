@@ -1,23 +1,17 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Cliente de Supabase — Carga perezosa (Lazy Initialization)
- *
- * No se inicializa en el top-level para evitar errores durante el build
- * cuando las variables de entorno no están disponibles.
+ * Polyfill WebSocket con try/catch para evitar crashes en dev mode.
+ * Si ws no está disponible, el cliente funciona sin realtime (solo auth/queries).
  */
-
-let _cliente: SupabaseClient | null = null;
-
-function obtenerVariablesEntorno() {
-  const url = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
-  const clave = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string | undefined;
-
-  if (!url || !clave) {
-    throw new Error(
-      'Faltan variables de entorno: PUBLIC_SUPABASE_URL y PUBLIC_SUPABASE_ANON_KEY'
-    );
+try {
+  if (typeof globalThis.WebSocket === 'undefined') {
+    const { default: ws } = await import('ws');
+    (globalThis as Record<string, unknown>).WebSocket = ws;
   }
+} catch {
+  // Sin WebSocket — sin realtime, pero auth y queries funcionan
+}
 
   return { url, clave };
 }
