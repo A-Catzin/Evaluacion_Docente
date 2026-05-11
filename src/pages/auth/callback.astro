@@ -1,0 +1,106 @@
+---
+/**
+ * Callback OAuth — Extrae tokens del hash y guarda sesión
+ *
+ * Supabase usa flujo implícito: los tokens vienen en el hash de la URL.
+ * Los extraemos, los enviamos a nuestro endpoint para guardar cookies,
+ * y redirigimos al dashboard.
+ */
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout titulo="SED-360 — Iniciando sesión..." modoEnfoque={true}>
+  <div class="flex flex-col items-center justify-center min-h-[80vh] gap-4 text-center">
+    <div id="spinner" class="w-12 h-12 rounded-full border-4 border-accion border-t-transparent animate-spin"></div>
+    <p id="estado" class="text-slate-500 text-sm">Completando inicio de sesión...</p>
+    <div id="debug" class="mt-4 max-w-md w-full text-left text-xs"></div>
+  </div>
+</Layout>
+
+<script is:inline>
+  (function () {
+    var estadoEl = document.getElementById('estado');
+    var debugEl = document.getElementById('debug');
+    var spinnerEl = document.getElementById('spinner');
+
+    function log(texto, error) {
+      var div = document.createElement('div');
+      div.className = 'py-1 px-2 rounded mb-1 ' + (error ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600');
+      div.textContent = texto;
+      if (debugEl) debugEl.appendChild(div);
+    }
+
+    function setEstado(texto, error) {
+      if (estadoEl) {
+        estadoEl.textContent = texto;
+        estadoEl.className = 'text-sm ' + (error ? 'text-red-600 font-medium' : 'text-slate-500');
+      }
+      if (error && spinnerEl) spinnerEl.classList.add('hidden');
+    }
+
+    var hash = window.location.hash.substring(1); // Quitar el #
+    log('Hash presente: ' + (hash ? 'SI (' + hash.length + ' chars)' : 'NO'));
+
+    if (!hash) {
+      // Intentar con query string (flujo PKCE)
+      var url = new URL(window.location.href);
+      var code = url.searchParams.get('code');
+      var errorParam = url.searchParams.get('error');
+
+      if (errorParam) {
+        setEstado('Error: ' + errorParam, true);
+        return;
+      }
+      if (code) {
+        setEstado('Código PKCE detectado pero no implementado en este flujo', true);
+        return;
+      }
+      setEstado('No se recibieron tokens ni código', true);
+      return;
+    }
+
+    // Parsear parámetros del hash
+    var params = {};
+    hash.split('&').forEach(function (part) {
+      var pair = part.split('=');
+      params[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1] || '');
+    });
+
+    var accessToken = params.access_token;
+    var refreshToken = params.refresh_token;
+
+    log('access_token: ' + (accessToken ? 'SI (' + accessToken.substring(0, 20) + '...)' : 'NO'));
+    log('refresh_token: ' + (refreshToken ? 'SI' : 'NO'));
+
+    if (!accessToken || !refreshToken) {
+      setEstado('Tokens no encontrados en el hash', true);
+      return;
+    }
+
+    setEstado('Guardando sesión...');
+
+    fetch('/api/auth/guardar-sesion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      }),
+    })
+      .then(function (res) {
+        log('Guardar sesión: ' + res.status);
+        if (res.ok) {
+          setEstado('¡Sesión establecida! Redirigiendo...');
+          setTimeout(function () {
+            window.location.href = '/evaluador';
+          }, 500);
+        } else {
+          setEstado('Error al guardar sesión (status ' + res.status + ')', true);
+        }
+      })
+      .catch(function (err) {
+        setEstado('Error de conexión al guardar sesión', true);
+        log(err.message, true);
+      });
+  })();
+</script>
