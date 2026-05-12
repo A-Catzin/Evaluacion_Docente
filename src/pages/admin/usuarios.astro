@@ -150,6 +150,7 @@ function formatear(n: number | undefined): string {
                 <th class="px-2 py-2 text-xs uppercase text-slate-600 sticky left-0 bg-slate-50">Nombre</th>
                 <th class="px-2 py-2 text-xs uppercase text-slate-600">Ap. Paterno</th>
                 <th class="px-2 py-2 text-xs uppercase text-slate-600">Ap. Materno</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Correo</th>
                 <th class="px-2 py-2 text-xs uppercase text-slate-600">Campus</th>
                 <th class="px-2 py-2 text-xs uppercase text-slate-600">Materias</th>
                 <th class="px-2 py-2 text-xs uppercase text-slate-600">Coordinador/a</th>
@@ -165,7 +166,7 @@ function formatear(n: number | undefined): string {
               </tr></thead>
               <tbody class="divide-y">{filas.map(f => {
                 const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
-                return (<tr class="hover:bg-slate-50"><td class="px-2 py-2 font-medium">{f.nombre}</td><td class="px-2 py-2">{paterno}</td><td class="px-2 py-2">{materno || '—'}</td><td class="px-2 py-2">{f.campus}</td><td class="px-2 py-2">{f.materias}</td><td class="px-2 py-2">{f.coordinador}</td><td class="px-2 py-2">{f.nivel_desempeno}</td><td class="px-2 py-2"><span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${(f.categoria_360 === 'Sobresaliente' || f.categoria_360 === 'Distinguido') ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{f.categoria_360}</span></td><td class="px-2 py-2 font-bold">{formatear(f.final_360)}</td><td class="px-2 py-2">{formatear(f.prom_estudiantil)}</td><td class="px-2 py-2">{formatear(f.prom_observacion)}</td><td class="px-2 py-2">{formatear(f.prom_coordinador)}</td><td class="px-2 py-2">{formatear(f.prom_planeacion)}</td><td class="px-2 py-2">{formatear(f.prom_autodiagnostico)}</td><td class="px-2 py-2">{f.turno}</td></tr>);
+                return (<tr class="hover:bg-slate-50"><td class="px-2 py-2 font-medium">{f.nombre}</td><td class="px-2 py-2">{paterno}</td><td class="px-2 py-2">{materno || '—'}</td><td class="px-2 py-2 text-xs">{f.email}</td><td class="px-2 py-2">{f.campus}</td><td class="px-2 py-2">{f.materias}</td><td class="px-2 py-2">{f.coordinador}</td><td class="px-2 py-2">{f.nivel_desempeno}</td><td class="px-2 py-2"><span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${(f.categoria_360 === 'Sobresaliente' || f.categoria_360 === 'Distinguido') ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{f.categoria_360}</span></td><td class="px-2 py-2 font-bold">{formatear(f.final_360)}</td><td class="px-2 py-2">{formatear(f.prom_estudiantil)}</td><td class="px-2 py-2">{formatear(f.prom_observacion)}</td><td class="px-2 py-2">{formatear(f.prom_coordinador)}</td><td class="px-2 py-2">{formatear(f.prom_planeacion)}</td><td class="px-2 py-2">{formatear(f.prom_autodiagnostico)}</td><td class="px-2 py-2">{f.turno}</td></tr>);
               })}</tbody>
             </table>
           )}
