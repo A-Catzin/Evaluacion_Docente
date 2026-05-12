@@ -1,0 +1,114 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { obtenerOfertasAcademicas } from '../../services/catalogos';
+
+const ofertas = await obtenerOfertasAcademicas();
+---
+<LayoutAdmin titulo="Ofertas Académicas — Admin">
+  <div class="animate-flotar-entrada">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-3xl font-bold text-tup">Ofertas Académicas</h1>
+    </div>
+
+    <!-- Formulario para agregar -->
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form id="form-nueva" class="flex gap-3">
+        <input type="text" id="input-nombre" placeholder="Nombre de la carrera..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium hover:bg-tup/90">Agregar</button>
+      </form>
+    </div>
+
+    <!-- Lista -->
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      {ofertas.length === 0 ? (
+        <div class="p-12 text-center text-slate-400">No hay ofertas académicas.</div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Estado</th><th class="text-right px-4 py-3 text-xs uppercase text-slate-600">Acciones</th></tr></thead>
+          <tbody class="divide-y">
+            {ofertas.map(o => (
+              <tr class="hover:bg-slate-50" id={`row-${o.id}`}>
+                <td class="px-4 py-3">
+                  <span class="oferta-nombre">{o.nombre}</span>
+                  <input type="text" class="oferta-edit hidden rounded-lg border border-slate-200 px-2 py-1 text-sm w-full" value={o.nombre} />
+                </td>
+                <td class="px-4 py-3 text-center">
+                  <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${o.activa ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`} data-id={o.id} data-activa={o.activa}>
+                    {o.activa ? 'Activa' : 'Inactiva'}
+                  </button>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <button class="btn-editar text-xs text-tup hover:underline mr-3" data-id={o.id}>Editar</button>
+                  <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-3 hidden" data-id={o.id}>Guardar</button>
+                  <button class="btn-cancelar text-xs text-slate-400 hover:underline mr-3 hidden" data-id={o.id}>Cancelar</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
+</LayoutAdmin>
+
+<script is:inline>
+  function toast(msg, err) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal ' + (err ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white');
+    t.classList.remove('hidden');
+    setTimeout(function () { t.classList.add('hidden'); }, 3000);
+  }
+
+  // Agregar nueva
+  document.getElementById('form-nueva').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var input = document.getElementById('input-nombre');
+    var nombre = input.value.trim();
+    if (!nombre) return;
+    var res = await fetch('/api/admin/ofertas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', nombre: nombre }) });
+    if (res.ok) { toast('Oferta agregada', false); setTimeout(function () { location.reload(); }, 500); }
+    else { var d = await res.json(); toast(d.error || 'Error', true); }
+  });
+
+  // Toggle activa/inactiva
+  document.querySelectorAll('.toggle-btn').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var id = this.dataset.id;
+      var nueva = this.dataset.activa === 'true' ? false : true;
+      var res = await fetch('/api/admin/ofertas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'toggle', id: parseInt(id), activa: nueva }) });
+      if (res.ok) { location.reload(); } else { toast('Error', true); }
+    });
+  });
+
+  // Editar
+  document.querySelectorAll('.btn-editar').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var row = this.closest('tr');
+      row.querySelector('.oferta-nombre').classList.add('hidden');
+      row.querySelector('.oferta-edit').classList.remove('hidden');
+      this.classList.add('hidden');
+      row.querySelector('.btn-guardar').classList.remove('hidden');
+      row.querySelector('.btn-cancelar').classList.remove('hidden');
+    });
+  });
+
+  // Guardar
+  document.querySelectorAll('.btn-guardar').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var row = this.closest('tr');
+      var id = parseInt(this.dataset.id);
+      var nombre = row.querySelector('.oferta-edit').value.trim();
+      if (!nombre) return;
+      var res = await fetch('/api/admin/ofertas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', id: id, nombre: nombre, activa: true }) });
+      if (res.ok) { toast('Actualizado', false); setTimeout(function () { location.reload(); }, 500); }
+      else { var d = await res.json(); toast(d.error || 'Error', true); }
+    });
+  });
+
+  // Cancelar
+  document.querySelectorAll('.btn-cancelar').forEach(function (btn) {
+    btn.addEventListener('click', function () { location.reload(); });
+  });
+</script>
