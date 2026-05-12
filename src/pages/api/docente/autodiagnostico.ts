@@ -75,7 +75,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (comentarios) insert.comentarios = comentarios;
 
     const { data: resultado, error: errDiag } = await cliente.from('autodiagnosticos').insert(insert).select('puntaje_total,nivel_desempeno').single();
-    if (errDiag) throw new Error('Error al guardar autodiagnóstico');
+    if (errDiag) {
+      console.error('[API Autodiagnóstico] Error insert:', errDiag);
+      throw new Error('Error al guardar autodiagnóstico: ' + errDiag.message);
+    }
 
     return new Response(JSON.stringify({
       success: true,
