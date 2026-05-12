@@ -32,15 +32,27 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         nombre, apellido_paterno, apellido_materno, apellidos,
         campus, turno, oferta_academica,
       }).eq('id', docenteId);
-      if (errUpd) throw new Error('Error al actualizar docente');
+      if (errUpd) throw new Error('Error al actualizar docente: ' + errUpd.message);
     } else {
-      const { data: nuevo, error: errIns } = await cliente.from('docentes').insert({
-        nombre, apellido_paterno, apellido_materno, apellidos,
-        email: usuario.email, campus, turno, oferta_academica,
-      }).select('id').single();
-      if (errIns) throw new Error('Error al crear docente');
-      docenteId = nuevo.id;
-      await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
+      // Buscar si ya existe un docente con ese email (creado antes sin vincular)
+      const { data: existenteDoc } = await cliente.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
+      if (existenteDoc) {
+        docenteId = existenteDoc.id;
+        await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
+        // Actualizar sus datos
+        await cliente.from('docentes').update({
+          nombre, apellido_paterno, apellido_materno, apellidos,
+          campus, turno, oferta_academica,
+        }).eq('id', docenteId);
+      } else {
+        const { data: nuevo, error: errIns } = await cliente.from('docentes').insert({
+          nombre, apellido_paterno, apellido_materno, apellidos,
+          email: usuario.email, campus, turno, oferta_academica,
+        }).select('id').single();
+        if (errIns) throw new Error('Error al crear docente: ' + errIns.message);
+        docenteId = nuevo.id;
+        await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
+      }
     }
 
     // 2. Verificar si ya respondió
