@@ -1,6 +1,7 @@
 ---
-import Layout[id].astro from '..\/..\/..\/..\/..\/..\/..\/[id].astrolayouts/Layout[id].astro.astro';
+import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
+const { id } = Astro.params;
 ---
-<Layout[id].astro titulo="Perfil Docente">
-  <div class="animate-flotar-entrada"><h1 class="text-3xl font-bold text-tup mb-6">Perfil Docente</h1><div class="bg-white rounded-2xl p-8 shadow-tarjeta text-center text-slate-400"><p>En desarrollo</p></div></div>
-</Layout[id].astro>
+<LayoutCoordinador titulo={`Perfil Docente ${id}`}>
+  <div class="animate-flotar-entrada"><h1 class="text-3xl font-bold text-tup mb-6">Perfil del Docente</h1><div class="bg-white rounded-2xl p-8 shadow-tarjeta text-center text-slate-400"><p>Detalle del docente ID: {id}</p></div></div>
+</LayoutCoordinador>
