@@ -13,12 +13,13 @@ const { data: sesion } = await cliente.auth.setSession({ access_token: tokenAcce
 if (!sesion.user) return Astro.redirect('/auth');
 
 const { data: usuario } = await cliente.from('usuarios').select('entidad_id,rol').eq('id', sesion.user.id).maybeSingle();
-if (!usuario || usuario.rol !== 'docente' || !usuario.entidad_id) return Astro.redirect('/docente/dashboard');
+if (!usuario || usuario.rol !== 'docente') return Astro.redirect('/docente/dashboard');
+const docenteId = usuario.entidad_id;
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
 if (!cuatrimestre) return Astro.redirect('/docente/dashboard');
 
-const existente = await obtenerAutodiagnostico(usuario.entidad_id, cuatrimestre.id);
+const existente = docenteId ? await obtenerAutodiagnostico(docenteId, cuatrimestre.id) : null;
 const yaRespondido = !!existente;
 
 const OFERTA = ['Arquitectura','Administración de Empresas','Administración de Empresas Turísticas','Mercadotecnia','Sistemas Computacionales','Enfermería','Nutrición','Contaduría','Derecho','Pedagogía','Criminología','Comercio Internacional','Diseño Gráfico Digital','Inglés','Otros'];
