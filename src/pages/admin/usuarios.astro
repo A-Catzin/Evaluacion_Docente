@@ -1,20 +1,91 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { obtenerUsuarios, buscarUsuarios, type UsuarioConNombre } from '../../services/usuarios';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 import type { RolUsuario } from '../../types/supabase';
 
 const rolFiltro = (Astro.url.searchParams.get('rol') as RolUsuario) || undefined;
 const busqueda = Astro.url.searchParams.get('q') || '';
+const cliente = obtenerClienteSuperbase();
 
-let usuarios: UsuarioConNombre[] = [];
+interface FilaUsuario {
+  id: string; email: string; rol: string;
+  nombre: string; apellidos: string;
+  // Docente
+  campus?: string; materias?: string; coordinador?: string;
+  nivel_desempeno?: string; categoria_360?: string; final_360?: number;
+  prom_estudiantil?: number; prom_observacion?: number;
+  prom_coordinador?: number; prom_planeacion?: number; prom_autodiagnostico?: number;
+  turno?: string;
+  // Coordinador
+  maestros_evaluados?: number; desempeno_critico?: number;
+  proceso_mejora?: number; adecuado?: number; eficaz?: number; ejemplar?: number;
+}
+
+let filas: FilaUsuario[] = [];
 let errorMsg = '';
 
 try {
-  if (busqueda) {
-    usuarios = await buscarUsuarios(busqueda);
-    if (rolFiltro) usuarios = usuarios.filter(u => u.rol === rolFiltro);
-  } else {
-    usuarios = await obtenerUsuarios(rolFiltro);
+  let query = cliente.from('usuarios').select('id, email, rol, entidad_id');
+  if (rolFiltro) query = query.eq('rol', rolFiltro);
+  const { data: usuarios, error } = await query.order('email');
+  if (error) throw error;
+
+  for (const u of (usuarios || [])) {
+    const fila: FilaUsuario = { id: u.id, email: u.email, rol: u.rol, nombre: '', apellidos: '' };
+
+    // Obtener nombre desde entidad
+    if (u.entidad_id) {
+      if (u.rol === 'docente') {
+        const { data: doc } = await cliente.from('docentes').select('nombre,apellidos,num_empleado').eq('id', u.entidad_id).maybeSingle();
+        if (doc) { fila.nombre = doc.nombre; fila.apellidos = doc.apellidos; }
+      } else if (u.rol === 'estudiante') {
+        const { data: est } = await cliente.from('estudiantes').select('nombre,apellidos,matricula').eq('id', u.entidad_id).maybeSingle();
+        if (est) { fila.nombre = est.nombre; fila.apellidos = est.apellidos; }
+      }
+    }
+
+    // Datos específicos de docente
+    if (u.rol === 'docente' && u.entidad_id) {
+      const { data: cal } = await cliente.from('calificacion_final_docente').select('*').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
+      if (cal) {
+        fila.categoria_360 = cal.categoria_final || '—';
+        fila.final_360 = cal.calificacion_final;
+        fila.prom_estudiantil = cal.score_encuesta_estudiantil || undefined;
+        fila.prom_observacion = cal.score_observacion || undefined;
+        fila.prom_coordinador = cal.score_coordinacion || undefined;
+        fila.prom_planeacion = cal.score_planeacion || undefined;
+        fila.prom_autodiagnostico = cal.score_autoevaluacion || undefined;
+      }
+      // Datos no disponibles aún (placeholder)
+      fila.campus = '—';
+      fila.materias = '—';
+      fila.coordinador = '—';
+      fila.nivel_desempeno = '—';
+      fila.turno = '—';
+    }
+
+    // Datos específicos de coordinador
+    if (u.rol === 'coordinador') {
+      fila.maestros_evaluados = 0;
+      fila.desempeno_critico = 0;
+      fila.proceso_mejora = 0;
+      fila.adecuado = 0;
+      fila.eficaz = 0;
+      fila.ejemplar = 0;
+    }
+
+    // Si no tiene nombre desde entidad, usar email
+    if (!fila.nombre) {
+      fila.nombre = u.email.split('@')[0].replace(/[._]/g, ' ');
+    }
+
+    // Filtrar por búsqueda
+    if (busqueda) {
+      const t = busqueda.toLowerCase();
+      if (!fila.nombre.toLowerCase().includes(t) && !u.email.toLowerCase().includes(t)) continue;
+    }
+
+    filas.push(fila);
   }
 } catch (e) {
   errorMsg = e instanceof Error ? e.message : 'Error al cargar usuarios';
@@ -28,121 +99,107 @@ const COLOR_ROL: Record<string, string> = {
   superadmin: 'bg-purple-50 text-purple-700', coordinador: 'bg-blue-50 text-blue-700',
   docente: 'bg-emerald-50 text-emerald-700', estudiante: 'bg-slate-50 text-slate-700'
 };
+
+function formatear(n: number | undefined): string {
+  return n !== undefined && n !== null ? Math.round(n).toString() : '—';
+}
 ---
 
 <LayoutAdmin titulo="Usuarios — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Gestión de Usuarios</h1>
-      <span class="text-sm text-slate-400">{usuarios.length} usuarios</span>
+      <span class="text-sm text-slate-400">{filas.length} usuarios</span>
     </div>
 
-    <!-- Filtros y búsqueda -->
-    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6 flex flex-wrap gap-3 items-center">
-      <form method="GET" class="flex flex-wrap gap-3 items-center w-full">
-        <!-- Búsqueda -->
-        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre, email o matrícula..." class="flex-1 min-w-[200px] rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-tup" />
-        <!-- Filtro por rol -->
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form method="GET" class="flex flex-wrap gap-3 items-center">
+        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 min-w-[200px] rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-tup" />
         <select name="rol" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
           <option value="">Todos los roles</option>
           {ROLES.map(r => (<option value={r} selected={rolFiltro === r}>{ETIQUETAS_ROL[r]}</option>))}
         </select>
-        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium hover:bg-tup/90">Buscar</button>
-        {(busqueda || rolFiltro) && (<a href="/admin/usuarios" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500 hover:bg-slate-50">Limpiar</a>)}
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
+        {(busqueda || rolFiltro) && (<a href="/admin/usuarios" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
-    <!-- Error -->
     {errorMsg && (<div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm mb-6">{errorMsg}</div>)}
 
-    <!-- Tabla de usuarios -->
-    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      {usuarios.length === 0 ? (
-        <div class="p-12 text-center text-slate-400">No se encontraron usuarios.</div>
-      ) : (
+    {filas.length === 0 ? (
+      <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No se encontraron usuarios.</div>
+    ) : (
+      <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
         <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="bg-slate-50 border-b border-slate-200">
-                <th class="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase">Usuario</th>
-                <th class="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase">Email</th>
-                <th class="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase">ID / Matrícula</th>
-                <th class="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase">Rol Actual</th>
-                <th class="text-center px-4 py-3 font-semibold text-slate-600 text-xs uppercase">Cambiar a</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              {usuarios.map(u => (
-                <tr class="hover:bg-slate-50 transition-colors" id={`user-${u.id}`}>
-                  <td class="px-4 py-3">
-                    <div class="flex items-center gap-3">
-                      <div class="w-9 h-9 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold text-xs">{u.nombre_completo.charAt(0).toUpperCase()}</div>
-                      <div>
-                        <p class="font-medium text-slate-800">{u.nombre_completo}</p>
-                        <p class="text-xs text-slate-400">ID: {u.id.substring(0, 8)}...</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="px-4 py-3 text-slate-600">{u.email}</td>
-                  <td class="px-4 py-3 text-slate-600 font-mono text-xs">{u.matricula_o_empleado}</td>
-                  <td class="px-4 py-3 text-center">
-                    <span class={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium ${COLOR_ROL[u.rol] || 'bg-slate-50 text-slate-700'}`}>{ETIQUETAS_ROL[u.rol] || u.rol}</span>
-                  </td>
-                  <td class="px-4 py-3">
-                    <div class="flex items-center justify-center gap-1">
-                      {ROLES.filter(r => r !== u.rol).map(r => (
-                        <button
-                          class={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${COLOR_ROL[r]} hover:opacity-80`}
-                          onclick={`cambiarRol('${u.id}','${r}',this)`}
-                        >{ETIQUETAS_ROL[r]}</button>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
 
-    <!-- Toast -->
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal" role="alert"></div>
+          <!-- TABLA DOCENTE -->
+          {rolFiltro === 'docente' && (
+            <table class="w-full text-[11px] whitespace-nowrap">
+              <thead><tr class="bg-slate-50 border-b">
+                <th class="px-2 py-2 text-xs uppercase text-slate-600 sticky left-0 bg-slate-50">Nombre</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Ap. Paterno</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Ap. Materno</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Campus</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Materias</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Coordinador/a</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Nivel Desempeño</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Categoría 360</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Final 360</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Est.</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Obs.</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Coord.</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Plan.</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Auto.</th>
+                <th class="px-2 py-2 text-xs uppercase text-slate-600">Turno</th>
+              </tr></thead>
+              <tbody class="divide-y">{filas.map(f => {
+                const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
+                return (<tr class="hover:bg-slate-50"><td class="px-2 py-2 font-medium">{f.nombre}</td><td class="px-2 py-2">{paterno}</td><td class="px-2 py-2">{materno || '—'}</td><td class="px-2 py-2">{f.campus}</td><td class="px-2 py-2">{f.materias}</td><td class="px-2 py-2">{f.coordinador}</td><td class="px-2 py-2">{f.nivel_desempeno}</td><td class="px-2 py-2"><span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${(f.categoria_360 === 'Sobresaliente' || f.categoria_360 === 'Distinguido') ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{f.categoria_360}</span></td><td class="px-2 py-2 font-bold">{formatear(f.final_360)}</td><td class="px-2 py-2">{formatear(f.prom_estudiantil)}</td><td class="px-2 py-2">{formatear(f.prom_observacion)}</td><td class="px-2 py-2">{formatear(f.prom_coordinador)}</td><td class="px-2 py-2">{formatear(f.prom_planeacion)}</td><td class="px-2 py-2">{formatear(f.prom_autodiagnostico)}</td><td class="px-2 py-2">{f.turno}</td></tr>);
+              })}</tbody>
+            </table>
+          )}
+
+          <!-- TABLA COORDINADOR -->
+          {rolFiltro === 'coordinador' && (
+            <table class="w-full text-sm">
+              <thead><tr class="bg-slate-50 border-b">
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Nombre</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Ap. Paterno</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Ap. Materno</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">No. Maestros Evaluados</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Desempeño Crítico</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Proceso Mejora</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Adecuado</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Eficaz</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Ejemplar</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Rol</th>
+              </tr></thead>
+              <tbody class="divide-y">{filas.map(f => {
+                const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
+                return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 font-medium">{f.nombre}</td><td class="px-3 py-2">{paterno}</td><td class="px-3 py-2">{materno || '—'}</td><td class="px-3 py-2 text-center">{f.maestros_evaluados ?? '—'}</td><td class="px-3 py-2 text-center">{f.desempeno_critico ?? '—'}</td><td class="px-3 py-2 text-center">{f.proceso_mejora ?? '—'}</td><td class="px-3 py-2 text-center">{f.adecuado ?? '—'}</td><td class="px-3 py-2 text-center">{f.eficaz ?? '—'}</td><td class="px-3 py-2 text-center">{f.ejemplar ?? '—'}</td><td class="px-3 py-2"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>);
+              })}</tbody>
+            </table>
+          )}
+
+          <!-- TABLA ADMIN -->
+          {rolFiltro === 'superadmin' && (
+            <table class="w-full text-sm">
+              <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Apellidos</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th></tr></thead>
+              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{f.nombre}</td><td class="px-4 py-3">{f.apellidos || '—'}</td><td class="px-4 py-3 text-slate-600">{f.email}</td></tr>))}</tbody>
+            </table>
+          )}
+
+          <!-- TABLA ESTUDIANTE (default o todos) -->
+          {(!rolFiltro || rolFiltro === 'estudiante') && (
+            <table class="w-full text-sm">
+              <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Apellidos</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Rol</th></tr></thead>
+              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{f.nombre}</td><td class="px-4 py-3">{f.apellidos || '—'}</td><td class="px-4 py-3 text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
+            </table>
+          )}
+
+        </div>
+      </div>
+    )}
   </div>
 </LayoutAdmin>
-
-<script is:inline>
-  function cambiarRol(userId, nuevoRol, btn) {
-    if (!confirm('¿Cambiar el rol de este usuario a ' + nuevoRol + '?')) return;
-    btn.disabled = true;
-    btn.textContent = '...';
-
-    fetch('/api/admin/cambiar-rol', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, rol: nuevoRol }),
-    }).then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.success) {
-          mostrarToast('Rol cambiado a ' + nuevoRol, false);
-          setTimeout(function () { location.reload(); }, 800);
-        } else {
-          mostrarToast(data.error || 'Error al cambiar rol', true);
-          btn.disabled = false;
-          btn.textContent = nuevoRol;
-        }
-      }).catch(function () {
-        mostrarToast('Error de conexión', true);
-        btn.disabled = false;
-      });
-  }
-
-  function mostrarToast(mensaje, error) {
-    var t = document.getElementById('toast');
-    if (!t) return;
-    t.textContent = mensaje;
-    t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal ' + (error ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white');
-    t.classList.remove('hidden');
-    setTimeout(function () { t.classList.add('hidden'); }, 3000);
-  }
-</script>
