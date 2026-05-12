@@ -168,10 +168,9 @@ const REACTIVOS = [
   </div>
 </LayoutDocente>
 
-<script is:inline>
+<script is:inline define:vars={{ cuatrimestreId: cuatrimestre.id }}>
   var pasoActual = 1;
   var totalPasos = 4;
-  var cuatrimestreId = {JSON.stringify(cuatrimestre.id)};
 
   function mostrarPaso(n) {
     document.querySelectorAll('.paso').forEach(function (p) { p.classList.add('hidden'); });
