@@ -36,8 +36,14 @@ try {
     // Obtener nombre desde entidad
     if (u.entidad_id) {
       if (u.rol === 'docente') {
-        const { data: doc } = await cliente.from('docentes').select('nombre,apellidos,num_empleado').eq('id', u.entidad_id).maybeSingle();
-        if (doc) { fila.nombre = doc.nombre; fila.apellidos = doc.apellidos; }
+        const { data: doc } = await cliente.from('docentes').select('nombre,apellidos,apellido_paterno,apellido_materno,campus,turno,oferta_academica,num_empleado').eq('id', u.entidad_id).maybeSingle();
+        if (doc) {
+          fila.nombre = doc.nombre;
+          fila.apellidos = doc.apellidos;
+          fila.campus = doc.campus || '—';
+          fila.turno = doc.turno || '—';
+          fila.materias = doc.oferta_academica || '—';
+        }
       } else if (u.rol === 'estudiante') {
         const { data: est } = await cliente.from('estudiantes').select('nombre,apellidos,matricula').eq('id', u.entidad_id).maybeSingle();
         if (est) { fila.nombre = est.nombre; fila.apellidos = est.apellidos; }
@@ -46,6 +52,7 @@ try {
 
     // Datos específicos de docente
     if (u.rol === 'docente' && u.entidad_id) {
+      // Calificación final (si existe)
       const { data: cal } = await cliente.from('calificacion_final_docente').select('*').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
       if (cal) {
         fila.categoria_360 = cal.categoria_final || '—';
@@ -54,14 +61,17 @@ try {
         fila.prom_observacion = cal.score_observacion || undefined;
         fila.prom_coordinador = cal.score_coordinacion || undefined;
         fila.prom_planeacion = cal.score_planeacion || undefined;
-        fila.prom_autodiagnostico = cal.score_autoevaluacion || undefined;
       }
-      // Datos no disponibles aún (placeholder)
-      fila.campus = '—';
-      fila.materias = '—';
+      // Promedio autodiagnóstico
+      const { data: diag } = await cliente.from('autodiagnosticos').select('puntaje_total,nivel_desempeno').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
+      if (diag) {
+        fila.prom_autodiagnostico = Math.round((diag.puntaje_total / 120) * 100);
+        fila.nivel_desempeno = diag.nivel_desempeno || '—';
+      }
+      // Campos que vienen de docentes (ya seteados arriba)
+      if (!fila.campus) fila.campus = '—';
+      if (!fila.turno) fila.turno = '—';
       fila.coordinador = '—';
-      fila.nivel_desempeno = '—';
-      fila.turno = '—';
     }
 
     // Datos específicos de coordinador
