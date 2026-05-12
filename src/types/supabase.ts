@@ -206,6 +206,12 @@ export const NIVELES_DESEMPENO = [
   { min: 0, max: 59, nivel: 'Necesita Mejora', color: '#ef4444' },
 ] as const;
 
+export interface OfertaAcademica {
+  id: number;
+  nombre: string;
+  activa: boolean;
+}
+
 export function obtenerNivelDesempeno(promedio: number): { nivel: string; color: string } {
   for (const n of NIVELES_DESEMPENO) {
     if (promedio >= n.min && promedio <= n.max) return n;
