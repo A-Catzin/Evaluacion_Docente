@@ -172,6 +172,8 @@ export interface CalificacionFinal {
   score_autoevaluacion: number | null;
   calificacion_final: number;
   categoria_final: string | null;
+  tiene_comentarios_foco_rojo?: boolean;
+  tiene_comentarios_criticos?: boolean;
   num_instrumentos_completados: number;
 }
 
