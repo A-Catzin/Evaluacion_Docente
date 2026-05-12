@@ -5,6 +5,7 @@ const DOMINIO_PERMITIDO = '@tecplayacar.edu.mx';
 
 const RUTAS_PUBLICAS = [
   '/api/auth/guardar-sesion', '/api/auth/signout', '/api/auth/rol',
+  '/api/docente/autodiagnostico',
   '/auth', '/', '/favicon.ico', '/favicon.svg',
 ];
 

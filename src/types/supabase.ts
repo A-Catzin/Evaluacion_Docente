@@ -32,10 +32,15 @@ export interface Docente {
   id: number;
   nombre: string;
   apellidos: string;
+  apellido_paterno?: string | null;
+  apellido_materno?: string | null;
   email: string;
   num_empleado: string | null;
   licenciatura_id: number | null;
   foto_url: string | null;
+  campus?: string | null;
+  turno?: string | null;
+  oferta_academica?: string | null;
   activo: boolean;
 }
 
@@ -177,7 +182,36 @@ export interface CalificacionFinal {
   num_instrumentos_completados: number;
 }
 
-// ─── Constantes ─────────────────────────────────────────────────
+// ─── Autodiagnóstico ───────────────────────────────────────────
+
+export interface Autodiagnostico {
+  id: number;
+  docente_id: number;
+  cuatrimestre_id: number;
+  r1: number; r2: number; r3: number; r4: number; r5: number;
+  r6: number; r7: number; r8: number; r9: number; r10: number;
+  r11: number; r12: number; r13: number; r14: number; r15: number;
+  r16: number; r17: number; r18: number; r19: number; r20: number;
+  r21: number; r22: number; r23: number; r24: number;
+  puntaje_total: number;
+  nivel_desempeno: string | null;
+  comentarios: string | null;
+  fecha_respuesta: string;
+}
+
+export const NIVELES_DESEMPENO = [
+  { min: 90, max: 100, nivel: 'Excelente', color: '#22c55e' },
+  { min: 75, max: 89, nivel: 'Satisfactorio', color: '#3b82f6' },
+  { min: 60, max: 74, nivel: 'En Desarrollo', color: '#f59e0b' },
+  { min: 0, max: 59, nivel: 'Necesita Mejora', color: '#ef4444' },
+] as const;
+
+export function obtenerNivelDesempeno(promedio: number): { nivel: string; color: string } {
+  for (const n of NIVELES_DESEMPENO) {
+    if (promedio >= n.min && promedio <= n.max) return n;
+  }
+  return NIVELES_DESEMPENO[3];
+}
 
 export const PONDERACION_V2 = {
   EE: 0.40, // Encuesta Estudiantil
