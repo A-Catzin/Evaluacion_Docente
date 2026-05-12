@@ -1,0 +1,29 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { obtenerCampus } from '../../services/catalogos';
+
+const items = await obtenerCampus();
+---
+<LayoutAdmin titulo="Campus — Admin">
+  <div class="animate-flotar-entrada">
+    <h1 class="text-3xl font-bold text-tup mb-6">Gestión de Campus</h1>
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form id="form-nueva" class="flex gap-3">
+        <input type="text" id="input-nombre" placeholder="Nombre del campus..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Agregar</button>
+      </form>
+    </div>
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Estado</th></tr></thead>
+        <tbody class="divide-y">{items.map(i => (<tr class="hover:bg-slate-50"><td class="px-4 py-3">{i.nombre}</td><td class="px-4 py-3 text-center"><button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${i.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`} data-id={i.id} data-activa={i.activo}>{i.activo ? 'Activo' : 'Inactivo'}</button></td></tr>))}</tbody>
+      </table>
+    </div>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
+</LayoutAdmin>
+<script is:inline>
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},3000)}
+  document.getElementById('form-nueva').addEventListener('submit',async function(e){e.preventDefault();var n=document.getElementById('input-nombre').value.trim();if(!n)return;var r=await fetch('/api/admin/catalogos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',tabla:'campus',nombre:n})});if(r.ok){location.reload()}else{var d=await r.json();toast(d.error||'Error',true)}});
+  document.querySelectorAll('.toggle-btn').forEach(function(b){b.addEventListener('click',async function(){var r=await fetch('/api/admin/catalogos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'toggle',tabla:'campus',id:parseInt(this.dataset.id),activa:this.dataset.activa==='true'?false:true})});if(r.ok){location.reload()}else{toast('Error',true)}})});
+</script>

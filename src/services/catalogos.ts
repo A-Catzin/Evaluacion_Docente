@@ -2,7 +2,7 @@
  * Servicio de Catálogos — Cuatrimestres, Licenciaturas, Asignaturas
  */
 import { obtenerClienteSuperbase } from '../lib/supabaseClient';
-import type { Cuatrimestre, Licenciatura, Asignatura, OfertaAcademica } from '../types/supabase';
+import type { Cuatrimestre, Licenciatura, Asignatura, OfertaAcademica, Campus, Turno } from '../types/supabase';
 
 const cliente = () => obtenerClienteSuperbase();
 
@@ -54,4 +54,16 @@ export async function obtenerOfertasAcademicas(): Promise<OfertaAcademica[]> {
   const { data, error } = await cliente().from('ofertas_academicas').select('*').eq('activa', true).order('nombre');
   if (error) throw new Error('Error al obtener ofertas académicas');
   return data as OfertaAcademica[];
+}
+
+export async function obtenerCampus(): Promise<Campus[]> {
+  const { data, error } = await cliente().from('campus').select('*').eq('activo', true).order('nombre');
+  if (error) throw new Error('Error al obtener campus');
+  return data as Campus[];
+}
+
+export async function obtenerTurnos(): Promise<Turno[]> {
+  const { data, error } = await cliente().from('turnos').select('*').eq('activo', true).order('nombre');
+  if (error) throw new Error('Error al obtener turnos');
+  return data as Turno[];
 }

@@ -212,6 +212,18 @@ export interface OfertaAcademica {
   activa: boolean;
 }
 
+export interface Campus {
+  id: number;
+  nombre: string;
+  activo: boolean;
+}
+
+export interface Turno {
+  id: number;
+  nombre: string;
+  activo: boolean;
+}
+
 export function obtenerNivelDesempeno(promedio: number): { nivel: string; color: string } {
   for (const n of NIVELES_DESEMPENO) {
     if (promedio >= n.min && promedio <= n.max) return n;

@@ -1,6 +1,6 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
-import { obtenerCuatrimestreActivo, obtenerOfertasAcademicas } from '../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerOfertasAcademicas, obtenerCampus, obtenerTurnos } from '../../services/catalogos';
 import { obtenerAutodiagnostico } from '../../services/autodiagnostico';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
@@ -23,9 +23,11 @@ const existente = docenteId ? await obtenerAutodiagnostico(docenteId, cuatrimest
 const yaRespondido = !!existente;
 
 const ofertas = await obtenerOfertasAcademicas();
+const campusList = await obtenerCampus();
+const turnosList = await obtenerTurnos();
 const OFERTA = ofertas.map(o => o.nombre);
-const TURNOS = ['Matutino','Vespertino','Mixto','Virtual'];
-const CAMPUS = ['Tecnológico Universitario Tuxtla','Tecnológico Universitario Playacar / Facultad de Ciencias de la Salud'];
+const CAMPUS = campusList.map(c => c.nombre);
+const TURNOS = turnosList.map(t => t.nombre);
 const REACTIVOS = [
   'Domino los conceptos para la construcción del aprendizaje en los cursos o programas académicos que imparto.',
   'Expongo, organizo, desarrollo y vinculo los contenidos en forma clara.',
