@@ -10,13 +10,15 @@ const busqueda = Astro.url.searchParams.get('q') || '';
 const ofertaFiltro = Astro.url.searchParams.get('oferta') || '';
 
 let items = (asignaturas || []).map(a => ({ ...a, oferta_nombre: a.ofertas_academicas?.nombre || '—' }));
-if (busqueda) { const t = busqueda.toLowerCase(); items = items.filter(a => a.nombre.toLowerCase().includes(t) || a.clave?.toLowerCase().includes(t)); }
+if (busqueda) { const t = busqueda.toLowerCase(); items = items.filter(a => a.nombre.toLowerCase().includes(t) || (a.clave||'').toLowerCase().includes(t)); }
 if (ofertaFiltro) items = items.filter(a => a.oferta_academica_id?.toString() === ofertaFiltro);
 ---
+
 <LayoutAdmin titulo="Asignaturas — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Gestión de Asignaturas</h1><span class="text-sm text-slate-400">{items.length} materias</span></div>
 
+    <!-- Filtros -->
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex flex-wrap gap-3 items-center">
         <input type="text" name="q" value={busqueda} placeholder="Buscar materia..." class="flex-1 min-w-[200px] rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
@@ -29,11 +31,49 @@ if (ofertaFiltro) items = items.filter(a => a.oferta_academica_id?.toString() ==
       </form>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      <table class="w-full text-sm">
-        <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Carrera</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Créditos</th></tr></thead>
-        <tbody class="divide-y">{items.map(a => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-mono text-xs">{a.clave || '—'}</td><td class="px-4 py-3 font-medium">{a.nombre}</td><td class="px-4 py-3 text-slate-600">{a.oferta_nombre}</td><td class="px-4 py-3 text-center">{a.creditos || 5}</td></tr>))}</tbody>
-      </table>
+    <!-- Formulario para agregar -->
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form id="form-nueva" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <input type="text" id="input-clave" placeholder="Clave" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+        <input type="text" id="input-nombre" placeholder="Nombre *" required class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm sm:col-span-2" />
+        <div class="flex gap-2">
+          <select id="input-oferta" class="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Sin carrera</option>{ofertas.map(o => (<option value={o.id}>{o.nombre}</option>))}</select>
+          <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Agregar</button>
+        </div>
+      </form>
     </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      {items.length === 0 ? (<div class="p-12 text-center text-slate-400">No hay asignaturas. Agrega la primera.</div>) : (
+        <table class="w-full text-sm">
+          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Carrera</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Créditos</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Acción</th></tr></thead>
+          <tbody class="divide-y">{items.map(a => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-mono text-xs">{a.clave || '—'}</td><td class="px-4 py-3 font-medium">{a.nombre}</td><td class="px-4 py-3 text-slate-600">{a.oferta_nombre}</td><td class="px-4 py-3 text-center">{a.creditos || 5}</td><td class="px-4 py-3 text-center"><button class="btn-delete text-xs text-red-500 hover:underline" data-id={a.id}>Eliminar</button></td></tr>))}</tbody>
+        </table>
+      )}
+    </div>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
 </LayoutAdmin>
+
+<script is:inline>
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},3000)}
+
+  document.getElementById('form-nueva').addEventListener('submit',async function(e){
+    e.preventDefault();
+    var nombre=document.getElementById('input-nombre').value.trim();
+    if(!nombre)return;
+    var res=await fetch('/api/admin/asignaturas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',clave:document.getElementById('input-clave').value.trim()||null,nombre,oferta_academica_id:document.getElementById('input-oferta').value||null})});
+    if(res.ok){toast('Asignatura agregada',false);setTimeout(function(){location.reload()},500)}
+    else{var d=await res.json();toast(d.error||'Error',true)}
+  });
+
+  document.querySelectorAll('.btn-delete').forEach(function(b){
+    b.addEventListener('click',async function(){
+      if(!confirm('¿Eliminar esta asignatura?'))return;
+      var res=await fetch('/api/admin/asignaturas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',id:parseInt(this.dataset.id)})});
+      if(res.ok){toast('Eliminada',false);setTimeout(function(){location.reload()},500)}
+      else{var d=await res.json();toast(d.error||'Error',true)}
+    });
+  });
+</script>
