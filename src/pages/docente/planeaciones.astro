@@ -83,7 +83,8 @@ const planeaciones: PlaneacionItem[] = (planeacionesRaw || []).map((p: Record<st
       // Subir con fetch directo a la API REST de Supabase Storage
       var token=document.cookie.split('; ').find(function(r){return r.startsWith('sb-access-token=')});
       var accessToken=token?token.split('=')[1]:'';
-      var uploadRes=await fetch(supabaseUrl+'/storage/v1/object/planeaciones/'+path,{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'x-upsert':'true'},body:file});
+      var fileBuffer=await file.arrayBuffer();
+      var uploadRes=await fetch(supabaseUrl+'/storage/v1/object/planeaciones/'+path,{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':file.type||'application/pdf','x-upsert':'true'},body:fileBuffer});
       if(!uploadRes.ok){var errData=await uploadRes.json().catch(function(){return{}});toast('Error al subir: '+(errData.message||errData.error||uploadRes.status),true);btn.disabled=false;btn.textContent='Subir Planeación';return}
       var urlPdf=supabaseUrl+'/storage/v1/object/public/planeaciones/'+path;
       var res=await fetch('/api/docente/planeacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cuatrimestre_id:cuatrimestreId,asignatura_id:parseInt(asig.value),grupo,modalidad:document.getElementById('modalidad').value,proyecto:document.getElementById('proyecto').value==='true',laboratorio:document.getElementById('laboratorio').value,visitas:document.getElementById('visitas').value,url_pdf:urlPdf,nombre_archivo:nombreArchivo,comentario_docente:document.getElementById('comentario').value.trim()||null,campus,turno})});
