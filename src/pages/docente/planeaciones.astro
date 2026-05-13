@@ -74,9 +74,16 @@ const planeaciones: PlaneacionItem[] = (planeacionesRaw || []).map((p: Record<st
     var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_doc_26-3.pdf';
     try{
       var path=cuatrimestreId+'/'+docenteId+'/'+Date.now()+'_'+file.name.replace(/\s+/g,'_');
-      var fileBuffer=await file.arrayBuffer();
-      var params=new URLSearchParams({path,cuatrimestre:cuatrimestreId,asignatura:asig.value,grupo,modalidad:document.getElementById('modalidad').value,proyecto:document.getElementById('proyecto').value==='true'?'true':'false',laboratorio:document.getElementById('laboratorio').value,visitas:document.getElementById('visitas').value,comentario:document.getElementById('comentario').value.trim()||'',campus,turno,nombre:nombreArchivo});
-      var uploadRes=await fetch('/api/docente/subir-archivo?'+params.toString(),{method:'POST',body:fileBuffer});
+      var formData=new FormData();
+      formData.append('file',file); formData.append('path',path);
+      formData.append('cuatrimestre',cuatrimestreId); formData.append('asignatura',asig.value);
+      formData.append('grupo',grupo); formData.append('modalidad',document.getElementById('modalidad').value);
+      formData.append('proyecto',document.getElementById('proyecto').value==='true'?'true':'false');
+      formData.append('laboratorio',document.getElementById('laboratorio').value);
+      formData.append('visitas',document.getElementById('visitas').value);
+      formData.append('comentario',document.getElementById('comentario').value.trim()||'');
+      formData.append('campus',campus); formData.append('turno',turno); formData.append('nombre',nombreArchivo);
+      var uploadRes=await fetch('/api/docente/subir-archivo',{method:'POST',body:formData});
       if(!uploadRes.ok){var errData=await uploadRes.json().catch(function(){return{}});toast('Error: '+(errData.error||errData.message||uploadRes.status),true);btn.disabled=false;btn.textContent='Subir Planeación';return}
       toast('¡Planeación subida exitosamente!',false);setTimeout(function(){location.reload()},1000);
     }catch(err){toast('Error: '+err.message,true);btn.disabled=false;btn.textContent='Subir Planeación'}
