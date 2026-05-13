@@ -14,7 +14,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const body = await request.json();
     const { id, criterio_alineacion, criterio_secuencia, criterio_recursos, criterio_evaluacion, estado, comentario_retroalimentacion, comentario_interno } = body;
-    const puntaje = Math.round(((criterio_alineacion + criterio_secuencia + criterio_recursos + criterio_evaluacion) / 4 / 5) * 100 * 100) / 100;
+    const puntaje = Math.min(99.99, Math.round(((criterio_alineacion + criterio_secuencia + criterio_recursos + criterio_evaluacion) / 20) * 100 * 100) / 100);
 
     const { error } = await cl.from('planeaciones').update({
       criterio_alineacion, criterio_secuencia, criterio_recursos, criterio_evaluacion,
