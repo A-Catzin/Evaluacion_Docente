@@ -8,6 +8,13 @@ const ofertas = await obtenerOfertasAcademicas();
 const campusList = await obtenerCampus();
 const CUATRIMESTRES = ['1ro','2do','3ro','4to','5to','6to','7mo','8vo','9no','10mo','11vo','12vo'];
 const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
+
+// Precargar docente si viene de una tarjeta del dashboard
+const docenteIdParam = Astro.url.searchParams.get('docente_id');
+let docentePreseleccionado: { id: number; nombre: string; apellidos: string; oferta_academica?: string | null; campus?: string | null } | null = null;
+if (docenteIdParam) {
+  docentePreseleccionado = docentes.find(d => d.id === parseInt(docenteIdParam)) || null;
+}
 ---
 
 <LayoutCoordinador titulo="Observación de Clase">
@@ -22,16 +29,16 @@ const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Docente *</label>
-            <select id="docente_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+            <select id="docente_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="autoLlenar(this.value)">
               <option value="">Seleccionar...</option>
-              {docentes.map(d => (<option value={d.id}>{d.nombre} {d.apellidos}</option>))}
+              {docentes.map(d => (<option value={d.id} selected={docentePreseleccionado?.id === d.id}>{d.nombre} {d.apellidos}</option>))}
             </select>
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Oferta Académica *</label>
             <select id="oferta" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
               <option value="">Seleccionar...</option>
-              {ofertas.map(o => (<option value={o.nombre}>{o.nombre}</option>))}
+              {ofertas.map(o => (<option value={o.nombre} selected={docentePreseleccionado?.oferta_academica === o.nombre}>{o.nombre}</option>))}
             </select>
           </div>
           <div>
@@ -51,7 +58,7 @@ const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
           <div class="sm:col-span-2">
             <label class="block text-sm font-medium text-slate-700 mb-1">Campus *</label>
             <div class="flex flex-wrap gap-2">
-              {campusList.map(c => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-tup/5"><input type="radio" name="campus" value={c.nombre} required class="accent-tup" /><span class="text-sm">{c.nombre}</span></label>))}
+              {campusList.map(c => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-tup/5"><input type="radio" name="campus" value={c.nombre} required class="accent-tup" checked={docentePreseleccionado?.campus === c.nombre} /><span class="text-sm">{c.nombre}</span></label>))}
             </div>
           </div>
         </div>
@@ -104,8 +111,18 @@ const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
   </div>
 </LayoutCoordinador>
 
-<script is:inline>
-  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
+<script is:inline define:vars={{ docentesData: JSON.stringify(docentes.map(d => ({id:d.id, oferta:d.oferta_academica||'', campus:d.campus||''}))) }}>
+  var docentesMap = JSON.parse(docentesData).reduce(function(m, d) { m[d.id] = d; return m; }, {});
+
+  function autoLlenar(docenteId) {
+    var d = docentesMap[parseInt(docenteId)];
+    if (!d) return;
+    if (d.oferta) { var of = document.getElementById('oferta'); for (var i = 0; i < of.options.length; i++) { if (of.options[i].value === d.oferta) { of.selectedIndex = i; break; } } }
+    if (d.campus) { var cbs = document.querySelectorAll('input[name="campus"]'); cbs.forEach(function(cb) { if (cb.value === d.campus) cb.checked = true; }); }
+  }
+  // Auto-llenar al cargar si ya hay docente preseleccionado
+  var sel = document.getElementById('docente_id');
+  if (sel && sel.value) autoLlenar(sel.value);t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
 
   document.getElementById('form-obs').addEventListener('submit',async function(e){
     e.preventDefault();

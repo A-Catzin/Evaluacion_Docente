@@ -30,7 +30,7 @@ const docentes = await obtenerDocentes();
                 <div><p class="font-medium text-slate-800 text-sm">{doc.nombre} {doc.apellidos}</p><p class="text-xs text-slate-400">{doc.email}</p></div>
               </div>
               <div class="flex gap-2">
-                <a href="/coordinador/captura/observacion" class="flex-1 text-center px-3 py-2 rounded-lg bg-tup text-white text-xs font-medium hover:bg-tup/90">Observación</a>
+                <a href={`/coordinador/captura/observacion?docente_id=${doc.id}`} class="flex-1 text-center px-3 py-2 rounded-lg bg-tup text-white text-xs font-medium hover:bg-tup/90">Observación</a>
                 <a href="/coordinador/captura/planeacion" class="flex-1 text-center px-3 py-2 rounded-lg bg-dorado text-white text-xs font-medium hover:bg-dorado/90">Planeación</a>
               </div>
             </div>
