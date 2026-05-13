@@ -2,21 +2,38 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../services/docentes';
 
-const docentes = await obtenerDocentes();
+const busqueda = Astro.url.searchParams.get('q') || '';
+const todos = await obtenerDocentes();
+const docentes = busqueda
+  ? todos.filter(d =>
+      `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) ||
+      d.email.toLowerCase().includes(busqueda.toLowerCase()) ||
+      (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase())
+    )
+  : todos;
 ---
 <LayoutAdmin titulo="Docentes — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Gestión de Docentes</h1>
-      <button class="px-4 py-2 rounded-xl bg-tup text-white text-sm font-medium hover:bg-tup/90">+ Nuevo Docente</button>
+      <span class="text-sm text-slate-400">{docentes.length} docentes</span>
     </div>
+
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form method="GET" class="flex gap-3">
+        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre, email o empleado..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
+        {busqueda && (<a href="/admin/docentes" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+      </form>
+    </div>
+
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       {docentes.length === 0 ? (
-        <div class="p-12 text-center text-slate-400">No hay docentes registrados.</div>
+        <div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>
       ) : (
         <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Núm. Empleado</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Estado</th></tr></thead>
-          <tbody class="divide-y">{docentes.map(d => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{d.nombre} {d.apellidos}</td><td class="px-4 py-3 text-slate-600">{d.email}</td><td class="px-4 py-3 text-slate-600">{d.num_empleado || '—'}</td><td class="px-4 py-3"><span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700">Activo</span></td></tr>))}</tbody>
+          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Campus</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Turno</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Estado</th></tr></thead>
+          <tbody class="divide-y">{docentes.map(d => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{d.nombre} {d.apellidos}</td><td class="px-4 py-3 text-slate-600">{d.email}</td><td class="px-4 py-3 text-slate-600">{d.campus || '—'}</td><td class="px-4 py-3 text-slate-600">{d.turno || '—'}</td><td class="px-4 py-3"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${d.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>{d.activo ? 'Activo' : 'Inactivo'}</span></td></tr>))}</tbody>
         </table>
       )}
     </div>
