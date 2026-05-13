@@ -1,8 +1,7 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
-import { obtenerCuatrimestreActivo, obtenerOfertasAcademicas, obtenerCampus, obtenerTurnos } from '../../services/catalogos';
-import { obtenerAsignaturas } from '../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerAsignaturas } from '../../services/catalogos';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -14,13 +13,16 @@ const { data: usuario } = await cl.from('usuarios').select('entidad_id,rol').eq(
 if (!usuario || usuario.rol !== 'docente' || !usuario.entidad_id) return Astro.redirect('/docente/dashboard');
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
-const ofertas = await obtenerOfertasAcademicas();
-const campusList = await obtenerCampus();
-const turnosList = await obtenerTurnos();
 const asignaturas = await obtenerAsignaturas();
+const { data: docente } = await cl.from('docentes').select('campus,turno').eq('id', usuario.entidad_id).maybeSingle();
+const { data: planeacionesRaw } = await cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', usuario.entidad_id).order('fecha_subida', { ascending: false });
 
-const { data: docente } = await cl.from('docentes').select('*').eq('id', usuario.entidad_id).maybeSingle();
-const { data: planeaciones } = await cl.from('planeaciones').select('*, asignaturas(nombre)').eq('docente_id', usuario.entidad_id).order('fecha_subida', { ascending: false });
+interface PlaneacionItem { id: number; asignatura: string; grupo: string; estado: string; puntaje: number | null; url: string; }
+const planeaciones: PlaneacionItem[] = (planeacionesRaw || []).map((p: Record<string,unknown>) => ({
+  id: p.id as number, asignatura: (p.asignaturas as {nombre:string})?.nombre || String(p.asignatura_id),
+  grupo: p.grupo as string, estado: p.estado as string,
+  puntaje: p.puntaje_promedio as number | null, url: p.url_pdf as string
+}));
 ---
 
 <LayoutDocente titulo="Mis Planeaciones">
@@ -48,14 +50,14 @@ const { data: planeaciones } = await cl.from('planeaciones').select('*, asignatu
       </form>
     </div>
 
-    <!-- Lista de planeaciones -->
+    <!-- Lista -->
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      <div class="px-6 py-4 border-b"><h2 class="font-semibold text-slate-700">Planeaciones Enviadas ({planeaciones?.length || 0})</h2></div>
-      {(planeaciones || []).length === 0 ? (
+      <div class="px-6 py-4 border-b"><h2 class="font-semibold text-slate-700">Planeaciones Enviadas ({planeaciones.length})</h2></div>
+      {planeaciones.length === 0 ? (
         <div class="p-12 text-center text-slate-400">No has subido planeaciones todavía.</div>
       ) : (
         <table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-4 py-3 text-xs uppercase">Grupo</th><th class="text-center px-4 py-3 text-xs uppercase">Estado</th><th class="text-center px-4 py-3 text-xs uppercase">Puntaje</th><th class="text-right px-4 py-3 text-xs uppercase">PDF</th></tr></thead>
-        <tbody class="divide-y">{(planeaciones || []).map(p => (<tr class="hover:bg-slate-50"><td class="px-4 py-3">{(p as Record<string,unknown>).asignaturas?.nombre || p.asignatura_id}</td><td class="px-4 py-3">{p.grupo}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${p.estado==='Aprobado'?'bg-emerald-50 text-emerald-700':p.estado==='Corrección'?'bg-red-50 text-red-700':'bg-amber-50 text-amber-700'}`}>{p.estado}</span></td><td class="px-4 py-3 text-center font-bold">{p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'}</td><td class="px-4 py-3 text-right"><a href={p.url_pdf} target="_blank" class="text-tup text-xs hover:underline">Ver PDF</a></td></tr>))}</tbody></table>
+        <tbody class="divide-y">{planeaciones.map(p => (<tr class="hover:bg-slate-50"><td class="px-4 py-3">{p.asignatura}</td><td class="px-4 py-3">{p.grupo}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${p.estado==='Aprobado'?'bg-emerald-50 text-emerald-700':p.estado==='Corrección'?'bg-red-50 text-red-700':'bg-amber-50 text-amber-700'}`}>{p.estado}</span></td><td class="px-4 py-3 text-center font-bold">{p.puntaje ? Math.round(p.puntaje)+'%' : '—'}</td><td class="px-4 py-3 text-right"><a href={p.url} target="_blank" class="text-tup text-xs hover:underline">Ver PDF</a></td></tr>))}</tbody></table>
       )}
     </div>
     <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
@@ -64,41 +66,21 @@ const { data: planeaciones } = await cl.from('planeaciones').select('*, asignatu
 
 <script is:inline define:vars={{ docenteId: usuario.entidad_id, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '', supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL, supabaseKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY }}>
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
-
   document.getElementById('form-subir').addEventListener('submit',async function(e){
-    e.preventDefault();
-    var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Subiendo...';
+    e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Subiendo...';
     var file=document.getElementById('archivo').files[0];
     if(!file){toast('Selecciona un archivo PDF',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
-
-    var asignatura=document.getElementById('asignatura_id');
-    var grupo=document.getElementById('grupo').value.trim();
-    var asigNombre=asignatura.options[asignatura.selectedIndex].text.replace(/\s+/g,'_');
-    var nombreArchivo=asigNombre+'_'+grupo+'_'+(docenteId||'doc')+'_26-3.pdf';
-
+    var asig=document.getElementById('asignatura_id');var grupo=document.getElementById('grupo').value.trim();
+    var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_'+'doc_26-3.pdf';
     try{
-      // Subir a Supabase Storage
       var {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
       var supabase=createClient(supabaseUrl,supabaseKey);
       var path=cuatrimestreId+'/'+docenteId+'/'+nombreArchivo;
-      var {data:uploadData,error:uploadError}=await supabase.storage.from('planeaciones').upload(path,file,{upsert:true});
-      if(uploadError){toast('Error al subir archivo: '+uploadError.message,true);btn.disabled=false;btn.textContent='Subir Planeación';return}
-
+      var {error:uploadError}=await supabase.storage.from('planeaciones').upload(path,file,{upsert:true});
+      if(uploadError){toast('Error al subir: '+uploadError.message,true);btn.disabled=false;btn.textContent='Subir Planeación';return}
       var {data:urlData}=supabase.storage.from('planeaciones').getPublicUrl(path);
-      var urlPdf=urlData.publicUrl;
-
-      // Guardar metadatos
-      var res=await fetch('/api/docente/planeacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        cuatrimestre_id:cuatrimestreId,asignatura_id:parseInt(asignatura.value),grupo,
-        modalidad:document.getElementById('modalidad').value,
-        proyecto:document.getElementById('proyecto').value==='true',
-        laboratorio:document.getElementById('laboratorio').value,
-        visitas:document.getElementById('visitas').value,
-        url_pdf:urlPdf,nombre_archivo:nombreArchivo,
-        comentario_docente:document.getElementById('comentario').value.trim()||null,
-        campus:campus,turno:turno
-      })});
-      if(res.ok){toast('Planeación subida exitosamente',false);setTimeout(function(){location.reload()},1000)}
+      var res=await fetch('/api/docente/planeacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cuatrimestre_id:cuatrimestreId,asignatura_id:parseInt(asig.value),grupo,modalidad:document.getElementById('modalidad').value,proyecto:document.getElementById('proyecto').value==='true',laboratorio:document.getElementById('laboratorio').value,visitas:document.getElementById('visitas').value,url_pdf:urlData.publicUrl,nombre_archivo:nombreArchivo,comentario_docente:document.getElementById('comentario').value.trim()||null,campus,turno})});
+      if(res.ok){toast('Subida exitosa',false);setTimeout(function(){location.reload()},1000)}
       else{var d=await res.json();toast(d.error||'Error',true);btn.disabled=false;btn.textContent='Subir Planeación'}
     }catch(err){toast('Error: '+err.message,true);btn.disabled=false;btn.textContent='Subir Planeación'}
   });

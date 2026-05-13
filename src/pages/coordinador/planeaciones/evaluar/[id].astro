@@ -1,7 +1,7 @@
 ---
-import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
-import { obtenerPlaneacion } from '../../../services/planeaciones';
+import LayoutCoordinador from '../../../../layouts/LayoutCoordinador.astro';
+import { obtenerClienteSuperbase } from '../../../../lib/supabaseClient';
+import { obtenerPlaneacion } from '../../../../services/planeaciones';
 
 const id = parseInt(Astro.params.id || '0');
 const cliente = obtenerClienteSuperbase();
