@@ -8,6 +8,16 @@ const cliente = obtenerClienteSuperbase();
 const plan = await obtenerPlaneacion(id);
 if (!plan) return Astro.redirect('/coordinador/planeaciones');
 
+// Generar URL firmada para bucket privado
+let urlFirmada = plan.url_pdf;
+try {
+  const path = plan.url_pdf.split('/planeaciones/')[1];
+  if (path) {
+    const { data } = await cliente.storage.from('planeaciones').createSignedUrl(path, 3600);
+    if (data?.signedUrl) urlFirmada = data.signedUrl;
+  }
+} catch {}
+
 const { data: docente } = await cliente.from('docentes').select('nombre,apellidos').eq('id', plan.docente_id).maybeSingle();
 const { data: asignatura } = await cliente.from('asignaturas').select('nombre').eq('id', plan.asignatura_id).maybeSingle();
 ---
@@ -17,7 +27,7 @@ const { data: asignatura } = await cliente.from('asignaturas').select('nombre').
     <a href="/coordinador/planeaciones" class="text-sm text-tup hover:underline mb-4 inline-block">← Volver</a>
     <h1 class="text-3xl font-bold text-tup mb-2">Evaluar Planeación</h1>
     <p class="text-slate-500 mb-1">{docente?.nombre} {docente?.apellidos} · {asignatura?.nombre || plan.asignatura_id} · Grupo {plan.grupo}</p>
-    <a href={plan.url_pdf} target="_blank" class="text-sm text-tup hover:underline mb-6 inline-block">📄 Ver PDF de la planeación</a>
+    <a href={urlFirmada} target="_blank" class="text-sm text-tup hover:underline mb-6 inline-block">📄 Ver PDF de la planeación</a>
 
     <form id="form-eval" class="space-y-6">
       <input type="hidden" id="plan_id" value={plan.id} />

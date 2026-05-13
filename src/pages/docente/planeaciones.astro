@@ -18,11 +18,26 @@ const { data: docente } = await cl.from('docentes').select('campus,turno').eq('i
 const { data: planeacionesRaw } = await cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', usuario.entidad_id).order('fecha_subida', { ascending: false });
 
 interface PlaneacionItem { id: number; asignatura: string; grupo: string; estado: string; puntaje: number | null; url: string; }
-const planeaciones: PlaneacionItem[] = (planeacionesRaw || []).map((p: Record<string,unknown>) => ({
-  id: p.id as number, asignatura: (p.asignaturas as {nombre:string})?.nombre || String(p.asignatura_id),
-  grupo: p.grupo as string, estado: p.estado as string,
-  puntaje: p.puntaje_promedio as number | null, url: p.url_pdf as string
-}));
+const planeaciones: PlaneacionItem[] = [];
+for (const p of (planeacionesRaw || [])) {
+  const pdfUrl = (p as Record<string,unknown>).url_pdf as string;
+  let urlFirmada = pdfUrl;
+  try {
+    const path = pdfUrl.split('/planeaciones/')[1];
+    if (path) {
+      const { data } = await cl.storage.from('planeaciones').createSignedUrl(path, 3600);
+      if (data?.signedUrl) urlFirmada = data.signedUrl;
+    }
+  } catch {}
+  planeaciones.push({
+    id: (p as Record<string,unknown>).id as number,
+    asignatura: ((p as Record<string,unknown>).asignaturas as {nombre:string})?.nombre || String((p as Record<string,unknown>).asignatura_id),
+    grupo: (p as Record<string,unknown>).grupo as string,
+    estado: (p as Record<string,unknown>).estado as string,
+    puntaje: (p as Record<string,unknown>).puntaje_promedio as number | null,
+    url: urlFirmada
+  });
+}
 ---
 
 <LayoutDocente titulo="Mis Planeaciones">

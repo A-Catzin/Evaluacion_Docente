@@ -6,11 +6,30 @@ const cliente = obtenerClienteSuperbase();
 const { data: raw } = await cliente.from('planeaciones').select('*, docentes(nombre,apellidos), asignaturas(nombre)').order('fecha_subida', { ascending: false });
 
 interface Item { id: number; docente: string; asignatura: string; grupo: string; estado: string; puntaje: number|null; url: string; }
-const items: Item[] = (raw || []).map((p: Record<string,unknown>) => {
-  const doc = p.docentes as {nombre?:string;apellidos?:string} | null;
-  const asig = p.asignaturas as {nombre?:string} | null;
-  return { id: p.id as number, docente: doc ? (doc.nombre||'')+' '+(doc.apellidos||'') : '', asignatura: asig?.nombre || String(p.asignatura_id), grupo: p.grupo as string, estado: p.estado as string, puntaje: p.puntaje_promedio as number|null, url: p.url_pdf as string };
-});
+const items: Item[] = [];
+for (const p of (raw || [])) {
+  const doc = (p as Record<string,unknown>).docentes as {nombre?:string;apellidos?:string} | null;
+  const asig = (p as Record<string,unknown>).asignaturas as {nombre?:string} | null;
+  const pdfUrl = (p as Record<string,unknown>).url_pdf as string;
+  // Generar URL firmada (1 hora) para bucket privado
+  let urlFirmada = pdfUrl;
+  try {
+    const path = pdfUrl.split('/planeaciones/')[1];
+    if (path) {
+      const { data } = await cliente.storage.from('planeaciones').createSignedUrl(path, 3600);
+      if (data?.signedUrl) urlFirmada = data.signedUrl;
+    }
+  } catch {}
+  items.push({
+    id: (p as Record<string,unknown>).id as number,
+    docente: doc ? (doc.nombre||'')+' '+(doc.apellidos||'') : '',
+    asignatura: asig?.nombre || String((p as Record<string,unknown>).asignatura_id),
+    grupo: (p as Record<string,unknown>).grupo as string,
+    estado: (p as Record<string,unknown>).estado as string,
+    puntaje: (p as Record<string,unknown>).puntaje_promedio as number|null,
+    url: urlFirmada
+  });
+}
 const pendientes = items.filter(i => i.estado === 'Pendiente');
 const evaluadas = items.filter(i => i.estado !== 'Pendiente');
 ---
