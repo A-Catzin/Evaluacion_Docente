@@ -79,8 +79,8 @@ const planeaciones: PlaneacionItem[] = (planeacionesRaw || []).map((p: Record<st
       // Usar el token de sesión actual
       var token=document.cookie.split('; ').find(function(r){return r.startsWith('sb-access-token=')});
       if(token){var accessToken=token.split('=')[1];await supabase.auth.setSession({access_token:accessToken,refresh_token:''})}
-      var path=cuatrimestreId+'/'+docenteId+'/'+nombreArchivo;
-      var {error:uploadError}=await supabase.storage.from('planeaciones').upload(path,file,{contentType:'application/pdf',upsert:true});
+      var path=cuatrimestreId+'/'+docenteId+'/'+Date.now()+'_'+file.name.replace(/\s+/g,'_');
+      var {error:uploadError}=await supabase.storage.from('planeaciones').upload(path,file);
       if(uploadError){toast('Error al subir: '+uploadError.message,true);btn.disabled=false;btn.textContent='Subir Planeación';return}
       var {data:urlData}=supabase.storage.from('planeaciones').getPublicUrl(path);
       var res=await fetch('/api/docente/planeacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cuatrimestre_id:cuatrimestreId,asignatura_id:parseInt(asig.value),grupo,modalidad:document.getElementById('modalidad').value,proyecto:document.getElementById('proyecto').value==='true',laboratorio:document.getElementById('laboratorio').value,visitas:document.getElementById('visitas').value,url_pdf:urlData.publicUrl,nombre_archivo:nombreArchivo,comentario_docente:document.getElementById('comentario').value.trim()||null,campus,turno})});
