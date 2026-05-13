@@ -73,16 +73,7 @@ const planeaciones: PlaneacionItem[] = (planeacionesRaw || []).map((p: Record<st
     var asig=document.getElementById('asignatura_id');var grupo=document.getElementById('grupo').value.trim();
     var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_doc_26-3.pdf';
     try{
-      // Subir directo a Supabase Storage desde el navegador
-      var {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
-      var supabase=createClient(supabaseUrl,supabaseKey,{auth:{persistSession:false}});
-      // Usar el token de sesión actual
-      var token=document.cookie.split('; ').find(function(r){return r.startsWith('sb-access-token=')});
-      if(token){var accessToken=token.split('=')[1];await supabase.auth.setSession({access_token:accessToken,refresh_token:''})}
       var path=cuatrimestreId+'/'+docenteId+'/'+Date.now()+'_'+file.name.replace(/\s+/g,'_');
-      // Subir con fetch directo a la API REST de Supabase Storage
-      var token=document.cookie.split('; ').find(function(r){return r.startsWith('sb-access-token=')});
-      var accessToken=token?token.split('=')[1]:'';
       var fileBuffer=await file.arrayBuffer();
       var params=new URLSearchParams({path,cuatrimestre:cuatrimestreId,asignatura:asig.value,grupo,modalidad:document.getElementById('modalidad').value,proyecto:document.getElementById('proyecto').value==='true'?'true':'false',laboratorio:document.getElementById('laboratorio').value,visitas:document.getElementById('visitas').value,comentario:document.getElementById('comentario').value.trim()||'',campus,turno,nombre:nombreArchivo});
       var uploadRes=await fetch('/api/docente/subir-archivo?'+params.toString(),{method:'POST',body:fileBuffer});
