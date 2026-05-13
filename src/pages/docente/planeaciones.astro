@@ -64,7 +64,7 @@ const planeaciones: PlaneacionItem[] = (planeacionesRaw || []).map((p: Record<st
   </div>
 </LayoutDocente>
 
-<script is:inline define:vars={{ docenteId: usuario.entidad_id, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '', supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL, supabaseKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY }}>
+<script is:inline define:vars={{ docenteId: usuario.entidad_id, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '' }}>
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
   document.getElementById('form-subir').addEventListener('submit',async function(e){
     e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Subiendo...';
@@ -84,12 +84,10 @@ const planeaciones: PlaneacionItem[] = (planeacionesRaw || []).map((p: Record<st
       var token=document.cookie.split('; ').find(function(r){return r.startsWith('sb-access-token=')});
       var accessToken=token?token.split('=')[1]:'';
       var fileBuffer=await file.arrayBuffer();
-      var uploadRes=await fetch(supabaseUrl+'/storage/v1/object/planeaciones/'+path,{method:'POST',headers:{'apikey':supabaseKey,'Authorization':'Bearer '+supabaseKey},body:file});
-      if(!uploadRes.ok){var errData=await uploadRes.json().catch(function(){return{}});toast('Error al subir: '+(errData.message||errData.error||uploadRes.status),true);btn.disabled=false;btn.textContent='Subir Planeación';return}
-      var urlPdf=supabaseUrl+'/storage/v1/object/public/planeaciones/'+path;
-      var res=await fetch('/api/docente/planeacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cuatrimestre_id:cuatrimestreId,asignatura_id:parseInt(asig.value),grupo,modalidad:document.getElementById('modalidad').value,proyecto:document.getElementById('proyecto').value==='true',laboratorio:document.getElementById('laboratorio').value,visitas:document.getElementById('visitas').value,url_pdf:urlPdf,nombre_archivo:nombreArchivo,comentario_docente:document.getElementById('comentario').value.trim()||null,campus,turno})});
-      if(res.ok){toast('Subida exitosa',false);setTimeout(function(){location.reload()},1000)}
-      else{var d=await res.json();toast(d.error||'Error',true);btn.disabled=false;btn.textContent='Subir Planeación'}
+      var params=new URLSearchParams({path,cuatrimestre:cuatrimestreId,asignatura:asig.value,grupo,modalidad:document.getElementById('modalidad').value,proyecto:document.getElementById('proyecto').value==='true'?'true':'false',laboratorio:document.getElementById('laboratorio').value,visitas:document.getElementById('visitas').value,comentario:document.getElementById('comentario').value.trim()||'',campus,turno,nombre:nombreArchivo});
+      var uploadRes=await fetch('/api/docente/subir-archivo?'+params.toString(),{method:'POST',body:fileBuffer});
+      if(!uploadRes.ok){var errData=await uploadRes.json().catch(function(){return{}});toast('Error: '+(errData.error||errData.message||uploadRes.status),true);btn.disabled=false;btn.textContent='Subir Planeación';return}
+      toast('¡Planeación subida exitosamente!',false);setTimeout(function(){location.reload()},1000);
     }catch(err){toast('Error: '+err.message,true);btn.disabled=false;btn.textContent='Subir Planeación'}
   });
 </script>
