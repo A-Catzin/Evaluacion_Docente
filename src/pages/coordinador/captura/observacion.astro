@@ -122,7 +122,9 @@ if (docenteIdParam) {
   }
   // Auto-llenar al cargar si ya hay docente preseleccionado
   var sel = document.getElementById('docente_id');
-  if (sel && sel.value) autoLlenar(sel.value);t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
+  if (sel && sel.value) autoLlenar(sel.value);
+
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
 
   document.getElementById('form-obs').addEventListener('submit',async function(e){
     e.preventDefault();
