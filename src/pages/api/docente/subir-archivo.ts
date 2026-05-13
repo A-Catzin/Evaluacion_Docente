@@ -2,13 +2,16 @@ import type { APIRoute } from 'astro';
 import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
+  console.log('[Subir] Iniciando...');
   try {
     const t = cookies.get('sb-access-token')?.value;
     const r = cookies.get('sb-refresh-token')?.value;
+    console.log('[Subir] Cookies:', !!t, !!r);
     if (!t || !r) return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
 
     const cl = obtenerClienteSuperbase();
     const { data: s } = await cl.auth.setSession({ access_token: t, refresh_token: r });
+    console.log('[Subir] Sesión:', !!s.user);
     if (!s.user) return new Response(JSON.stringify({ error: 'Sesión inválida' }), { status: 401 });
     const { data: u } = await cl.from('usuarios').select('entidad_id,rol').eq('id', s.user.id).maybeSingle();
     if (!u || u.rol !== 'docente' || !u.entidad_id) return new Response(JSON.stringify({ error: 'Solo docentes' }), { status: 403 });
