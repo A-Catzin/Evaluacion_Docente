@@ -1,0 +1,76 @@
+---
+import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
+import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { obtenerPlaneacion } from '../../../services/planeaciones';
+
+const id = parseInt(Astro.params.id || '0');
+const cliente = obtenerClienteSuperbase();
+const plan = await obtenerPlaneacion(id);
+if (!plan) return Astro.redirect('/coordinador/planeaciones');
+
+const { data: docente } = await cliente.from('docentes').select('nombre,apellidos').eq('id', plan.docente_id).maybeSingle();
+const { data: asignatura } = await cliente.from('asignaturas').select('nombre').eq('id', plan.asignatura_id).maybeSingle();
+---
+
+<LayoutCoordinador titulo="Evaluar Planeación">
+  <div class="animate-flotar-entrada max-w-2xl mx-auto">
+    <a href="/coordinador/planeaciones" class="text-sm text-tup hover:underline mb-4 inline-block">← Volver</a>
+    <h1 class="text-3xl font-bold text-tup mb-2">Evaluar Planeación</h1>
+    <p class="text-slate-500 mb-1">{docente?.nombre} {docente?.apellidos} · {asignatura?.nombre || plan.asignatura_id} · Grupo {plan.grupo}</p>
+    <a href={plan.url_pdf} target="_blank" class="text-sm text-tup hover:underline mb-6 inline-block">📄 Ver PDF de la planeación</a>
+
+    <form id="form-eval" class="space-y-6">
+      <input type="hidden" id="plan_id" value={plan.id} />
+      {[
+        {id:'alineacion',label:'Alineación Curricular',desc:'Coherencia con el plan de estudios y perfil de egreso'},
+        {id:'secuencia',label:'Secuencia Didáctica',desc:'Estructura lógica de las actividades de aprendizaje'},
+        {id:'recursos',label:'Recursos y Materiales (NTIC)',desc:'Uso de tecnología y materiales didácticos'},
+        {id:'evaluacion',label:'Sistemas de Evaluación',desc:'Instrumentos y criterios de evaluación claros'}
+      ].map(c => (
+        <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+          <p class="font-medium text-slate-700 mb-1">{c.label}</p>
+          <p class="text-xs text-slate-400 mb-3">{c.desc}</p>
+          <div class="flex gap-2">
+            {[1,2,3,4,5].map(v => (
+              <label class="flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer">
+                <input type="radio" name={`criterio_${c.id}`} value={v} required class="sr-only peer" />
+                <span class="text-lg font-bold text-slate-400 peer-checked:text-tup">{v}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Estado *</label>
+          <select id="estado" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm"><option value="">Seleccionar...</option><option value="Aprobado">Aprobado</option><option value="Corrección">Corrección</option></select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Retroalimentación para el docente (opcional)</label>
+          <textarea id="retro" rows={3} placeholder="Comentarios que el docente podrá ver..." class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
+        </div>
+        <button type="submit" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90">Enviar Evaluación</button>
+      </div>
+    </form>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
+</LayoutCoordinador>
+
+<script is:inline>
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
+
+  document.getElementById('form-eval').addEventListener('submit',async function(e){
+    e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Enviando...';
+    var data={id:parseInt(document.getElementById('plan_id').value),estado:document.getElementById('estado').value,comentario_retroalimentacion:document.getElementById('retro').value.trim()||null};
+    ['alineacion','secuencia','recursos','evaluacion'].forEach(function(c){
+      var rb=document.querySelector('input[name="criterio_'+c+'"]:checked');if(rb)data['criterio_'+c]=parseInt(rb.value);
+    });
+    if(!data.criterio_alineacion||!data.criterio_secuencia||!data.criterio_recursos||!data.criterio_evaluacion||!data.estado){toast('Completa todos los criterios y el estado',true);btn.disabled=false;btn.textContent='Enviar Evaluación';return}
+    try{
+      var res=await fetch('/api/coordinador/planeacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      if(res.ok){var d=await res.json();toast('Evaluación guardada — Puntaje: '+d.puntaje+'%',false);setTimeout(function(){location.href='/coordinador/planeaciones'},1500)}
+      else{var j=await res.json();toast(j.error||'Error',true);btn.disabled=false;btn.textContent='Enviar Evaluación'}
+    }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Evaluación'}
+  });
+</script>

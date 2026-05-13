@@ -58,8 +58,10 @@ try {
         fila.categoria_360 = cal.categoria_final || '—';
         fila.final_360 = cal.calificacion_final;
         fila.prom_estudiantil = cal.score_encuesta_estudiantil || undefined;
-        fila.prom_planeacion = cal.score_planeacion || undefined;
       }
+      // Promedio planeación (desde tabla planeaciones)
+      const { data: planData } = await cliente.from('planeaciones').select('puntaje_promedio').eq('docente_id', u.entidad_id).eq('estado','Aprobado').order('fecha_evaluacion', { ascending: false }).limit(1).maybeSingle();
+      if (planData?.puntaje_promedio) fila.prom_planeacion = planData.puntaje_promedio;
       // Promedio observación (desde tabla observaciones)
       const { data: obsData } = await cliente.from('observaciones').select('*').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
       if (obsData) {

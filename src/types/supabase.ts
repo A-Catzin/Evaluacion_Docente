@@ -8,6 +8,20 @@
 
 export type RolUsuario = 'superadmin' | 'coordinador' | 'docente' | 'estudiante';
 
+// ─── Planeaciones ──────────────────────────────────────────────
+
+export interface Planeacion {
+  id: number; docente_id: number; cuatrimestre_id: number; asignatura_id: number;
+  campus: string; turno: string; modalidad: string; grupo: string;
+  proyecto: boolean; laboratorio: string; visitas: string;
+  url_pdf: string; nombre_archivo: string | null; comentario_docente: string | null;
+  criterio_alineacion: number | null; criterio_secuencia: number | null;
+  criterio_recursos: number | null; criterio_evaluacion: number | null;
+  puntaje_promedio: number | null;
+  estado: string; comentario_retroalimentacion: string | null; comentario_interno: string | null;
+  fecha_subida: string; fecha_evaluacion: string | null;
+}
+
 // ─── Catálogo ──────────────────────────────────────────────────
 
 export interface Cuatrimestre {

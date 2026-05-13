@@ -1,0 +1,33 @@
+---
+import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+
+const cliente = obtenerClienteSuperbase();
+const { data: planeaciones } = await cliente.from('planeaciones').select('*, docentes(nombre,apellidos), asignaturas(nombre)').order('fecha_subida', { ascending: false });
+const items = (planeaciones || []).map(p => ({ ...p, docente_nombre: (p as Record<string,unknown>).docentes?.nombre + ' ' + (p as Record<string,unknown>).docentes?.apellidos, asignatura_nombre: (p as Record<string,unknown>).asignaturas?.nombre }));
+const pendientes = items.filter(p => p.estado === 'Pendiente');
+const evaluadas = items.filter(p => p.estado !== 'Pendiente');
+---
+<LayoutCoordinador titulo="Planeaciones — Coordinador">
+  <div class="animate-flotar-entrada max-w-5xl mx-auto">
+    <h1 class="text-3xl font-bold text-tup mb-6">Evaluación de Planeaciones</h1>
+
+    <!-- Pendientes -->
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-8">
+      <div class="px-6 py-4 border-b bg-amber-50"><h2 class="font-semibold text-amber-800">Pendientes de Evaluar ({pendientes.length})</h2></div>
+      {pendientes.length === 0 ? (<div class="p-8 text-center text-slate-400">No hay planeaciones pendientes.</div>) : (
+        <table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase">Docente</th><th class="text-left px-4 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-4 py-3 text-xs uppercase">Grupo</th><th class="text-left px-4 py-3 text-xs uppercase">PDF</th><th class="text-right px-4 py-3 text-xs uppercase">Acción</th></tr></thead>
+        <tbody class="divide-y">{pendientes.map(p => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{p.docente_nombre}</td><td class="px-4 py-3">{p.asignatura_nombre || p.asignatura_id}</td><td class="px-4 py-3">{p.grupo}</td><td class="px-4 py-3"><a href={p.url_pdf} target="_blank" class="text-tup text-xs hover:underline">Ver PDF</a></td><td class="px-4 py-3 text-right"><a href={`/coordinador/planeaciones/evaluar/${p.id}`} class="px-3 py-1.5 rounded-lg bg-tup text-white text-xs font-medium">Evaluar</a></td></tr>))}</tbody></table>
+      )}
+    </div>
+
+    <!-- Evaluadas -->
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      <div class="px-6 py-4 border-b"><h2 class="font-semibold text-slate-700">Evaluadas ({evaluadas.length})</h2></div>
+      {evaluadas.length === 0 ? (<div class="p-8 text-center text-slate-400">No hay planeaciones evaluadas.</div>) : (
+        <table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase">Docente</th><th class="text-left px-4 py-3 text-xs uppercase">Asignatura</th><th class="text-center px-4 py-3 text-xs uppercase">Estado</th><th class="text-center px-4 py-3 text-xs uppercase">Puntaje</th></tr></thead>
+        <tbody class="divide-y">{evaluadas.map(p => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{p.docente_nombre}</td><td class="px-4 py-3">{p.asignatura_nombre || p.asignatura_id}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${p.estado==='Aprobado'?'bg-emerald-50 text-emerald-700':'bg-red-50 text-red-700'}`}>{p.estado}</span></td><td class="px-4 py-3 text-center font-bold">{p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'}</td></tr>))}</tbody></table>
+      )}
+    </div>
+  </div>
+</LayoutCoordinador>

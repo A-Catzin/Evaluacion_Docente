@@ -1,0 +1,39 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { obtenerOfertasAcademicas } from '../../services/catalogos';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+
+const ofertas = await obtenerOfertasAcademicas();
+const cliente = obtenerClienteSuperbase();
+const { data: asignaturas } = await cliente.from('asignaturas').select('*, ofertas_academicas(nombre)').order('nombre');
+const busqueda = Astro.url.searchParams.get('q') || '';
+const ofertaFiltro = Astro.url.searchParams.get('oferta') || '';
+
+let items = (asignaturas || []).map(a => ({ ...a, oferta_nombre: a.ofertas_academicas?.nombre || '—' }));
+if (busqueda) { const t = busqueda.toLowerCase(); items = items.filter(a => a.nombre.toLowerCase().includes(t) || a.clave?.toLowerCase().includes(t)); }
+if (ofertaFiltro) items = items.filter(a => a.oferta_academica_id?.toString() === ofertaFiltro);
+---
+<LayoutAdmin titulo="Asignaturas — Admin">
+  <div class="animate-flotar-entrada">
+    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Gestión de Asignaturas</h1><span class="text-sm text-slate-400">{items.length} materias</span></div>
+
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form method="GET" class="flex flex-wrap gap-3 items-center">
+        <input type="text" name="q" value={busqueda} placeholder="Buscar materia..." class="flex-1 min-w-[200px] rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <select name="oferta" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
+          <option value="">Todas las carreras</option>
+          {ofertas.map(o => (<option value={o.id} selected={ofertaFiltro === o.id.toString()}>{o.nombre}</option>))}
+        </select>
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Filtrar</button>
+        {(busqueda || ofertaFiltro) && (<a href="/admin/asignaturas" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+      </form>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Carrera</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Créditos</th></tr></thead>
+        <tbody class="divide-y">{items.map(a => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-mono text-xs">{a.clave || '—'}</td><td class="px-4 py-3 font-medium">{a.nombre}</td><td class="px-4 py-3 text-slate-600">{a.oferta_nombre}</td><td class="px-4 py-3 text-center">{a.creditos || 5}</td></tr>))}</tbody>
+      </table>
+    </div>
+  </div>
+</LayoutAdmin>
