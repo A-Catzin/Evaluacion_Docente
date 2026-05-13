@@ -24,7 +24,7 @@ const docentes = await obtenerDocentes();
       ) : (
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
           {docentes.map(doc => (
-            <a href={`/coordinador/docentes/${doc.id}`} class="block bg-slate-50 rounded-xl p-4 hover:bg-tup/5 transition-colors border border-slate-100">
+            <a href="/coordinador/captura/observacion" class="block bg-slate-50 rounded-xl p-4 hover:bg-tup/5 transition-colors border border-slate-100">
               <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{doc.nombre.charAt(0)}</div>
                 <div><p class="font-medium text-slate-800 text-sm">{doc.nombre} {doc.apellidos}</p><p class="text-xs text-slate-400">{doc.email}</p></div>
@@ -32,6 +32,7 @@ const docentes = await obtenerDocentes();
               <div class="flex gap-1">
                 {['EE','CA','PD','OC','AE'].map(i => (<span class="w-6 h-6 rounded bg-slate-200 flex items-center justify-center text-[10px] text-slate-500" title={i}>{i}</span>))}
               </div>
+              <p class="text-xs text-tup mt-2 font-medium">Iniciar Observación →</p>
             </a>
           ))}
         </div>
