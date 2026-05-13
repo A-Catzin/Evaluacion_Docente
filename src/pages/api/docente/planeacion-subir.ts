@@ -13,18 +13,23 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (!u || u.rol !== 'docente' || !u.entidad_id) return new Response(JSON.stringify({ error: 'Solo docentes' }), { status: 403 });
 
     const formData = await request.formData();
-    const file = formData.get('file') as File;
-    if (!file) return new Response(JSON.stringify({ error: 'Archivo requerido' }), { status: 400 });
-    if (file.size > 5 * 1024 * 1024) return new Response(JSON.stringify({ error: 'Máximo 5 MB' }), { status: 400 });
+    const file = formData.get('file');
+    if (!file || !(file instanceof File)) return new Response(JSON.stringify({ error: 'Archivo requerido o inválido' }), { status: 400 });
+    if (file.size > 5 * 1024 * 1024) return new Response(JSON.stringify({ error: 'Máximo 5 MB. Tu archivo pesa: ' + (file.size/1024/1024).toFixed(2) + ' MB' }), { status: 400 });
+    if (file.type !== 'application/pdf') return new Response(JSON.stringify({ error: 'Solo archivos PDF. Tipo recibido: ' + file.type }), { status: 400 });
 
     const path = formData.get('path') as string;
+    console.log('[Planeacion Subir] Recibido:', file.name, file.size, 'bytes, path:', path);
     const buffer = await file.arrayBuffer();
 
     // Subir a Supabase Storage
     const { error: uploadError } = await cl.storage.from('planeaciones').upload(path, buffer, {
       contentType: 'application/pdf', upsert: true
     });
-    if (uploadError) return new Response(JSON.stringify({ error: 'Error al subir archivo: ' + uploadError.message }), { status: 400 });
+    if (uploadError) {
+      console.error('[Planeacion Subir] Error storage:', uploadError);
+      return new Response(JSON.stringify({ error: 'Error al subir archivo: ' + uploadError.message }), { status: 400 });
+    }
 
     const { data: urlData } = cl.storage.from('planeaciones').getPublicUrl(path);
 
