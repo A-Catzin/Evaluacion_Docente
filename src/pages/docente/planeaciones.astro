@@ -64,26 +64,27 @@ const planeaciones: PlaneacionItem[] = (planeacionesRaw || []).map((p: Record<st
   </div>
 </LayoutDocente>
 
-<script is:inline define:vars={{ docenteId: usuario.entidad_id, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '' }}>
+<script is:inline define:vars={{ docenteId: usuario.entidad_id, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '', supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL, supabaseKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY }}>
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
   document.getElementById('form-subir').addEventListener('submit',async function(e){
     e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Subiendo...';
     var file=document.getElementById('archivo').files[0];
     if(!file){toast('Selecciona un archivo PDF',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
-    if(file.size>5*1024*1024){toast('El archivo no debe superar 5 MB',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
     var asig=document.getElementById('asignatura_id');var grupo=document.getElementById('grupo').value.trim();
     var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_doc_26-3.pdf';
     try{
-      var formData=new FormData();formData.append('file',file);formData.append('path',cuatrimestreId+'/'+docenteId+'/'+nombreArchivo);
-      formData.append('cuatrimestre_id',cuatrimestreId);formData.append('asignatura_id',asig.value);formData.append('grupo',grupo);
-      formData.append('modalidad',document.getElementById('modalidad').value);
-      formData.append('proyecto',document.getElementById('proyecto').value==='true'?'true':'false');
-      formData.append('laboratorio',document.getElementById('laboratorio').value);
-      formData.append('visitas',document.getElementById('visitas').value);
-      formData.append('comentario',document.getElementById('comentario').value.trim()||'');
-      formData.append('campus',campus);formData.append('turno',turno);
-      var res=await fetch('/api/docente/planeacion-subir',{method:'POST',body:formData});
-      if(res.ok){toast('Planeación subida exitosamente',false);setTimeout(function(){location.reload()},1000)}
+      // Subir directo a Supabase Storage desde el navegador
+      var {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
+      var supabase=createClient(supabaseUrl,supabaseKey,{auth:{persistSession:false}});
+      // Usar el token de sesión actual
+      var token=document.cookie.split('; ').find(function(r){return r.startsWith('sb-access-token=')});
+      if(token){var accessToken=token.split('=')[1];await supabase.auth.setSession({access_token:accessToken,refresh_token:''})}
+      var path=cuatrimestreId+'/'+docenteId+'/'+nombreArchivo;
+      var {error:uploadError}=await supabase.storage.from('planeaciones').upload(path,file,{contentType:'application/pdf',upsert:true});
+      if(uploadError){toast('Error al subir: '+uploadError.message,true);btn.disabled=false;btn.textContent='Subir Planeación';return}
+      var {data:urlData}=supabase.storage.from('planeaciones').getPublicUrl(path);
+      var res=await fetch('/api/docente/planeacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cuatrimestre_id:cuatrimestreId,asignatura_id:parseInt(asig.value),grupo,modalidad:document.getElementById('modalidad').value,proyecto:document.getElementById('proyecto').value==='true',laboratorio:document.getElementById('laboratorio').value,visitas:document.getElementById('visitas').value,url_pdf:urlData.publicUrl,nombre_archivo:nombreArchivo,comentario_docente:document.getElementById('comentario').value.trim()||null,campus,turno})});
+      if(res.ok){toast('Subida exitosa',false);setTimeout(function(){location.reload()},1000)}
       else{var d=await res.json();toast(d.error||'Error',true);btn.disabled=false;btn.textContent='Subir Planeación'}
     }catch(err){toast('Error: '+err.message,true);btn.disabled=false;btn.textContent='Subir Planeación'}
   });
