@@ -17,9 +17,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     const body = await request.json();
-    const { cuatrimestre_id, nombre, apellido_paterno, apellido_materno, campus, oferta_academica, turno, reactivos, comentarios } = body;
+    const { cuatrimestre_id, nombre, apellido_paterno, apellido_materno, campus, oferta_academica, turno, modalidad, reactivos, comentarios } = body;
 
-    if (!cuatrimestre_id || !nombre || !apellido_paterno || !apellido_materno || !campus || !oferta_academica || !turno || !reactivos || reactivos.length !== 24) {
+    if (!cuatrimestre_id || !nombre || !apellido_paterno || !apellido_materno || !campus || !oferta_academica || !turno || !modalidad || !reactivos || reactivos.length !== 24) {
       return new Response(JSON.stringify({ error: 'Todos los campos son obligatorios excepto comentarios' }), { status: 400 });
     }
 
@@ -30,24 +30,22 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (docenteId) {
       const { error: errUpd } = await cliente.from('docentes').update({
         nombre, apellido_paterno, apellido_materno, apellidos,
-        campus, turno, oferta_academica,
+        campus, turno, oferta_academica, modalidad,
       }).eq('id', docenteId);
       if (errUpd) throw new Error('Error al actualizar docente: ' + errUpd.message);
     } else {
-      // Buscar si ya existe un docente con ese email (creado antes sin vincular)
       const { data: existenteDoc } = await cliente.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
       if (existenteDoc) {
         docenteId = existenteDoc.id;
         await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
-        // Actualizar sus datos
         await cliente.from('docentes').update({
           nombre, apellido_paterno, apellido_materno, apellidos,
-          campus, turno, oferta_academica,
+          campus, turno, oferta_academica, modalidad,
         }).eq('id', docenteId);
       } else {
         const { data: nuevo, error: errIns } = await cliente.from('docentes').insert({
           nombre, apellido_paterno, apellido_materno, apellidos,
-          email: usuario.email, campus, turno, oferta_academica,
+          email: usuario.email, campus, turno, oferta_academica, modalidad,
         }).select('id').single();
         if (errIns) throw new Error('Error al crear docente: ' + errIns.message);
         docenteId = nuevo.id;
