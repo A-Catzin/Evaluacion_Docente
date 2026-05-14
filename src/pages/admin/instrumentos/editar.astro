@@ -10,55 +10,83 @@ const nombres: Record<string,string> = { autodiagnostico:'Autoevaluación Docent
 ---
 
 <LayoutAdmin titulo={`Preguntas — ${nombres[instrumento] || instrumento}`}>
-  <div class="animate-flotar-entrada">
+  <div class="animate-flotar-entrada max-w-4xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Editar: {nombres[instrumento]}</h1>
       <a href="/admin/instrumentos" class="text-sm text-tup hover:underline">← Instrumentos</a>
     </div>
 
     <!-- Formulario para agregar -->
-    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
-      <form id="form-nueva" class="flex gap-3">
-        <input type="text" id="input-texto" placeholder="Texto de la pregunta..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm" />
-        <input type="number" id="input-orden" placeholder="Orden" value={(preguntas?.length||0)+1} class="w-20 rounded-xl border border-slate-200 px-3 py-2.5 text-sm" min="1" />
-        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Agregar</button>
+    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8">
+      <h2 class="text-lg font-bold text-tup mb-4">Agregar Pregunta #{ (preguntas?.length || 0) + 1 }</h2>
+      <form id="form-nueva" class="space-y-4">
+        <div>
+          <textarea id="input-texto" placeholder="Escribe la pregunta..." rows={2} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-tup focus:outline-none" required></textarea>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Tipo de respuesta</label>
+            <select id="input-tipo" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="toggleOpciones()">
+              <option value="cerrada">Cerrada (escala numérica)</option>
+              <option value="opcion_multiple">Opción múltiple</option>
+              <option value="abierta">Abierta (texto libre)</option>
+            </select>
+          </div>
+          <div id="div-opciones">
+            <label class="block text-xs font-medium text-slate-600 mb-1">Opciones de respuesta</label>
+            <div id="lista-opciones" class="space-y-1 mb-2"></div>
+            <div class="flex gap-2">
+              <input type="text" id="input-opcion" placeholder="Agregar opción..." class="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs" />
+              <button type="button" onclick="agregarOpcion()" class="px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-medium hover:bg-slate-200">+</button>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="w-full bg-tup text-white font-medium py-3 rounded-xl hover:bg-tup/90">Agregar Pregunta</button>
       </form>
     </div>
 
-    <!-- Lista -->
-    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      <table class="w-full text-sm">
-        <thead><tr class="bg-slate-50 border-b"><th class="text-center px-3 py-3 text-xs uppercase w-16">#</th><th class="text-left px-4 py-3 text-xs uppercase">Pregunta</th><th class="text-center px-3 py-3 text-xs uppercase w-20">Estado</th><th class="text-center px-3 py-3 text-xs uppercase w-24">Acciones</th></tr></thead>
-        <tbody class="divide-y">{(preguntas||[]).map(p => (
-          <tr class="hover:bg-slate-50">
-            <td class="text-center px-3 py-3 text-slate-400">{p.orden}</td>
-            <td class="px-4 py-3">
-              <span class="texto-pregunta">{p.texto}</span>
-              <input type="text" class="edit-input hidden rounded-lg border border-slate-200 px-2 py-1 text-sm w-full" value={p.texto} />
-            </td>
-            <td class="text-center px-3 py-3">
-              <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${p.activa?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-400'}`} data-id={p.id} data-activa={p.activa}>{p.activa?'Activa':'Inactiva'}</button>
-            </td>
-            <td class="text-center px-3 py-3">
-              <button class="btn-editar text-xs text-tup hover:underline mr-2" data-id={p.id}>Editar</button>
-              <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-2 hidden" data-id={p.id}>Guardar</button>
-              <button class="btn-eliminar text-xs text-red-500 hover:underline" data-id={p.id}>Eliminar</button>
-            </td>
-          </tr>
-        ))}</tbody>
-      </table>
+    <!-- Lista de preguntas -->
+    <div class="space-y-3">
+      {(preguntas || []).map((p, i) => (
+        <div class="bg-white rounded-xl p-4 shadow-tarjeta border-l-4 border-tup">
+          <div class="flex items-start gap-3">
+            <span class="text-sm font-bold text-tup mt-0.5 min-w-[28px]">{i + 1}.</span>
+            <div class="flex-1">
+              <p class="texto-pregunta text-sm text-slate-700">{p.texto}</p>
+              <textarea class="edit-input hidden rounded-lg border border-slate-200 px-2 py-1 text-sm w-full resize-none" rows={2}>{p.texto}</textarea>
+              <div class="flex items-center gap-3 mt-2">
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{p.tipo_respuesta === 'abierta' ? '📝 Abierta' : p.tipo_respuesta === 'opcion_multiple' ? '☑️ Opción múltiple' : '🔢 Cerrada'}</span>
+                {(p.opciones as unknown[] || []).length > 0 && <span class="text-[10px] text-slate-400">{(p.opciones as string[]).join(', ')}</span>}
+              </div>
+            </div>
+            <div class="flex gap-1 flex-shrink-0">
+              <button class="btn-editar text-[10px] px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" data-id={p.id}>✏️</button>
+              <button class="btn-guardar text-[10px] px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 hidden" data-id={p.id}>💾</button>
+              <button class={`toggle-btn text-[10px] px-2 py-1 rounded-lg ${p.activa?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-400'}`} data-id={p.id} data-activa={p.activa}>{p.activa?'ON':'OFF'}</button>
+              <button class="btn-eliminar text-[10px] px-2 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100" data-id={p.id}>🗑️</button>
+            </div>
+          </div>
+        </div>
+      ))}
+      {(preguntas || []).length === 0 && <div class="text-center text-slate-400 py-12">No hay preguntas todavía.</div>}
     </div>
     <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
 </LayoutAdmin>
 
 <script is:inline define:vars={{ instrumento }}>
+  var opcionesTmp = [];
+  function toggleOpciones(){ var d=document.getElementById('div-opciones'); var t=document.getElementById('input-tipo').value; d.classList.toggle('hidden',t==='abierta'||t==='cerrada') }
+  function agregarOpcion(){ var inp=document.getElementById('input-opcion'); var v=inp.value.trim(); if(!v)return; opcionesTmp.push(v); inp.value=''; renderOpciones() }
+  function quitarOpcion(i){ opcionesTmp.splice(i,1); renderOpciones() }
+  function renderOpciones(){ var l=document.getElementById('lista-opciones'); l.innerHTML=opcionesTmp.map(function(o,i){return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 text-xs mr-1 mb-1">'+o+' <button type="button" onclick="quitarOpcion('+i+')" class="text-red-400 hover:text-red-600">&times;</button></span>'}).join('') }
+
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},3000)}
 
   document.getElementById('form-nueva').addEventListener('submit',async function(e){
-    e.preventDefault();var t=document.getElementById('input-texto').value.trim();if(!t)return;
-    var o=parseInt(document.getElementById('input-orden').value)||1;
-    var res=await fetch('/api/admin/preguntas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',instrumento,texto:t,orden:o})});
+    e.preventDefault(); var texto=document.getElementById('input-texto').value.trim(); if(!texto)return;
+    var tipo=document.getElementById('input-tipo').value;
+    var res=await fetch('/api/admin/preguntas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',instrumento,texto,orden:(document.querySelectorAll('.bg-white.rounded-xl.p-4').length+1),tipo_respuesta:tipo,opciones:opcionesTmp})});
     if(res.ok){toast('Pregunta agregada',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
   });
 
@@ -67,19 +95,19 @@ const nombres: Record<string,string> = { autodiagnostico:'Autoevaluación Docent
     if(res.ok)location.reload();else toast('Error',true);
   })});
 
-  document.querySelectorAll('.btn-editar').forEach(function(b){b.addEventListener('click',function(){
-    var row=this.closest('tr');row.querySelector('.texto-pregunta').classList.add('hidden');row.querySelector('.edit-input').classList.remove('hidden');this.classList.add('hidden');row.querySelector('.btn-guardar').classList.remove('hidden');
-  })});
-
-  document.querySelectorAll('.btn-guardar').forEach(function(b){b.addEventListener('click',async function(){
-    var row=this.closest('tr');var texto=row.querySelector('.edit-input').value.trim();if(!texto)return;
-    var res=await fetch('/api/admin/preguntas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'update',id:parseInt(this.dataset.id),texto})});
-    if(res.ok){toast('Guardado',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
-  })});
-
   document.querySelectorAll('.btn-eliminar').forEach(function(b){b.addEventListener('click',async function(){
     if(!confirm('¿Eliminar esta pregunta?'))return;
     var res=await fetch('/api/admin/preguntas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',id:parseInt(this.dataset.id)})});
     if(res.ok){toast('Eliminada',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
+  })});
+
+  document.querySelectorAll('.btn-editar').forEach(function(b){b.addEventListener('click',function(){
+    var row=this.closest('.bg-white');row.querySelector('.texto-pregunta').classList.add('hidden');row.querySelector('.edit-input').classList.remove('hidden');this.classList.add('hidden');row.querySelector('.btn-guardar').classList.remove('hidden');
+  })});
+
+  document.querySelectorAll('.btn-guardar').forEach(function(b){b.addEventListener('click',async function(){
+    var row=this.closest('.bg-white');var texto=row.querySelector('.edit-input').value.trim();if(!texto)return;
+    var res=await fetch('/api/admin/preguntas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'update',id:parseInt(this.dataset.id),texto})});
+    if(res.ok){toast('Guardado',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
   })});
 </script>
