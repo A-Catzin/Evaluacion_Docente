@@ -1,0 +1,173 @@
+---
+/**
+ * EscalaLikert.astro — Componente de Escala Likert Interactivo
+ *
+ * Propósito: Renderizar una escala Likert de 5 puntos (1-5) como
+ * componente vanilla JS. Ideal para formularios de evaluación docente
+ * donde se requiere capturar la opinión del evaluador.
+ *
+ * Características:
+ * - 5 botones grandes (mín. 44×44px) en fila con flex-wrap para móviles
+ * - Feedback visual al seleccionar (bg-accion text-white)
+ * - Navegación por teclado (Tab, Enter, Space)
+ * - Evento custom `likert-change` con detail: { nombre, valor }
+ * - Event delegation en el contenedor
+ *
+ * Nota técnica:
+ * Astro procesa los tags <script> de componentes .astro como módulos ES
+ * que se incluyen automáticamente en el bundle de la página. No requiere
+ * directiva client:load — el script se ejecuta cuando el DOM está listo.
+ *
+ * @props {string} pregunta - Texto de la pregunta a mostrar
+ * @props {string} nombre - Identificador único para el evento
+ * @props {Record<number, string>} etiquetas - Mapa valor → etiqueta
+ */
+
+export interface Props {
+  pregunta: string;
+  nombre: string;
+  etiquetas: Record<number, string>;
+}
+
+const { pregunta, nombre, etiquetas } = Astro.props;
+const valores = [1, 2, 3, 4, 5] as const;
+---
+
+<div class="escala-likert w-full" data-nombre={nombre}>
+  <!-- Pregunta / Label -->
+  <p class="text-sm font-medium text-slate-700 mb-3 leading-relaxed">
+    {pregunta}
+  </p>
+
+  <!--
+    Fila de 5 botones.
+    flex-wrap para que en móviles muy pequeños los botones fluyan a
+    la siguiente línea si es necesario.
+    gap-2 en móvil, gap-3 en desktop.
+  -->
+  <div
+    class="flex flex-wrap gap-2 sm:gap-3"
+    role="radiogroup"
+    aria-label={pregunta}
+  >
+    {
+      valores.map((valor) => (
+        <button
+          type="button"
+          role="radio"
+          aria-checked="false"
+          aria-label={`${valor}: ${etiquetas[valor]}`}
+          data-value={valor}
+          class="likert-btn flex flex-col items-center justify-center min-w-[44px] min-h-[44px] w-16 sm:w-20 px-2 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-700 hover:border-accion hover:bg-accion/5 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-accion focus:ring-offset-2"
+        >
+          <span class="text-lg font-bold leading-none">{valor}</span>
+          <span class="text-[10px] sm:text-[11px] leading-tight text-center mt-1.5 max-w-[72px] break-words">
+            {etiquetas[valor]}
+          </span>
+        </button>
+      ))
+    }
+  </div>
+</div>
+
+<script>
+  /**
+   * Script de hidratación — Event delegation en el contenedor.
+   *
+   * Patrón:
+   * 1. Un solo event listener por contenedor (click y keydown)
+   * 2. Delegación con element.closest('.likert-btn')
+   * 3. Al seleccionar: resetea todos los botones, ilumina el activo,
+   *    dispara evento custom `likert-change`
+   */
+  (function () {
+    const contenedores = document.querySelectorAll<HTMLDivElement>('.escala-likert');
+
+    contenedores.forEach((contenedor) => {
+      const nombre = contenedor.dataset.nombre ?? '';
+      const botones = contenedor.querySelectorAll<HTMLButtonElement>('.likert-btn');
+
+      if (!botones.length) return;
+
+      // ─── Click ────────────────────────────────────────────────
+      contenedor.addEventListener('click', (e: MouseEvent) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(
+          '.likert-btn'
+        );
+        if (!btn) return;
+        seleccionar(btn);
+      });
+
+      // ─── Teclado: Enter / Space / Flechas ─────────────────────
+      contenedor.addEventListener('keydown', (e: KeyboardEvent) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(
+          '.likert-btn'
+        );
+        if (!btn) return;
+
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          seleccionar(btn);
+          return;
+        }
+
+        // Navegación con flechas: ArrowRight → siguiente, ArrowLeft → anterior
+        const botonesArray = Array.from(botones);
+        const indiceActual = botonesArray.indexOf(btn);
+
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const siguiente = botonesArray[indiceActual + 1];
+          if (siguiente) {
+            siguiente.focus();
+            seleccionar(siguiente);
+          }
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const anterior = botonesArray[indiceActual - 1];
+          if (anterior) {
+            anterior.focus();
+            seleccionar(anterior);
+          }
+        }
+      });
+
+      // ─── Lógica de selección ──────────────────────────────────
+      function seleccionar(btn: HTMLButtonElement) {
+        // 1. Deseleccionar todos los botones
+        botones.forEach((b) => {
+          b.classList.remove(
+            'bg-accion',
+            'text-white',
+            'border-accion'
+          );
+          b.classList.add(
+            'bg-white',
+            'border-slate-200',
+            'text-slate-700'
+          );
+          b.setAttribute('aria-checked', 'false');
+        });
+
+        // 2. Seleccionar el botón clickeado
+        btn.classList.remove(
+          'bg-white',
+          'border-slate-200',
+          'text-slate-700'
+        );
+        btn.classList.add('bg-accion', 'text-white', 'border-accion');
+        btn.setAttribute('aria-checked', 'true');
+
+        const valor = parseInt(btn.dataset.value ?? '0', 10);
+
+        // 3. Disparar evento custom para que el formulario padre
+        //    capture el cambio
+        const evento = new CustomEvent('likert-change', {
+          bubbles: true,
+          detail: { nombre, valor },
+        });
+        contenedor.dispatchEvent(evento);
+      }
+    });
+  })();
+</script>
