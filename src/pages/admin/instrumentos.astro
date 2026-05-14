@@ -1,12 +1,92 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+
+const cliente = obtenerClienteSuperbase();
+const cuatrimestre = await obtenerCuatrimestreActivo();
+const cId = cuatrimestre?.id;
+
+// Contar evaluaciones por instrumento
+const { count: totalDocentes } = await cliente.from('docentes').select('*', { count: 'exact', head: true });
+const { count: autodiag } = await cliente.from('autodiagnosticos').select('*', { count: 'exact', head: true });
+const { count: observaciones } = await cliente.from('observaciones').select('*', { count: 'exact', head: true });
+const { count: planeaciones } = await cliente.from('planeaciones').select('*', { count: 'exact', head: true });
+const { count: planeacionesAprobadas } = await cliente.from('planeaciones').select('*', { count: 'exact', head: true }).eq('estado', 'Aprobado');
+const { count: coordinacion } = await cliente.from('evaluacion_coordinacion').select('*', { count: 'exact', head: true });
+const { count: encuestas } = await cliente.from('encuesta_estudiantil_respuestas').select('*', { count: 'exact', head: true });
+
+const instrumentos = [
+  { nombre: 'Autoevaluación Docente', peso: '5%', total: autodiag || 0, reactivos: 24, escala: '1-5', ruta: '/docente/autodiagnostico', color: 'bg-purple-50 border-purple-200 text-purple-700' },
+  { nombre: 'Planeación Docente', peso: '15%', total: planeacionesAprobadas || 0, pendientes: (planeaciones || 0) - (planeacionesAprobadas || 0), reactivos: 4, escala: '1-5', ruta: '/coordinador/planeaciones', color: 'bg-amber-50 border-amber-200 text-amber-700' },
+  { nombre: 'Observación de Clase', peso: '15%', total: observaciones || 0, reactivos: 43, escala: '1-5 + N/A', ruta: '/coordinador/captura/observacion', color: 'bg-blue-50 border-blue-200 text-blue-700' },
+  { nombre: 'Coordinación Académica', peso: '25%', total: coordinacion || 0, reactivos: 15, escala: '1-5', ruta: '/coordinador/captura/coordinacion', color: 'bg-purple-50 border-purple-200 text-purple-700' },
+  { nombre: 'Encuesta Estudiantil', peso: '40%', total: encuestas || 0, reactivos: 19, escala: '1-6 / 1-4', ruta: null, color: 'bg-slate-50 border-slate-200 text-slate-500' },
+];
 ---
+
 <LayoutAdmin titulo="Instrumentos — Admin">
   <div class="animate-flotar-entrada">
-    <h1 class="text-3xl font-bold text-tup mb-6">Estado de Captura</h1>
-    <div class="bg-white rounded-2xl p-12 shadow-tarjeta text-center text-slate-400">
-      <p class="text-lg">Sin datos de instrumentos</p>
-      <p class="text-sm mt-1">El estado de captura aparecerá cuando haya evaluaciones registradas.</p>
+    <h1 class="text-3xl font-bold text-tup mb-2">Estado de Instrumentos</h1>
+    <p class="text-slate-500 mb-6">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'} · {totalDocentes || 0} docentes</p>
+
+    <!-- Ponderación -->
+    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8">
+      <h2 class="text-lg font-bold text-tup mb-4">Fórmula de Ponderación 360°</h2>
+      <div class="flex flex-wrap gap-2">
+        <span class="px-4 py-2 rounded-xl bg-tup text-white font-bold text-lg">EE 40%</span>
+        <span class="text-slate-400 text-2xl self-center">+</span>
+        <span class="px-4 py-2 rounded-xl bg-purple-600 text-white font-bold text-lg">CA 25%</span>
+        <span class="text-slate-400 text-2xl self-center">+</span>
+        <span class="px-4 py-2 rounded-xl bg-amber-500 text-white font-bold text-lg">PD 15%</span>
+        <span class="text-slate-400 text-2xl self-center">+</span>
+        <span class="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-lg">OC 15%</span>
+        <span class="text-slate-400 text-2xl self-center">+</span>
+        <span class="px-4 py-2 rounded-xl bg-purple-400 text-white font-bold text-lg">AE 5%</span>
+      </div>
+    </div>
+
+    <!-- Tarjetas por instrumento -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {instrumentos.map(inst => (
+        <div class={`bg-white rounded-2xl shadow-tarjeta border-l-4 ${inst.color.split(' ')[0]} overflow-hidden`}>
+          <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-bold text-slate-800">{inst.nombre}</h3>
+              <span class="px-3 py-1 rounded-xl bg-slate-100 text-xs font-bold">{inst.peso}</span>
+            </div>
+            <div class="grid grid-cols-3 gap-4 mb-4">
+              <div class="text-center">
+                <p class="text-2xl font-bold text-tup">{inst.total}</p>
+                <p class="text-[10px] text-slate-400 uppercase">Evaluaciones</p>
+              </div>
+              <div class="text-center">
+                <p class="text-2xl font-bold text-slate-600">{inst.reactivos}</p>
+                <p class="text-[10px] text-slate-400 uppercase">Reactivos</p>
+              </div>
+              <div class="text-center">
+                <p class="text-2xl font-bold text-slate-600">{inst.escala}</p>
+                <p class="text-[10px] text-slate-400 uppercase">Escala</p>
+              </div>
+            </div>
+            {inst.pendientes !== undefined && (
+              <div class="mb-3 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                <span class="text-xs text-slate-500">{inst.pendientes} pendientes de evaluación</span>
+              </div>
+            )}
+            <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div class={`h-full rounded-full transition-all ${inst.total && totalDocentes ? (inst.total >= totalDocentes ? 'bg-emerald-500' : inst.total > 0 ? 'bg-amber-500' : 'bg-slate-300') : 'bg-slate-300'}`} style={`width:${totalDocentes ? Math.min(100, ((inst.total || 0) / (totalDocentes || 1)) * 100) : 0}%`}></div>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1">{totalDocentes ? Math.round(((inst.total || 0) / (totalDocentes || 1)) * 100) : 0}% de docentes evaluados</p>
+            {inst.ruta ? (
+              <a href={inst.ruta} class="inline-block mt-4 text-xs text-tup hover:underline">Ir al formulario →</a>
+            ) : (
+              <span class="inline-block mt-4 text-xs text-slate-400">Próximamente</span>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   </div>
 </LayoutAdmin>
