@@ -1,0 +1,85 @@
+---
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+
+const cliente = obtenerClienteSuperbase();
+const instrumento = Astro.url.searchParams.get('inst') || 'autodiagnostico';
+const { data: preguntas } = await cliente.from('instrumento_preguntas').select('*').eq('instrumento', instrumento).order('orden');
+
+const nombres: Record<string,string> = { autodiagnostico:'Autoevaluación Docente', observacion:'Observación de Clase', coordinacion:'Coordinación Académica', planeacion:'Planeación Docente', encuesta:'Encuesta Estudiantil' };
+---
+
+<LayoutAdmin titulo={`Preguntas — ${nombres[instrumento] || instrumento}`}>
+  <div class="animate-flotar-entrada">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-3xl font-bold text-tup">Editar: {nombres[instrumento]}</h1>
+      <a href="/admin/instrumentos" class="text-sm text-tup hover:underline">← Instrumentos</a>
+    </div>
+
+    <!-- Formulario para agregar -->
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form id="form-nueva" class="flex gap-3">
+        <input type="text" id="input-texto" placeholder="Texto de la pregunta..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm" />
+        <input type="number" id="input-orden" placeholder="Orden" value={(preguntas?.length||0)+1} class="w-20 rounded-xl border border-slate-200 px-3 py-2.5 text-sm" min="1" />
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Agregar</button>
+      </form>
+    </div>
+
+    <!-- Lista -->
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-slate-50 border-b"><th class="text-center px-3 py-3 text-xs uppercase w-16">#</th><th class="text-left px-4 py-3 text-xs uppercase">Pregunta</th><th class="text-center px-3 py-3 text-xs uppercase w-20">Estado</th><th class="text-center px-3 py-3 text-xs uppercase w-24">Acciones</th></tr></thead>
+        <tbody class="divide-y">{(preguntas||[]).map(p => (
+          <tr class="hover:bg-slate-50">
+            <td class="text-center px-3 py-3 text-slate-400">{p.orden}</td>
+            <td class="px-4 py-3">
+              <span class="texto-pregunta">{p.texto}</span>
+              <input type="text" class="edit-input hidden rounded-lg border border-slate-200 px-2 py-1 text-sm w-full" value={p.texto} />
+            </td>
+            <td class="text-center px-3 py-3">
+              <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${p.activa?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-400'}`} data-id={p.id} data-activa={p.activa}>{p.activa?'Activa':'Inactiva'}</button>
+            </td>
+            <td class="text-center px-3 py-3">
+              <button class="btn-editar text-xs text-tup hover:underline mr-2" data-id={p.id}>Editar</button>
+              <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-2 hidden" data-id={p.id}>Guardar</button>
+              <button class="btn-eliminar text-xs text-red-500 hover:underline" data-id={p.id}>Eliminar</button>
+            </td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
+</LayoutAdmin>
+
+<script is:inline define:vars={{ instrumento }}>
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},3000)}
+
+  document.getElementById('form-nueva').addEventListener('submit',async function(e){
+    e.preventDefault();var t=document.getElementById('input-texto').value.trim();if(!t)return;
+    var o=parseInt(document.getElementById('input-orden').value)||1;
+    var res=await fetch('/api/admin/preguntas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',instrumento,texto:t,orden:o})});
+    if(res.ok){toast('Pregunta agregada',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
+  });
+
+  document.querySelectorAll('.toggle-btn').forEach(function(b){b.addEventListener('click',async function(){
+    var res=await fetch('/api/admin/preguntas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'toggle',id:parseInt(this.dataset.id),activa:this.dataset.activa==='true'?false:true})});
+    if(res.ok)location.reload();else toast('Error',true);
+  })});
+
+  document.querySelectorAll('.btn-editar').forEach(function(b){b.addEventListener('click',function(){
+    var row=this.closest('tr');row.querySelector('.texto-pregunta').classList.add('hidden');row.querySelector('.edit-input').classList.remove('hidden');this.classList.add('hidden');row.querySelector('.btn-guardar').classList.remove('hidden');
+  })});
+
+  document.querySelectorAll('.btn-guardar').forEach(function(b){b.addEventListener('click',async function(){
+    var row=this.closest('tr');var texto=row.querySelector('.edit-input').value.trim();if(!texto)return;
+    var res=await fetch('/api/admin/preguntas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'update',id:parseInt(this.dataset.id),texto})});
+    if(res.ok){toast('Guardado',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
+  })});
+
+  document.querySelectorAll('.btn-eliminar').forEach(function(b){b.addEventListener('click',async function(){
+    if(!confirm('¿Eliminar esta pregunta?'))return;
+    var res=await fetch('/api/admin/preguntas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',id:parseInt(this.dataset.id)})});
+    if(res.ok){toast('Eliminada',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
+  })});
+</script>
