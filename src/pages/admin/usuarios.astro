@@ -68,6 +68,9 @@ try {
         const r = [obsData.cco1,obsData.cco2,obsData.cco3,obsData.cco4,obsData.cco5,obsData.cco6,obsData.cco7,obsData.cme1,obsData.cme2,obsData.cme3,obsData.cme4,obsData.cme5,obsData.cme6,obsData.cme7,obsData.cme8,obsData.cme9,obsData.ccom1,obsData.ccom2,obsData.ccom3,obsData.ccom4,obsData.cso1,obsData.cso2,obsData.cso3,obsData.cso4,obsData.cge1,obsData.cge2,obsData.cge3,obsData.cge4,obsData.cge5,obsData.cge6,obsData.cge7,obsData.caf1,obsData.caf2,obsData.ctepe1,obsData.ctepe2,obsData.ctepe3,obsData.ctepe4,obsData.ctepe5,obsData.ctepe6,obsData.ctepe7,obsData.cno1,obsData.cno2,obsData.cno3,obsData.cno4,obsData.cno5].filter(v => v);
         if (r.length > 0) fila.prom_observacion = Math.round((r.reduce((a,b) => a+b, 0) / (r.length * 5)) * 100);
       }
+      // Promedio coordinación (desde evaluacion_coordinacion)
+      const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('score_normalizado').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
+      if (coordData?.score_normalizado) fila.prom_coordinador = Math.round(coordData.score_normalizado);
       // Promedio autodiagnóstico
       const { data: diag } = await cliente.from('autodiagnosticos').select('puntaje_total,nivel_desempeno').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
       if (diag) {

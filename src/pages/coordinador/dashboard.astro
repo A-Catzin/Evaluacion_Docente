@@ -8,19 +8,22 @@ const cuatrimestre = await obtenerCuatrimestreActivo();
 const docentes = await obtenerDocentes();
 const cliente = obtenerClienteSuperbase();
 
-// Obtener observaciones y planeaciones para cada docente
+// Obtener observaciones, planeaciones y evaluaciones de coordinación
 const { data: obsData } = await cliente.from('observaciones').select('docente_id');
 const { data: planData } = await cliente.from('planeaciones').select('docente_id,estado');
+const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('docente_id');
 
 const obsSet = new Set((obsData || []).map(o => o.docente_id));
 const planPendiente = new Set((planData || []).filter(p => p.estado === 'Pendiente').map(p => p.docente_id));
 const planEvaluada = new Set((planData || []).filter(p => p.estado !== 'Pendiente').map(p => p.docente_id));
+const coordSet = new Set((coordData || []).map(c => c.docente_id));
 const totalDocs = docentes.length;
 
 interface EstadoDocente {
   docente: { id: number; nombre: string; apellidos: string; email: string };
   observacion: 'pendiente' | 'completada';
   planeacion: 'pendiente' | 'completada' | 'no_aplica';
+  coordinacion: 'pendiente' | 'completada';
   completo: boolean;
 }
 
@@ -28,11 +31,13 @@ const estados: EstadoDocente[] = docentes.map(d => ({
   docente: { id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email },
   observacion: obsSet.has(d.id) ? 'completada' : 'pendiente',
   planeacion: planEvaluada.has(d.id) ? 'completada' : planPendiente.has(d.id) ? 'pendiente' : 'no_aplica',
-  completo: obsSet.has(d.id) && (planEvaluada.has(d.id) || planPendiente.has(d.id)),
+  coordinacion: coordSet.has(d.id) ? 'completada' : 'pendiente',
+  completo: obsSet.has(d.id) && (planEvaluada.has(d.id) || planPendiente.has(d.id)) && coordSet.has(d.id),
 }));
 
 const pendientesObs = estados.filter(e => e.observacion === 'pendiente').length;
 const pendientesPlan = estados.filter(e => e.planeacion === 'pendiente').length;
+const pendientesCoord = estados.filter(e => e.coordinacion === 'pendiente').length;
 const completadosObs = estados.filter(e => e.observacion === 'completada').length;
 const completadosPlan = estados.filter(e => e.planeacion === 'completada').length;
 const faltantes = estados.filter(e => !e.completo);
@@ -45,22 +50,30 @@ const completados = estados.filter(e => e.completo);
     <p class="text-slate-500 mb-6">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'} · {totalDocs} docentes</p>
 
     <!-- KPIs -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
       <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-xs text-slate-400 uppercase">Obs. Pendientes</p>
-        <p class="text-2xl font-bold text-amber-600">{pendientesObs}</p>
+        <p class="text-[10px] text-slate-400 uppercase">CA Pend.</p>
+        <p class="text-xl font-bold text-amber-600">{pendientesCoord}</p>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-xs text-slate-400 uppercase">Obs. Completadas</p>
-        <p class="text-2xl font-bold text-emerald-600">{completadosObs}</p>
+        <p class="text-[10px] text-slate-400 uppercase">Obs. Pend.</p>
+        <p class="text-xl font-bold text-amber-600">{pendientesObs}</p>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-xs text-slate-400 uppercase">Plan. Pendientes</p>
-        <p class="text-2xl font-bold text-amber-600">{pendientesPlan}</p>
+        <p class="text-[10px] text-slate-400 uppercase">Plan. Pend.</p>
+        <p class="text-xl font-bold text-amber-600">{pendientesPlan}</p>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-xs text-slate-400 uppercase">Plan. Evaluadas</p>
-        <p class="text-2xl font-bold text-emerald-600">{completadosPlan}</p>
+        <p class="text-[10px] text-slate-400 uppercase">CA Lista</p>
+        <p class="text-xl font-bold text-emerald-600">{estados.filter(e => e.coordinacion === 'completada').length}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+        <p class="text-[10px] text-slate-400 uppercase">Obs. Lista</p>
+        <p class="text-xl font-bold text-emerald-600">{estados.filter(e => e.observacion === 'completada').length}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+        <p class="text-[10px] text-slate-400 uppercase">Plan. Lista</p>
+        <p class="text-xl font-bold text-emerald-600">{estados.filter(e => e.planeacion === 'completada').length}</p>
       </div>
     </div>
 
@@ -83,18 +96,23 @@ const completados = estados.filter(e => e.completo);
                   <p class="text-xs text-slate-400 truncate">{e.docente.email}</p>
                 </div>
               </div>
-              <div class="flex gap-2">
-                {e.observacion === 'pendiente' ? (
-                  <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}`} class="flex-1 text-center px-3 py-2 rounded-lg bg-tup text-white text-xs font-medium hover:bg-tup/90">Obs. Pendiente</a>
+              <div class="flex gap-1.5">
+                {e.coordinacion === 'pendiente' ? (
+                  <a href={`/coordinador/captura/coordinacion?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-purple-600 text-white text-[10px] font-medium hover:bg-purple-700">CA</a>
                 ) : (
-                  <span class="flex-1 text-center px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium">✅ Observación</span>
+                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ CA</span>
+                )}
+                {e.observacion === 'pendiente' ? (
+                  <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
+                ) : (
+                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Obs.</span>
                 )}
                 {e.planeacion === 'pendiente' ? (
-                  <a href={`/coordinador/planeaciones`} class="flex-1 text-center px-3 py-2 rounded-lg bg-dorado text-white text-xs font-medium hover:bg-dorado/90">Plan. Pendiente</a>
+                  <a href="/coordinador/planeaciones" class="flex-1 text-center px-2 py-1.5 rounded-lg bg-dorado text-white text-[10px] font-medium hover:bg-dorado/90">Plan.</a>
                 ) : e.planeacion === 'no_aplica' ? (
-                  <span class="flex-1 text-center px-3 py-2 rounded-lg bg-slate-100 text-slate-400 text-xs font-medium">Sin plan.</span>
+                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-[10px] font-medium">—</span>
                 ) : (
-                  <span class="flex-1 text-center px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium">✅ Planeación</span>
+                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Plan.</span>
                 )}
               </div>
             </div>

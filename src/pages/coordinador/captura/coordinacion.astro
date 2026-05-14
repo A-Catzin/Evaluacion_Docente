@@ -1,12 +1,105 @@
 ---
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
+import { obtenerDocentes } from '../../../services/docentes';
+import { obtenerCuatrimestreActivo, obtenerCampus } from '../../../services/catalogos';
+
+const docentes = await obtenerDocentes();
+const cuatrimestre = await obtenerCuatrimestreActivo();
+const campusList = await obtenerCampus();
+const CICLOS = ['26-2','26-3'];
+const CATEGORIAS = [
+  {id:'a',titulo:'A. Cumplimiento Académico',items:['Cumplimiento del programa, planeación y avance académico.','Organización y conducción de sesiones (presenciales, virtuales o ejecutivas).','Uso y disponibilidad de materiales didácticos o recursos en plataforma.']},
+  {id:'b',titulo:'B. Gestión y Organización',items:['Entrega de calificaciones en tiempo y forma.','Puntualidad, asistencia y cumplimiento administrativo.','Uso adecuado de plataformas institucionales (Moodle, Saeko, sistemas).']},
+  {id:'c',titulo:'C. Desempeño Profesional y Comunicación',items:['Comunicación clara, oportuna y profesional con estudiantes y coordinación.','Trabajo colaborativo con docentes y áreas institucionales.','Participación en reuniones, actividades y procesos institucionales.']},
+  {id:'d',titulo:'D. Innovación y Mejora Continua',items:['Implementación de estrategias didácticas innovadoras.','Participación en procesos de capacitación o actualización docente.','Aplicación de mejoras en su práctica docente.']},
+  {id:'e',titulo:'E. Compromiso Institucional y Ética',items:['Cumplimiento de normatividad institucional.','Trato respetuoso, ético y profesional.','Representación institucional adecuada en entornos presenciales o digitales.']}
+];
+const docenteIdParam = Astro.url.searchParams.get('docente_id');
+const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docenteIdParam)) : null;
 ---
-<LayoutCoordinador titulo="Captura: Coordinación">
-  <div class="animate-flotar-entrada max-w-2xl mx-auto">
-    <h1 class="text-3xl font-bold text-tup mb-6">Evaluación por Coordinación</h1>
-    <div class="bg-white rounded-2xl p-8 shadow-tarjeta text-center text-slate-400">
-      <p class="text-lg">Formulario de captura</p>
-      <p class="text-sm mt-1">Selecciona un docente y cuatrimestre para evaluar.</p>
-    </div>
+
+<LayoutCoordinador titulo="Evaluación por Coordinación">
+  <div class="animate-flotar-entrada max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-tup mb-2">Evaluación por Coordinación Académica</h1>
+    <p class="text-slate-500 mb-6">15 reactivos · 5 categorías · Escala 1-5 · Total máx 75 puntos</p>
+
+    <form id="form-eval" class="space-y-6">
+      <!-- Identificación -->
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
+        <h2 class="text-lg font-bold text-tup mb-4">Datos de Identificación</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Docente *</label>
+            <select id="docente_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+              <option value="">Seleccionar...</option>
+              {docentes.map(d => (<option value={d.id} selected={docentePre?.id === d.id}>{d.nombre} {d.apellidos}</option>))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Ciclo *</label>
+            <select id="ciclo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+              <option value="">Seleccionar...</option>
+              {CICLOS.map(c => (<option value={c}>{c}</option>))}
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-slate-700 mb-2">Campus *</label>
+            <div class="flex flex-wrap gap-2">
+              {campusList.map(c => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-tup/5"><input type="radio" name="campus" value={c.nombre} required class="accent-tup" /><span class="text-sm">{c.nombre}</span></label>))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5 secciones colapsables -->
+      {CATEGORIAS.map(cat => (
+        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+          <button type="button" class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50" onclick="this.parentElement.querySelector('.sec-content').classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')">
+            <h3 class="font-bold text-tup">{cat.titulo}</h3>
+            <svg class="w-5 h-5 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="sec-content px-6 pb-6 space-y-4">
+            {cat.items.map((item, i) => (
+              <div class="p-4 rounded-xl bg-slate-50">
+                <p class="text-sm font-medium text-slate-700 mb-3">{i+1}. {item}</p>
+                <div class="flex gap-2">
+                  {[1,2,3,4,5].map(v => (
+                    <label class="flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer">
+                      <input type="radio" name={`${cat.id}${i+1}`} value={v} required class="sr-only peer" />
+                      <span class="text-sm font-bold text-slate-400 peer-checked:text-tup">{v}</span>
+                      <span class="text-[9px] text-slate-400">{['Insuf.','Defic.','Acept.','Bueno','Excel.'][v-1]}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <!-- Cierre -->
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta space-y-4">
+        <textarea id="comentarios" placeholder="Comentarios (opcional)" rows={3} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
+        <button type="submit" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90">Enviar Evaluación</button>
+      </div>
+    </form>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
 </LayoutCoordinador>
+
+<script is:inline define:vars={{ cuatrimestreId: cuatrimestre?.id }}>
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
+  document.getElementById('form-eval').addEventListener('submit',async function(e){
+    e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Enviando...';
+    var data={cuatrimestre_id:cuatrimestreId,docente_id:parseInt(document.getElementById('docente_id').value),ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value,comentarios:document.getElementById('comentarios').value.trim()||null};
+    var prefixes=['a','b','c','d','e'];var counts=[3,3,3,3,3];var allOk=true;
+    prefixes.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb)data[p+i]=parseInt(rb.value);else allOk=false}});
+    if(!allOk){toast('Responde todos los reactivos',true);btn.disabled=false;btn.textContent='Enviar Evaluación';return}
+    if(!data.docente_id||!data.ciclo||!data.campus){toast('Completa los datos de identificación',true);btn.disabled=false;btn.textContent='Enviar Evaluación';return}
+    try{
+      var res=await fetch('/api/coordinador/evaluacion-coordinacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      if(res.ok){var d=await res.json();toast('Evaluación guardada — '+d.score+'% ('+d.puntos+'/75)',false);setTimeout(function(){location.href='/coordinador/dashboard'},1500)}
+      else{var j=await res.json();toast(j.error||'Error',true);btn.disabled=false;btn.textContent='Enviar Evaluación'}
+    }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Evaluación'}
+  });
+</script>
