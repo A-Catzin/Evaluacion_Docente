@@ -20,7 +20,7 @@ const coordSet = new Set((coordData || []).map(c => c.docente_id));
 const totalDocs = docentes.length;
 
 interface EstadoDocente {
-  docente: { id: number; nombre: string; apellidos: string; email: string };
+  docente: { id: number; nombre: string; apellidos: string; email: string; modalidad: string };
   observacion: 'pendiente' | 'completada';
   planeacion: 'pendiente' | 'completada' | 'no_aplica';
   coordinacion: 'pendiente' | 'completada';
@@ -28,7 +28,7 @@ interface EstadoDocente {
 }
 
 const estados: EstadoDocente[] = docentes.map(d => ({
-  docente: { id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email },
+  docente: { id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email, modalidad: d.modalidad || 'Escolarizado' },
   observacion: obsSet.has(d.id) ? 'completada' : 'pendiente',
   planeacion: planEvaluada.has(d.id) ? 'completada' : planPendiente.has(d.id) ? 'pendiente' : 'no_aplica',
   coordinacion: coordSet.has(d.id) ? 'completada' : 'pendiente',
@@ -103,7 +103,7 @@ const completados = estados.filter(e => e.completo);
                   <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ CA</span>
                 )}
                 {e.observacion === 'pendiente' ? (
-                  <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
+                  <a href={`/coordinador/captura/observacion${e.docente.modalidad.includes('Virtual') ? '-virtual' : e.docente.modalidad.includes('Ejecutivo') ? '-ejecutivo' : ''}?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
                 ) : (
                   <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Obs.</span>
                 )}

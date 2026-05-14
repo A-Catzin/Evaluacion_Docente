@@ -1,0 +1,72 @@
+---
+import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
+import { obtenerDocentes } from '../../../services/docentes';
+import { obtenerOfertasAcademicas, obtenerCampus } from '../../../services/catalogos';
+
+const docentes = await obtenerDocentes();
+const ofertas = await obtenerOfertasAcademicas();
+const campusList = await obtenerCampus();
+const CUATRIMESTRES = ['1ro','2do','3ro','4to','5to','6to','7mo','8vo','9no','10mo','11vo','12vo'];
+const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
+const docenteIdParam = Astro.url.searchParams.get('docente_id');
+const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docenteIdParam)) : null;
+
+const SECCIONES = [
+  {id:'cco',titulo:'A. Cognitiva',items:['Organización y vinculación de contenidos con recursos digitales.','Uso de ejemplos y casos contextualizados al entorno en línea.','Adaptación ante limitaciones tecnológicas del grupo.','Uso de apoyos visuales (gráficas, pizarras virtuales) para clarificar conceptos.','Clarificación de términos técnicos con herramientas digitales.','Promoción del razonamiento crítico (breakout rooms, debates).']},
+  {id:'cme',titulo:'B. Metacognitiva',items:['Generación de reflexión mediante foros o chats.','Orientación sobre fortalezas y áreas de oportunidad.','Fomento del aprendizaje autónomo y gestión propia en línea.','Actividades de recapitulación o autoevaluaciones digitales.']},
+  {id:'ccom',titulo:'C. Comunicativa',items:['Claridad en voz, dicción, ritmo y volumen.','Manejo respetuoso de chats y turnos de voz.','Explicación de dinámicas con lenguaje accesible.','Comunicación de propósitos y resultados esperados.','Verificación de comprensión (encuestas, reacciones).']},
+  {id:'cso',titulo:'D. Social y Afectiva',items:['Clima de respeto, participación equitativa y manejo de imprevistos técnicos.','Ambiente de confianza y manejo cálido de la baja participación (cámaras apagadas).']},
+  {id:'cge',titulo:'E. Gestión y Tecno-Pedagogía',items:['Alineación con la planeación y uso de estrategias activas (Kahoot, Jamboard).','Dominio de la plataforma virtual y promoción del uso ético de la tecnología.']},
+  {id:'cno',titulo:'F. Normativa',items:['Inicio puntual, desarrollo conforme al calendario y respeto a la duración de la sesión.']}
+];
+---
+
+<LayoutCoordinador titulo="Observación Virtual">
+  <div class="animate-flotar-entrada max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-tup mb-2">Observación de Clase — Virtual</h1>
+    <p class="text-slate-500 mb-6">20 reactivos · 6 secciones · Escala 1-5 + N/A</p>
+    <form id="form-obs" class="space-y-6">
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-slate-700 mb-1">Docente *</label><select id="docente_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option>{docentes.map(d => (<option value={d.id} selected={docentePre?.id===d.id}>{d.nombre} {d.apellidos}</option>))}</select></div>
+          <div><label class="block text-sm font-medium text-slate-700 mb-1">Oferta Académica *</label><select id="oferta" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option>{ofertas.map(o => (<option value={o.nombre}>{o.nombre}</option>))}</select></div>
+          <div><label class="block text-sm font-medium text-slate-700 mb-1">Cuatrimestre *</label><select id="cuatrimestre" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option>{CUATRIMESTRES.map(c => (<option value={c}>{c}</option>))}</select></div>
+          <div><label class="block text-sm font-medium text-slate-700 mb-1">Ciclo *</label><select id="ciclo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option>{CICLOS.map(c => (<option value={c}>{c}</option>))}</select></div>
+          <div class="sm:col-span-2"><label class="block text-sm font-medium text-slate-700 mb-2">Campus *</label><div class="flex flex-wrap gap-2">{campusList.map(c => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-tup/5"><input type="radio" name="campus" value={c.nombre} required class="accent-tup" /><span class="text-sm">{c.nombre}</span></label>))}</div></div>
+        </div>
+      </div>
+      {SECCIONES.map(sec => (
+        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+          <button type="button" class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50" onclick="this.parentElement.querySelector('.sc').classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')"><h3 class="font-bold text-tup">{sec.titulo}</h3><svg class="w-5 h-5 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button>
+          <div class="sc px-6 pb-6 space-y-4">
+            {sec.items.map((item,i) => (<div class="p-4 rounded-xl bg-slate-50"><p class="text-sm font-medium text-slate-700 mb-3">{i+1}. {item}</p><div class="flex gap-2">{[1,2,3,4,5,'N/A'].map(v => (<label class="flex-1 flex flex-col items-center p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer"><input type="radio" name={`${sec.id}${i+1}`} value={v} class="sr-only peer" /><span class="text-sm font-bold text-slate-400 peer-checked:text-tup">{v}</span></label>))}</div></div>))}
+            <textarea name={`obs_${sec.id}`} placeholder="Observaciones..." rows={2} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
+          </div>
+        </div>
+      ))}
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta space-y-4">
+        <textarea id="com_evaluador" placeholder="Comentarios adicionales (opcional)" rows={3} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
+        <button type="submit" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90">Enviar Observación Virtual</button>
+      </div>
+    </form>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
+</LayoutCoordinador>
+
+<script is:inline>
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
+  document.getElementById('form-obs').addEventListener('submit',async function(e){
+    e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Enviando...';
+    var data={docente_id:parseInt(document.getElementById('docente_id').value),oferta_academica:document.getElementById('oferta').value,cuatrimestre_grupo:document.getElementById('cuatrimestre').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value,tipo:'virtual'};
+    if(!data.docente_id||!data.oferta_academica||!data.cuatrimestre_grupo||!data.ciclo||!data.campus){toast('Completa todos los campos',true);btn.disabled=false;btn.textContent='Enviar Observación Virtual';return}
+    var prefs=['cco','cme','ccom','cso','cge','cno'];var counts=[6,4,5,2,2,1];
+    prefs.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb&&rb.value!=='N/A')data[p+i]=parseInt(rb.value)}});
+    prefs.forEach(function(p){var obs=document.querySelector('textarea[name="obs_'+p+'"]');if(obs&&obs.value.trim())data['obs_'+p]=obs.value.trim()});
+    data.comentario_evaluador=document.getElementById('com_evaluador').value.trim()||null;
+    try{
+      var res=await fetch('/api/coordinador/observacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      if(res.ok){toast('Observación guardada',false);setTimeout(function(){location.href='/coordinador/dashboard'},1500)}
+      else{var j=await res.json();toast(j.error||'Error',true);btn.disabled=false;btn.textContent='Enviar Observación Virtual'}
+    }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación Virtual'}
+  });
+</script>
