@@ -47,9 +47,9 @@ for (const d of docentes) {
   if (scores.length > 0 && !f.final360) {
     const pesos = [0.35, 0.20, 0.15, 0.25, 0.05]; // EE, CA, PD, OC, AE
     const disponibles = [f.promEst, f.promCoord, f.promPlan, f.promObs, f.promAuto];
-    let suma = 0, pesoTotal = 0;
-    for (let i = 0; i < 5; i++) { if (disponibles[i]) { suma += disponibles[i]! * pesos[i]; pesoTotal += pesos[i]; } }
-    f.final360 = pesoTotal > 0 ? Math.round(suma / pesoTotal) : null;
+    let suma = 0;
+    for (let i = 0; i < 5; i++) { if (disponibles[i]) suma += disponibles[i]! * pesos[i]; }
+    f.final360 = Math.round(suma);
     if (f.final360) {
       if (f.final360 >= 90) f.cat360 = 'Sobresaliente';
       else if (f.final360 >= 80) f.cat360 = 'Distinguido';
