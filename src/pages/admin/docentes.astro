@@ -62,7 +62,7 @@ function colorScore(n: number|null): string { if (!n) return 'text-slate-400'; i
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Est.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Obs.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Coord.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Plan.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Auto.</th>
           </tr></thead>
           <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50">
-            <td class="px-2 py-2 font-medium">{f.nombre} {f.apellidos}</td><td class="px-2 py-2 text-slate-600 text-[10px]">{f.email}</td><td class="px-2 py-2">{f.campus}</td><td class="px-2 py-2">{f.turno}</td><td class="px-2 py-2">{f.modalidad}</td>
+            <td class="px-2 py-2 text-center font-medium">{f.nombre} {f.apellidos}</td><td class="px-2 py-2 text-center text-slate-600 text-[10px]">{f.email}</td><td class="px-2 py-2 text-center">{f.campus}</td><td class="px-2 py-2 text-center">{f.turno}</td><td class="px-2 py-2 text-center">{f.modalidad}</td>
             <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{f.cat360}</span></td>
             <td class="px-2 py-2 text-center font-bold {colorScore(f.final360)}">{fmt(f.final360)}</td>
             <td class="px-2 py-2 text-center {colorScore(f.promEst)}">{fmt(f.promEst)}</td>
