@@ -76,17 +76,11 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
     loaded[coordId] = true;
 
     try {
-      var {createClient} = await import('https://esm.sh/@supabase/supabase-js@2');
-      var supabase = createClient(supabaseUrl, supabaseKey, {auth:{persistSession:false}});
-      // Obtener docentes evaluados por este coordinador (observaciones + evaluacion_coordinacion)
-      var {data:obs} = await supabase.from('observaciones').select('docente_id').eq('evaluador_id', coordId);
-      var {data:coord} = await supabase.from('evaluacion_coordinacion').select('docente_id').eq('evaluador_id', coordId);
-      var ids = new Set([...(obs||[]).map(o=>o.docente_id),...(coord||[]).map(c=>c.docente_id)]);
-      if (ids.size === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No ha evaluado docentes todavía.</p>'; return; }
-
-      var {data:docentes} = await supabase.from('docentes').select('id,nombre,apellidos,email').in('id', [...ids]);
+      var res = await fetch('/api/admin/docentes-evaluados?coordinador=' + coordId);
+      var docentes = await res.json();
+      if (!docentes || docentes.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No ha evaluado docentes todavía.</p>'; return; }
       container.innerHTML = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-left px-3 py-2 font-medium text-slate-600">Docente</th><th class="text-left px-3 py-2 font-medium text-slate-600">Email</th><th class="text-center px-3 py-2 font-medium text-slate-600">Acciones</th></tr></thead><tbody class="divide-y">' +
-        (docentes||[]).map(function(d){ return '<tr><td class="px-3 py-2 font-medium">'+d.nombre+' '+d.apellidos+'</td><td class="px-3 py-2 text-slate-500">'+d.email+'</td><td class="px-3 py-2 text-center"><a href="/admin/docentes?q='+encodeURIComponent(d.nombre+' '+d.apellidos)+'" class="px-2 py-1 rounded-lg bg-tup/10 text-tup text-[10px] hover:bg-tup/20 mr-1">Ver desempeño</a></td></tr>' }).join('') +
+        docentes.map(function(d){ return '<tr><td class="px-3 py-2 font-medium">'+d.nombre+' '+d.apellidos+'</td><td class="px-3 py-2 text-slate-500">'+d.email+'</td><td class="px-3 py-2 text-center"><a href="/admin/docentes?q='+encodeURIComponent(d.nombre+' '+d.apellidos)+'" class="px-2 py-1 rounded-lg bg-tup/10 text-tup text-[10px] hover:bg-tup/20 mr-1">Ver desempeño</a></td></tr>' }).join('') +
         '</tbody></table>';
     } catch(err) { container.innerHTML = '<p class="text-xs text-red-500 text-center py-4">Error al cargar docentes</p>'; }
   }
