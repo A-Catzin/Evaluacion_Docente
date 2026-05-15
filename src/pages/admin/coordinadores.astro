@@ -3,34 +3,21 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
 const cliente = obtenerClienteSuperbase();
-
-// Obtener coordinadores
 const { data: coordinadores } = await cliente.from('usuarios').select('id,email,rol,entidad_id').eq('rol', 'coordinador');
 
 interface CoordinadorInfo {
-  id: string; email: string; nombre: string; apellidos: string;
-  maestrosEvaluados: number; criticos: number; procesoMejora: number; adecuado: number; eficaz: number; ejemplar: number;
+  id: string; email: string; nombre: string; apellidos: string; maestrosEvaluados: number;
+  criticos: number; procesoMejora: number; adecuado: number; eficaz: number; ejemplar: number;
 }
-
 const filas: CoordinadorInfo[] = [];
 if (coordinadores) {
   for (const c of coordinadores) {
     const [nombre, ...apellidos] = c.email.split('@')[0].replace(/[._]/g, ' ').split(' ');
-    // Contar docentes evaluados por este coordinador
     const { count: obsCount } = await cliente.from('observaciones').select('*', { count: 'exact', head: true }).eq('evaluador_id', c.id);
     const { count: coordCount } = await cliente.from('evaluacion_coordinacion').select('*', { count: 'exact', head: true }).eq('evaluador_id', c.id);
-    const { count: planCount } = await cliente.from('planeaciones').select('*', { count: 'exact', head: true }).eq('estado', 'Aprobado');
-
-    const total = (obsCount || 0) + (coordCount || 0);
-    filas.push({
-      id: c.id, email: c.email,
-      nombre: nombre || c.email, apellidos: apellidos.join(' ') || '—',
-      maestrosEvaluados: total,
-      criticos: 0, procesoMejora: 0, adecuado: 0, eficaz: 0, ejemplar: 0,
-    });
+    filas.push({ id: c.id, email: c.email, nombre: nombre || c.email, apellidos: apellidos.join(' ') || '—', maestrosEvaluados: (obsCount || 0) + (coordCount || 0), criticos: 0, procesoMejora: 0, adecuado: 0, eficaz: 0, ejemplar: 0 });
   }
 }
-
 const busqueda = Astro.url.searchParams.get('q') || '';
 let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqueda.toLowerCase()) || f.email.toLowerCase().includes(busqueda.toLowerCase())) : filas;
 ---
@@ -38,7 +25,6 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
 <LayoutAdmin titulo="Coordinadores — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Coordinadores</h1><span class="text-sm text-slate-400">{items.length} coordinadores</span></div>
-
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
@@ -47,39 +33,61 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
       </form>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden overflow-x-auto">
-      {items.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron coordinadores.</div>) : (
-        <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 border-b">
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Nombre</th>
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Apellidos</th>
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Email</th>
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Maestros Evaluados</th>
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Crítico</th>
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Proceso Mejora</th>
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Adecuado</th>
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Eficaz</th>
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Ejemplar</th>
-            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Docentes</th>
-          </tr></thead>
-          <tbody class="divide-y">{items.map(f => (
-            <tr class="hover:bg-slate-50">
-              <td class="px-3 py-2 text-center font-medium">{f.nombre}</td>
-              <td class="px-3 py-2 text-center">{f.apellidos}</td>
-              <td class="px-3 py-2 text-center text-xs text-slate-600">{f.email}</td>
-              <td class="px-3 py-2 text-center font-bold">{f.maestrosEvaluados}</td>
-              <td class="px-3 py-2 text-center text-red-600 font-medium">{f.criticos || '0'}</td>
-              <td class="px-3 py-2 text-center text-amber-600 font-medium">{f.procesoMejora || '0'}</td>
-              <td class="px-3 py-2 text-center text-amber-500 font-medium">{f.adecuado || '0'}</td>
-              <td class="px-3 py-2 text-center text-emerald-600 font-medium">{f.eficaz || '0'}</td>
-              <td class="px-3 py-2 text-center text-emerald-500 font-medium">{f.ejemplar || '0'}</td>
-              <td class="px-3 py-2 text-center">
-                <button class="px-2 py-1 rounded-lg bg-tup/10 text-tup text-xs font-medium hover:bg-tup/20" onclick="alert('Docentes evaluados por este coordinador aparecerán aquí')">Ver</button>
-              </td>
-            </tr>
-          ))}</tbody>
-        </table>
-      )}
+    <div class="space-y-4">
+      {items.map(f => (
+        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+          <div class="flex items-center justify-between px-6 py-4">
+            <div class="flex items-center gap-4">
+              <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{f.nombre.charAt(0)}</div>
+              <div>
+                <p class="font-medium text-slate-800">{f.nombre} {f.apellidos}</p>
+                <p class="text-xs text-slate-400">{f.email}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-6">
+              <div class="text-center"><p class="text-lg font-bold text-tup">{f.maestrosEvaluados}</p><p class="text-[10px] text-slate-400">Evaluados</p></div>
+              <div class="flex gap-2">
+                <span class="w-2 h-2 rounded-full bg-red-500" title="Crítico"></span>
+                <span class="w-2 h-2 rounded-full bg-amber-500" title="Proceso"></span>
+                <span class="w-2 h-2 rounded-full bg-emerald-500" title="Eficaz"></span>
+              </div>
+              <button class="btn-ver px-3 py-1.5 rounded-lg bg-tup/10 text-tup text-xs font-medium hover:bg-tup/20" data-id={f.id} onclick="toggleDocentes(this,'{f.id}')">Ver docentes ▾</button>
+            </div>
+          </div>
+          <div id={`docs-${f.id}`} class="hidden border-t border-slate-100 bg-slate-50/50 p-4">
+            <p class="text-xs text-slate-400 mb-3">Cargando docentes evaluados...</p>
+          </div>
+        </div>
+      ))}
+      {items.length === 0 && <div class="text-center text-slate-400 py-12">No se encontraron coordinadores.</div>}
     </div>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
 </LayoutAdmin>
+
+<script is:inline define:vars={{ supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL, supabaseKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY }}>
+  var loaded = {};
+  async function toggleDocentes(btn, coordId) {
+    var container = document.getElementById('docs-' + coordId);
+    var isHidden = container.classList.contains('hidden');
+    if (!isHidden) { container.classList.add('hidden'); btn.textContent = 'Ver docentes ▾'; return; }
+    container.classList.remove('hidden'); btn.textContent = 'Ocultar ▴';
+    if (loaded[coordId]) return;
+    loaded[coordId] = true;
+
+    try {
+      var {createClient} = await import('https://esm.sh/@supabase/supabase-js@2');
+      var supabase = createClient(supabaseUrl, supabaseKey, {auth:{persistSession:false}});
+      // Obtener docentes evaluados por este coordinador (observaciones + evaluacion_coordinacion)
+      var {data:obs} = await supabase.from('observaciones').select('docente_id').eq('evaluador_id', coordId);
+      var {data:coord} = await supabase.from('evaluacion_coordinacion').select('docente_id').eq('evaluador_id', coordId);
+      var ids = new Set([...(obs||[]).map(o=>o.docente_id),...(coord||[]).map(c=>c.docente_id)]);
+      if (ids.size === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No ha evaluado docentes todavía.</p>'; return; }
+
+      var {data:docentes} = await supabase.from('docentes').select('id,nombre,apellidos,email').in('id', [...ids]);
+      container.innerHTML = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-left px-3 py-2 font-medium text-slate-600">Docente</th><th class="text-left px-3 py-2 font-medium text-slate-600">Email</th><th class="text-center px-3 py-2 font-medium text-slate-600">Acciones</th></tr></thead><tbody class="divide-y">' +
+        (docentes||[]).map(function(d){ return '<tr><td class="px-3 py-2 font-medium">'+d.nombre+' '+d.apellidos+'</td><td class="px-3 py-2 text-slate-500">'+d.email+'</td><td class="px-3 py-2 text-center"><a href="/admin/docentes?q='+encodeURIComponent(d.nombre+' '+d.apellidos)+'" class="px-2 py-1 rounded-lg bg-tup/10 text-tup text-[10px] hover:bg-tup/20 mr-1">Ver desempeño</a></td></tr>' }).join('') +
+        '</tbody></table>';
+    } catch(err) { container.innerHTML = '<p class="text-xs text-red-500 text-center py-4">Error al cargar docentes</p>'; }
+  }
+</script>
