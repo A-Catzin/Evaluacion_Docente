@@ -191,7 +191,7 @@ function formatear(n: number | undefined): string {
               </tr></thead>
               <tbody class="divide-y">{filas.map(f => {
                 const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
-                return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 font-medium">{f.nombre}</td><td class="px-3 py-2">{paterno}</td><td class="px-3 py-2">{materno || '—'}</td><td class="px-3 py-2 text-center">{f.maestros_evaluados ?? '—'}</td><td class="px-3 py-2 text-center">{f.desempeno_critico ?? '—'}</td><td class="px-3 py-2 text-center">{f.proceso_mejora ?? '—'}</td><td class="px-3 py-2 text-center">{f.adecuado ?? '—'}</td><td class="px-3 py-2 text-center">{f.eficaz ?? '—'}</td><td class="px-3 py-2 text-center">{f.ejemplar ?? '—'}</td><td class="px-3 py-2"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>);
+                return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{f.nombre}</td><td class="px-3 py-2 text-center">{paterno}</td><td class="px-3 py-2 text-center">{materno || '—'}</td><td class="px-3 py-2 text-center">{f.maestros_evaluados ?? '—'}</td><td class="px-3 py-2 text-center">{f.desempeno_critico ?? '—'}</td><td class="px-3 py-2 text-center">{f.proceso_mejora ?? '—'}</td><td class="px-3 py-2 text-center">{f.adecuado ?? '—'}</td><td class="px-3 py-2 text-center">{f.eficaz ?? '—'}</td><td class="px-3 py-2 text-center">{f.ejemplar ?? '—'}</td><td class="px-3 py-2 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>);
               })}</tbody>
             </table>
           )}
@@ -200,7 +200,7 @@ function formatear(n: number | undefined): string {
           {rolFiltro === 'superadmin' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Apellidos</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th></tr></thead>
-              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{f.nombre}</td><td class="px-4 py-3">{f.apellidos || '—'}</td><td class="px-4 py-3 text-slate-600">{f.email}</td></tr>))}</tbody>
+              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center">{f.apellidos || '—'}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td></tr>))}</tbody>
             </table>
           )}
 
@@ -208,7 +208,7 @@ function formatear(n: number | undefined): string {
           {(!rolFiltro || rolFiltro === 'estudiante') && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Apellidos</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Rol</th></tr></thead>
-              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{f.nombre}</td><td class="px-4 py-3">{f.apellidos || '—'}</td><td class="px-4 py-3 text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
+              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center">{f.apellidos || '—'}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
             </table>
           )}
 
