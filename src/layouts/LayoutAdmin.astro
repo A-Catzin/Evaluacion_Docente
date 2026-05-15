@@ -1,20 +1,32 @@
 ---
-/**
- * LayoutAdmin.astro — Sidebar fijo para SuperAdmin
- */
 import BaseLayout from './BaseLayout.astro';
-import { obtenerClienteSuperbase } from '../lib/supabaseClient';
-
-export interface Props {
-  titulo?: string;
-}
-
+export interface Props { titulo?: string; }
 const { titulo = 'Admin — SED-360' } = Astro.props;
+
+const grupos = [
+  {
+    nombre: 'Académico', icono: '🎓',
+    items: ['ofertas','asignaturas','cuatrimestres','campus','turnos'],
+    labels: ['Ofertas Académicas','Asignaturas','Cuatrimestres','Campus','Turnos'],
+    icons: ['🎓','📚','📅','🏫','🕐']
+  },
+  {
+    nombre: 'Personal', icono: '👥',
+    items: ['docentes','coordinadores','usuarios'],
+    labels: ['Docentes','Coordinadores','Usuarios'],
+    icons: ['👨‍🏫','📊','👥']
+  },
+  {
+    nombre: 'Configuración', icono: '⚙️',
+    items: ['instrumentos','roles'],
+    labels: ['Instrumentos','Roles'],
+    icons: ['📋','🔑']
+  }
+];
 ---
 
 <BaseLayout titulo={titulo}>
   <div class="flex min-h-screen">
-    <!-- Sidebar fijo -->
     <aside class="w-64 bg-white border-r border-slate-200 flex-shrink-0 hidden lg:flex flex-col">
       <div class="p-6 border-b border-slate-100">
         <a href="/admin/dashboard" class="flex items-center gap-3">
@@ -24,41 +36,31 @@ const { titulo = 'Admin — SED-360' } = Astro.props;
           <span class="font-semibold text-tup text-lg">SED-360</span>
         </a>
       </div>
-      <nav class="flex-1 p-4 space-y-1">
+
+      <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+        <!-- Dashboard (siempre visible) -->
         <a href="/admin/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
           📊 Dashboard
         </a>
-        <a href="/admin/docentes" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          👨‍🏫 Docentes
-        </a>
-        <a href="/admin/instrumentos" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          📋 Instrumentos
-        </a>
-        <a href="/admin/cuatrimestres" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          📅 Cuatrimestres
-        </a>
-        <a href="/admin/usuarios" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          👥 Usuarios
-        </a>
-        <a href="/admin/coordinadores" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          📊 Coordinadores
-        </a>
-        <a href="/admin/ofertas" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          🎓 Ofertas Académicas
-        </a>
-        <a href="/admin/campus" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          🏫 Campus
-        </a>
-        <a href="/admin/asignaturas" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          📚 Asignaturas
-        </a>
-        <a href="/admin/roles" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          🔑 Roles
-        </a>
-        <a href="/admin/turnos" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          🕐 Turnos
-        </a>
+
+        <!-- Grupos colapsables -->
+        {grupos.map(g => (
+          <div>
+            <button type="button" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')">
+              <span>{g.icono} {g.nombre}</span>
+              <svg class="w-3.5 h-3.5 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="space-y-0.5 ml-3 mt-1">
+              {g.items.map((item, i) => (
+                <a href={`/admin/${item}`} class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-tup/5 hover:text-tup transition-colors">
+                  <span class="text-xs">{g.icons[i]}</span> {g.labels[i]}
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
       </nav>
+
       <div class="p-4 border-t border-slate-100">
         <a href="/api/auth/signout" class="flex items-center gap-2 text-xs text-slate-400 hover:text-red-500 transition-colors">
           🚪 Cerrar Sesión
@@ -66,7 +68,6 @@ const { titulo = 'Admin — SED-360' } = Astro.props;
       </div>
     </aside>
 
-    <!-- Contenido -->
     <main class="flex-1 p-6 lg:p-8 overflow-auto">
       <slot />
     </main>
