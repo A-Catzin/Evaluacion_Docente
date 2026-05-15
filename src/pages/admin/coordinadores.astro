@@ -51,7 +51,7 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
                 <span class="w-2 h-2 rounded-full bg-amber-500" title="Proceso"></span>
                 <span class="w-2 h-2 rounded-full bg-emerald-500" title="Eficaz"></span>
               </div>
-              <button class="btn-ver px-3 py-1.5 rounded-lg bg-tup/10 text-tup text-xs font-medium hover:bg-tup/20" data-id={f.id} onclick="toggleDocentes(this,'{f.id}')">Ver docentes ▾</button>
+              <button class="btn-ver px-3 py-1.5 rounded-lg bg-tup/10 text-tup text-xs font-medium hover:bg-tup/20" data-id={f.id}>Ver docentes ▾</button>
             </div>
           </div>
           <div id={`docs-${f.id}`} class="hidden border-t border-slate-100 bg-slate-50/50 p-4">
@@ -90,4 +90,8 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
         '</tbody></table>';
     } catch(err) { container.innerHTML = '<p class="text-xs text-red-500 text-center py-4">Error al cargar docentes</p>'; }
   }
+
+  document.querySelectorAll('.btn-ver').forEach(function(btn) {
+    btn.addEventListener('click', function() { toggleDocentes(this, this.dataset.id); });
+  });
 </script>
