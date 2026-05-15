@@ -13,9 +13,10 @@ const filas: CoordinadorInfo[] = [];
 if (coordinadores) {
   for (const c of coordinadores) {
     const [nombre, ...apellidos] = c.email.split('@')[0].replace(/[._]/g, ' ').split(' ');
-    const { count: obsCount } = await cliente.from('observaciones').select('*', { count: 'exact', head: true }).eq('evaluador_id', c.id);
-    const { count: coordCount } = await cliente.from('evaluacion_coordinacion').select('*', { count: 'exact', head: true }).eq('evaluador_id', c.id);
-    filas.push({ id: c.id, email: c.email, nombre: nombre || c.email, apellidos: apellidos.join(' ') || '—', maestrosEvaluados: (obsCount || 0) + (coordCount || 0), criticos: 0, procesoMejora: 0, adecuado: 0, eficaz: 0, ejemplar: 0 });
+    const { data: obsData } = await cliente.from('observaciones').select('docente_id').eq('evaluador_id', c.id);
+    const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('docente_id').eq('evaluador_id', c.id);
+    const idsUnicos = new Set([...(obsData||[]).map(o=>o.docente_id), ...(coordData||[]).map(c=>c.docente_id)]);
+    filas.push({ id: c.id, email: c.email, nombre: nombre || c.email, apellidos: apellidos.join(' ') || '—', maestrosEvaluados: idsUnicos.size, criticos: 0, procesoMejora: 0, adecuado: 0, eficaz: 0, ejemplar: 0 });
   }
 }
 const busqueda = Astro.url.searchParams.get('q') || '';
