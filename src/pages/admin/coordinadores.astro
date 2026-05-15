@@ -1,0 +1,85 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+
+const cliente = obtenerClienteSuperbase();
+
+// Obtener coordinadores
+const { data: coordinadores } = await cliente.from('usuarios').select('id,email,rol,entidad_id').eq('rol', 'coordinador');
+
+interface CoordinadorInfo {
+  id: string; email: string; nombre: string; apellidos: string;
+  maestrosEvaluados: number; criticos: number; procesoMejora: number; adecuado: number; eficaz: number; ejemplar: number;
+}
+
+const filas: CoordinadorInfo[] = [];
+if (coordinadores) {
+  for (const c of coordinadores) {
+    const [nombre, ...apellidos] = c.email.split('@')[0].replace(/[._]/g, ' ').split(' ');
+    // Contar docentes evaluados por este coordinador
+    const { count: obsCount } = await cliente.from('observaciones').select('*', { count: 'exact', head: true }).eq('evaluador_id', c.id);
+    const { count: coordCount } = await cliente.from('evaluacion_coordinacion').select('*', { count: 'exact', head: true }).eq('evaluador_id', c.id);
+    const { count: planCount } = await cliente.from('planeaciones').select('*', { count: 'exact', head: true }).eq('estado', 'Aprobado');
+
+    const total = (obsCount || 0) + (coordCount || 0);
+    filas.push({
+      id: c.id, email: c.email,
+      nombre: nombre || c.email, apellidos: apellidos.join(' ') || '—',
+      maestrosEvaluados: total,
+      criticos: 0, procesoMejora: 0, adecuado: 0, eficaz: 0, ejemplar: 0,
+    });
+  }
+}
+
+const busqueda = Astro.url.searchParams.get('q') || '';
+let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqueda.toLowerCase()) || f.email.toLowerCase().includes(busqueda.toLowerCase())) : filas;
+---
+
+<LayoutAdmin titulo="Coordinadores — Admin">
+  <div class="animate-flotar-entrada">
+    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Coordinadores</h1><span class="text-sm text-slate-400">{items.length} coordinadores</span></div>
+
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form method="GET" class="flex gap-3">
+        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
+        {busqueda && (<a href="/admin/coordinadores" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+      </form>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden overflow-x-auto">
+      {items.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron coordinadores.</div>) : (
+        <table class="w-full text-sm">
+          <thead><tr class="bg-slate-50 border-b">
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Nombre</th>
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Apellidos</th>
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Email</th>
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Maestros Evaluados</th>
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Crítico</th>
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Proceso Mejora</th>
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Adecuado</th>
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Eficaz</th>
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Ejemplar</th>
+            <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Docentes</th>
+          </tr></thead>
+          <tbody class="divide-y">{items.map(f => (
+            <tr class="hover:bg-slate-50">
+              <td class="px-3 py-2 text-center font-medium">{f.nombre}</td>
+              <td class="px-3 py-2 text-center">{f.apellidos}</td>
+              <td class="px-3 py-2 text-center text-xs text-slate-600">{f.email}</td>
+              <td class="px-3 py-2 text-center font-bold">{f.maestrosEvaluados}</td>
+              <td class="px-3 py-2 text-center text-red-600 font-medium">{f.criticos || '0'}</td>
+              <td class="px-3 py-2 text-center text-amber-600 font-medium">{f.procesoMejora || '0'}</td>
+              <td class="px-3 py-2 text-center text-amber-500 font-medium">{f.adecuado || '0'}</td>
+              <td class="px-3 py-2 text-center text-emerald-600 font-medium">{f.eficaz || '0'}</td>
+              <td class="px-3 py-2 text-center text-emerald-500 font-medium">{f.ejemplar || '0'}</td>
+              <td class="px-3 py-2 text-center">
+                <button class="px-2 py-1 rounded-lg bg-tup/10 text-tup text-xs font-medium hover:bg-tup/20" onclick="alert('Docentes evaluados por este coordinador aparecerán aquí')">Ver</button>
+              </td>
+            </tr>
+          ))}</tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</LayoutAdmin>

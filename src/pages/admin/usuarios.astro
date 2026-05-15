@@ -174,24 +174,19 @@ function formatear(n: number | undefined): string {
             </table>
           )}
 
-          <!-- TABLA COORDINADOR -->
+          <!-- TABLA COORDINADOR (simplificada — métricas en /admin/coordinadores) -->
           {rolFiltro === 'coordinador' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b">
-                <th class="px-3 py-2 text-xs uppercase text-slate-600">Nombre</th>
-                <th class="px-3 py-2 text-xs uppercase text-slate-600">Ap. Paterno</th>
-                <th class="px-3 py-2 text-xs uppercase text-slate-600">Ap. Materno</th>
-                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">No. Maestros Evaluados</th>
-                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Desempeño Crítico</th>
-                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Proceso Mejora</th>
-                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Adecuado</th>
-                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Eficaz</th>
-                <th class="px-3 py-2 text-xs uppercase text-slate-600 text-center">Ejemplar</th>
-                <th class="px-3 py-2 text-xs uppercase text-slate-600">Rol</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Nombre</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Ap. Paterno</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Ap. Materno</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Maestros Evaluados</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Rol</th>
               </tr></thead>
               <tbody class="divide-y">{filas.map(f => {
                 const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
-                return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{f.nombre}</td><td class="px-3 py-2 text-center">{paterno}</td><td class="px-3 py-2 text-center">{materno || '—'}</td><td class="px-3 py-2 text-center">{f.maestros_evaluados ?? '—'}</td><td class="px-3 py-2 text-center">{f.desempeno_critico ?? '—'}</td><td class="px-3 py-2 text-center">{f.proceso_mejora ?? '—'}</td><td class="px-3 py-2 text-center">{f.adecuado ?? '—'}</td><td class="px-3 py-2 text-center">{f.eficaz ?? '—'}</td><td class="px-3 py-2 text-center">{f.ejemplar ?? '—'}</td><td class="px-3 py-2 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>);
+                return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{f.nombre}</td><td class="px-3 py-2 text-center">{paterno}</td><td class="px-3 py-2 text-center">{materno || '—'}</td><td class="px-3 py-2 text-center">{f.maestros_evaluados ?? '—'}</td><td class="px-3 py-2 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>);
               })}</tbody>
             </table>
           )}
