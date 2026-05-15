@@ -263,10 +263,10 @@ export function obtenerNivelDesempeno(promedio: number): { nivel: string; color:
 }
 
 export const PONDERACION_V2 = {
-  EE: 0.40, // Encuesta Estudiantil
-  CA: 0.25, // Coordinación Académica
+  EE: 0.35, // Encuesta Estudiantil
+  CA: 0.20, // Coordinación Académica
   PD: 0.15, // Planeación Docente
-  OC: 0.15, // Observación de Clase
+  OC: 0.25, // Observación de Clase
   AE: 0.05, // Auto-evaluación
 } as const;
 
