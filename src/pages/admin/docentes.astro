@@ -36,6 +36,29 @@ for (const d of docentes) {
   // Autodiagnóstico
   const { data: diag } = await cliente.from('autodiagnosticos').select('puntaje_total').eq('docente_id', d.id).order('id',{ascending:false}).limit(1).maybeSingle();
   if (diag?.puntaje_total) f.promAuto = Math.round((diag.puntaje_total/120)*100);
+
+  // Calcular Final 360 y categoría desde los instrumentos disponibles
+  const scores: number[] = [];
+  if (f.promEst) scores.push(f.promEst);
+  if (f.promObs) scores.push(f.promObs);
+  if (f.promCoord) scores.push(f.promCoord);
+  if (f.promPlan) scores.push(f.promPlan);
+  if (f.promAuto) scores.push(f.promAuto);
+  if (scores.length > 0 && !f.final360) {
+    const pesos = [0.35, 0.20, 0.15, 0.25, 0.05]; // EE, CA, PD, OC, AE
+    const disponibles = [f.promEst, f.promCoord, f.promPlan, f.promObs, f.promAuto];
+    let suma = 0, pesoTotal = 0;
+    for (let i = 0; i < 5; i++) { if (disponibles[i]) { suma += disponibles[i]! * pesos[i]; pesoTotal += pesos[i]; } }
+    f.final360 = pesoTotal > 0 ? Math.round(suma / pesoTotal) : null;
+    if (f.final360) {
+      if (f.final360 >= 90) f.cat360 = 'Sobresaliente';
+      else if (f.final360 >= 80) f.cat360 = 'Distinguido';
+      else if (f.final360 >= 70) f.cat360 = 'Bueno';
+      else if (f.final360 >= 60) f.cat360 = 'Aprobado';
+      else if (f.final360 >= 50) f.cat360 = 'A mejorar';
+      else f.cat360 = 'Insuficiente';
+    }
+  }
   filas.push(f);
 }
 
