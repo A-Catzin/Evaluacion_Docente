@@ -9,7 +9,7 @@ const cliente = () => obtenerClienteSuperbase();
 // ─── Docentes ──────────────────────────────────────────────────
 
 export async function obtenerDocentes(): Promise<Docente[]> {
-  const { data, error } = await cliente().from('docentes').select('*').order('apellidos');
+  const { data, error } = await cliente().from('docentes').select('*').eq('activo', true).order('apellidos');
   if (error) throw new Error('Error al obtener docentes');
   return data as Docente[];
 }
