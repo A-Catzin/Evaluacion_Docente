@@ -12,6 +12,7 @@ interface FilaUsuario {
   nombre: string; apellidos: string;
   // Docente
   campus?: string; materias?: string; coordinador?: string;
+  modalidad?: string;
   nivel_desempeno?: string; categoria_360?: string; final_360?: number;
   prom_estudiantil?: number; prom_observacion?: number;
   prom_coordinador?: number; prom_planeacion?: number; prom_autodiagnostico?: number;
@@ -42,6 +43,7 @@ try {
           fila.apellidos = doc.apellidos;
           fila.campus = doc.campus || '—';
           fila.turno = doc.turno || '—';
+          fila.modalidad = doc.modalidad || '—';
           fila.materias = doc.oferta_academica || '—';
         }
       } else if (u.rol === 'estudiante') {
@@ -152,30 +154,22 @@ function formatear(n: number | undefined): string {
       <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
         <div class="overflow-x-auto">
 
-          <!-- TABLA DOCENTE -->
+          <!-- TABLA DOCENTE (simplificada — scores en /admin/docentes) -->
           {rolFiltro === 'docente' && (
-            <table class="w-full text-[11px] whitespace-nowrap">
+            <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b">
-                <th class="px-2 py-2 text-xs uppercase text-slate-600 sticky left-0 bg-slate-50">Nombre</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Ap. Paterno</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Ap. Materno</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Correo</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Campus</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Materias</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Coordinador/a</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Nivel Desempeño</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Categoría 360</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Final 360</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Est.</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Obs.</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Coord.</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Plan.</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Prom. Auto.</th>
-                <th class="px-2 py-2 text-xs uppercase text-slate-600">Turno</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Nombre</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Ap. Paterno</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Ap. Materno</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Correo</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Campus</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Turno</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Modalidad</th>
+                <th class="px-3 py-2 text-xs uppercase text-slate-600">Materias</th>
               </tr></thead>
               <tbody class="divide-y">{filas.map(f => {
                 const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
-                return (<tr class="hover:bg-slate-50"><td class="px-2 py-2 font-medium">{f.nombre}</td><td class="px-2 py-2">{paterno}</td><td class="px-2 py-2">{materno || '—'}</td><td class="px-2 py-2 text-xs">{f.email}</td><td class="px-2 py-2">{f.campus}</td><td class="px-2 py-2">{f.materias}</td><td class="px-2 py-2">{f.coordinador}</td><td class="px-2 py-2">{f.nivel_desempeno}</td><td class="px-2 py-2"><span class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${(f.categoria_360 === 'Sobresaliente' || f.categoria_360 === 'Distinguido') ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{f.categoria_360}</span></td><td class="px-2 py-2 font-bold">{formatear(f.final_360)}</td><td class="px-2 py-2">{formatear(f.prom_estudiantil)}</td><td class="px-2 py-2">{formatear(f.prom_observacion)}</td><td class="px-2 py-2">{formatear(f.prom_coordinador)}</td><td class="px-2 py-2">{formatear(f.prom_planeacion)}</td><td class="px-2 py-2">{formatear(f.prom_autodiagnostico)}</td><td class="px-2 py-2">{f.turno}</td></tr>);
+                return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 font-medium">{f.nombre}</td><td class="px-3 py-2">{paterno}</td><td class="px-3 py-2">{materno || '—'}</td><td class="px-3 py-2 text-xs">{f.email}</td><td class="px-3 py-2">{f.campus}</td><td class="px-3 py-2">{f.turno}</td><td class="px-3 py-2">{f.modalidad || '—'}</td><td class="px-3 py-2 text-xs">{f.materias}</td></tr>);
               })}</tbody>
             </table>
           )}

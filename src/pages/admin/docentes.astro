@@ -1,24 +1,51 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../services/docentes';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { obtenerCuatrimestreActivo } from '../../services/catalogos';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const todos = await obtenerDocentes();
 const docentes = busqueda
-  ? todos.filter(d =>
-      `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) ||
-      d.email.toLowerCase().includes(busqueda.toLowerCase()) ||
-      (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase())
-    )
+  ? todos.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()) || (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase()))
   : todos;
+
+const cliente = obtenerClienteSuperbase();
+
+// Obtener scores para cada docente
+interface FilaDocente {
+  id: number; nombre: string; apellidos: string; email: string; num_empleado: string; campus: string; turno: string; modalidad: string; activo: boolean;
+  cat360: string; final360: number|null; promEst: number|null; promObs: number|null; promCoord: number|null; promPlan: number|null; promAuto: number|null;
+}
+
+const filas: FilaDocente[] = [];
+for (const d of docentes) {
+  const f: FilaDocente = { id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email, num_empleado: d.num_empleado || '—', campus: d.campus || '—', turno: d.turno || '—', modalidad: d.modalidad || 'Escolarizado', activo: d.activo, cat360: '—', final360: null, promEst: null, promObs: null, promCoord: null, promPlan: null, promAuto: null };
+  // Scores de calificacion_final
+  const { data: cal } = await cliente.from('calificacion_final_docente').select('*').eq('docente_id', d.id).order('id', { ascending: false }).limit(1).maybeSingle();
+  if (cal) { f.cat360 = cal.categoria_final || '—'; f.final360 = cal.calificacion_final; f.promEst = cal.score_encuesta_estudiantil; }
+  // Observación
+  const { data: obs } = await cliente.from('observaciones').select('*').eq('docente_id', d.id).order('id', { ascending: false }).limit(1).maybeSingle();
+  if (obs) { const r = [obs.cco1,obs.cco2,obs.cco3,obs.cco4,obs.cco5,obs.cco6,obs.cco7,obs.cme1,obs.cme2,obs.cme3,obs.cme4,obs.cme5,obs.cme6,obs.cme7,obs.cme8,obs.cme9,obs.ccom1,obs.ccom2,obs.ccom3,obs.ccom4,obs.cso1,obs.cso2,obs.cso3,obs.cso4,obs.cge1,obs.cge2,obs.cge3,obs.cge4,obs.cge5,obs.cge6,obs.cge7,obs.caf1,obs.caf2,obs.ctepe1,obs.ctepe2,obs.ctepe3,obs.ctepe4,obs.ctepe5,obs.ctepe6,obs.ctepe7,obs.cno1,obs.cno2,obs.cno3,obs.cno4,obs.cno5].filter(v=>v); if(r.length>0) f.promObs = Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100); }
+  // Coordinación
+  const { data: coord } = await cliente.from('evaluacion_coordinacion').select('score_normalizado').eq('docente_id', d.id).order('id',{ascending:false}).limit(1).maybeSingle();
+  if (coord?.score_normalizado) f.promCoord = Math.round(coord.score_normalizado);
+  // Planeación
+  const { data: plan } = await cliente.from('planeaciones').select('puntaje_promedio').eq('docente_id', d.id).eq('estado','Aprobado').order('fecha_evaluacion',{ascending:false}).limit(1).maybeSingle();
+  if (plan?.puntaje_promedio) f.promPlan = plan.puntaje_promedio;
+  // Autodiagnóstico
+  const { data: diag } = await cliente.from('autodiagnosticos').select('puntaje_total').eq('docente_id', d.id).order('id',{ascending:false}).limit(1).maybeSingle();
+  if (diag?.puntaje_total) f.promAuto = Math.round((diag.puntaje_total/120)*100);
+  filas.push(f);
+}
+
+function fmt(n: number|null): string { return n !== null && n !== undefined ? Math.round(n).toString() : '—'; }
+function colorScore(n: number|null): string { if (!n) return 'text-slate-400'; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
 ---
+
 <LayoutAdmin titulo="Docentes — Admin">
   <div class="animate-flotar-entrada">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-3xl font-bold text-tup">Gestión de Docentes</h1>
-      <span class="text-sm text-slate-400">{docentes.length} docentes</span>
-    </div>
-
+    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm text-slate-400">{filas.length} docentes</span></div>
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre, email o empleado..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
@@ -26,14 +53,24 @@ const docentes = busqueda
         {busqueda && (<a href="/admin/docentes" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
-
-    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      {docentes.length === 0 ? (
-        <div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>
-      ) : (
-        <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Campus</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Turno</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Estado</th></tr></thead>
-          <tbody class="divide-y">{docentes.map(d => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{d.nombre} {d.apellidos}</td><td class="px-4 py-3 text-slate-600">{d.email}</td><td class="px-4 py-3 text-slate-600">{d.campus || '—'}</td><td class="px-4 py-3 text-slate-600">{d.turno || '—'}</td><td class="px-4 py-3"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${d.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>{d.activo ? 'Activo' : 'Inactivo'}</span></td></tr>))}</tbody>
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden overflow-x-auto">
+      {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>) : (
+        <table class="w-full text-[11px] whitespace-nowrap">
+          <thead><tr class="bg-slate-50 border-b">
+            <th class="text-left px-2 py-2 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-2 py-2 text-xs uppercase text-slate-600">Email</th><th class="text-left px-2 py-2 text-xs uppercase text-slate-600">Campus</th><th class="text-left px-2 py-2 text-xs uppercase text-slate-600">Turno</th><th class="text-left px-2 py-2 text-xs uppercase text-slate-600">Modalidad</th>
+            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Cat. 360</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Final</th>
+            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Est.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Obs.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Coord.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Plan.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Auto.</th>
+          </tr></thead>
+          <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50">
+            <td class="px-2 py-2 font-medium">{f.nombre} {f.apellidos}</td><td class="px-2 py-2 text-slate-600 text-[10px]">{f.email}</td><td class="px-2 py-2">{f.campus}</td><td class="px-2 py-2">{f.turno}</td><td class="px-2 py-2">{f.modalidad}</td>
+            <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{f.cat360}</span></td>
+            <td class="px-2 py-2 text-center font-bold {colorScore(f.final360)}">{fmt(f.final360)}</td>
+            <td class="px-2 py-2 text-center {colorScore(f.promEst)}">{fmt(f.promEst)}</td>
+            <td class="px-2 py-2 text-center {colorScore(f.promObs)}">{fmt(f.promObs)}</td>
+            <td class="px-2 py-2 text-center {colorScore(f.promCoord)}">{fmt(f.promCoord)}</td>
+            <td class="px-2 py-2 text-center {colorScore(f.promPlan)}">{fmt(f.promPlan)}</td>
+            <td class="px-2 py-2 text-center {colorScore(f.promAuto)}">{fmt(f.promAuto)}</td>
+          </tr>))}</tbody>
         </table>
       )}
     </div>
