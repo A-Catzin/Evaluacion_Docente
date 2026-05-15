@@ -16,8 +16,8 @@ const { count: encuestas } = await cliente.from('encuesta_estudiantil_respuestas
 const instrumentos = [
   { nombre: 'Autoevaluación Docente', peso: '5%', total: autodiag || 0, reactivos: 24, escala: '1-5', ruta: '/docente/autodiagnostico', editar: '/admin/instrumentos/editar?inst=autodiagnostico', color: 'border-l-purple-500' },
   { nombre: 'Planeación Docente', peso: '15%', total: planeacionesAprobadas || 0, reactivos: 4, escala: '1-5', ruta: '/coordinador/planeaciones', editar: '/admin/instrumentos/editar?inst=planeacion', color: 'border-l-amber-500' },
-  { nombre: 'Coordinación Académica', peso: '25%', total: coordinacion || 0, reactivos: 15, escala: '1-5', ruta: '/coordinador/captura/coordinacion', editar: '/admin/instrumentos/editar?inst=coordinacion', color: 'border-l-purple-500' },
-  { nombre: 'Encuesta Estudiantil', peso: '40%', total: encuestas || 0, reactivos: 19, escala: '1-6 / 1-4', ruta: null, editar: null, color: 'border-l-slate-400' },
+  { nombre: 'Coordinación Académica', peso: '20%', total: coordinacion || 0, reactivos: 15, escala: '1-5', ruta: '/coordinador/captura/coordinacion', editar: '/admin/instrumentos/editar?inst=coordinacion', color: 'border-l-purple-500' },
+  { nombre: 'Encuesta Estudiantil', peso: '35%', total: encuestas || 0, reactivos: 19, escala: '1-6 / 1-4', ruta: null, editar: null, color: 'border-l-slate-400' },
 ];
 
 const observacionesGrupo = [
@@ -81,7 +81,7 @@ const observacionesGrupo = [
       <button type="button" class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50" onclick="this.parentElement.querySelector('.obs-content').classList.toggle('hidden')">
         <div>
           <h2 class="text-lg font-bold text-slate-800">Observación de Clase <span class="text-sm font-normal text-slate-400">(3 modalidades)</span></h2>
-          <p class="text-xs text-slate-400">Peso: 15% · Escala: 1-5 + N/A</p>
+          <p class="text-xs text-slate-400">Peso: 25% · Escala: 1-5 + N/A</p>
         </div>
         <svg class="w-5 h-5 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
