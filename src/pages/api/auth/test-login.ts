@@ -2,10 +2,10 @@ import type { APIRoute } from 'astro';
 import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
 
 const TEST_USERS = [
-  { email: 'admin@test.local', password: 'test123', rol: 'superadmin' },
-  { email: 'coord@test.local', password: 'test123', rol: 'coordinador' },
-  { email: 'docente@test.local', password: 'test123', rol: 'docente' },
-  { email: 'est@test.local', password: 'test123', rol: 'estudiante' },
+  { email: 'admin@test.sed360.com', password: 'test123', rol: 'superadmin' },
+  { email: 'coord@test.sed360.com', password: 'test123', rol: 'coordinador' },
+  { email: 'docente@test.sed360.com', password: 'test123', rol: 'docente' },
+  { email: 'est@test.sed360.com', password: 'test123', rol: 'estudiante' },
 ];
 
 export const POST: APIRoute = async ({ request }) => {

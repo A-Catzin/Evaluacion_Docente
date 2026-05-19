@@ -19,10 +19,10 @@ import Layout from '../../layouts/Layout.astro';
 
 <script>
   var ROLES = {
-    'btn-admin': { email:'admin@test.local', pw:'test123', dash:'/admin/dashboard' },
-    'btn-coord': { email:'coord@test.local', pw:'test123', dash:'/coordinador/dashboard' },
-    'btn-doc': { email:'docente@test.local', pw:'test123', dash:'/docente/dashboard' },
-    'btn-est': { email:'est@test.local', pw:'test123', dash:'/estudiante/dashboard' }
+    'btn-admin': { email:'admin@test.sed360.com', pw:'test123', dash:'/admin/dashboard' },
+    'btn-coord': { email:'coord@test.sed360.com', pw:'test123', dash:'/coordinador/dashboard' },
+    'btn-doc': { email:'docente@test.sed360.com', pw:'test123', dash:'/docente/dashboard' },
+    'btn-est': { email:'est@test.sed360.com', pw:'test123', dash:'/estudiante/dashboard' }
   };
   Object.keys(ROLES).forEach(function(id) {
     document.getElementById(id).addEventListener('click', async function() {
