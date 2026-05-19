@@ -18,15 +18,18 @@ import Layout from '../../layouts/Layout.astro';
 </Layout>
 
 <script>
-  async function login(rol, email, nombre) {
-    var res = await fetch('/api/auth/test-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rol, email, nombre }) });
-    if (res.ok) {
-      var dash = rol === 'superadmin' ? '/admin/dashboard' : rol === 'coordinador' ? '/coordinador/dashboard' : rol === 'docente' ? '/docente/dashboard' : '/estudiante/dashboard';
-      window.location.href = dash;
-    } else { alert('Error al iniciar sesión de prueba'); }
-  }
-  document.getElementById('btn-admin').addEventListener('click', function(){ login('superadmin','admin@test.local','Admin Test') });
-  document.getElementById('btn-coord').addEventListener('click', function(){ login('coordinador','coord@test.local','Coord Test') });
-  document.getElementById('btn-doc').addEventListener('click', function(){ login('docente','docente@test.local','Docente Test') });
-  document.getElementById('btn-est').addEventListener('click', function(){ login('estudiante','est@test.local','Estudiante Test') });
+  var ROLES = {
+    'btn-admin': { email:'admin@test.local', pw:'test123', dash:'/admin/dashboard' },
+    'btn-coord': { email:'coord@test.local', pw:'test123', dash:'/coordinador/dashboard' },
+    'btn-doc': { email:'docente@test.local', pw:'test123', dash:'/docente/dashboard' },
+    'btn-est': { email:'est@test.local', pw:'test123', dash:'/estudiante/dashboard' }
+  };
+  Object.keys(ROLES).forEach(function(id) {
+    document.getElementById(id).addEventListener('click', async function() {
+      var r = ROLES[id]; this.disabled = true; this.textContent = 'Entrando...';
+      var res = await fetch('/api/auth/test-login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: r.email, password: r.pw }) });
+      if (res.ok) { window.location.href = r.dash; }
+      else { var d = await res.json(); alert(d.error || 'Error'); this.disabled = false; this.textContent = this.textContent.replace('Entrando...',''); }
+    });
+  });
 </script>

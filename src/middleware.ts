@@ -33,23 +33,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   if (!tokenAcceso || !tokenRefresco) return redirect('/auth');
 
-  // 🧪 MODO TEST: si el token empieza con test_token_, saltar validación Supabase
-  if (tokenAcceso.startsWith('test_token_')) {
-    try {
-      const payload = JSON.parse(atob(tokenAcceso.replace('test_token_', '')));
-      if (payload.test && payload.sub && payload.rol) {
-        // Verificar autorización por rol con el rol del token
-        for (const [prefijo, roles] of Object.entries(ROLES_POR_RUTA)) {
-          if (url.pathname.startsWith(prefijo)) {
-            if (!roles.includes(payload.rol)) return redirect('/?error=no-autorizado');
-            break;
-          }
-        }
-        return next();
-      }
-    } catch { return redirect('/auth'); }
-  }
-
   try {
     const cliente = obtenerClienteSuperbase();
     const { data, error } = await cliente.auth.setSession({

@@ -1,27 +1,42 @@
 import type { APIRoute } from 'astro';
+import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
 
-const TOKEN_PREFIJO = 'test_token_';
+const TEST_USERS = [
+  { email: 'admin@test.local', password: 'test123', rol: 'superadmin' },
+  { email: 'coord@test.local', password: 'test123', rol: 'coordinador' },
+  { email: 'docente@test.local', password: 'test123', rol: 'docente' },
+  { email: 'est@test.local', password: 'test123', rol: 'estudiante' },
+];
 
-// IDs fijos para usuarios de prueba (no dependen de Supabase)
-const TEST_USERS: Record<string, string> = {
-  superadmin: '00000000-0000-0000-0000-000000000001',
-  coordinador: '00000000-0000-0000-0000-000000000002',
-  docente: '00000000-0000-0000-0000-000000000003',
-  estudiante: '00000000-0000-0000-0000-000000000004',
-};
+export const POST: APIRoute = async ({ request }) => {
+  const { email, password } = await request.json();
+  const user = TEST_USERS.find(u => u.email === email);
+  if (!user) return new Response(JSON.stringify({ error: 'Usuario no válido' }), { status: 400 });
 
-export const POST: APIRoute = async ({ request, cookies }) => {
-  const body = await request.json();
-  const { rol, email, nombre } = body;
-  if (!rol || !email) return new Response(JSON.stringify({ error: 'Faltan datos' }), { status: 400 });
+  try {
+    const cl = obtenerClienteSuperbase();
+    // Intentar login
+    let { data, error } = await cl.auth.signInWithPassword({ email, password });
+    
+    // Si no existe, crearlo
+    if (error && error.message?.includes('Invalid login')) {
+      const { error: signUpErr } = await cl.auth.signUp({ email, password });
+      if (signUpErr) return new Response(JSON.stringify({ error: signUpErr.message }), { status: 400 });
+      // Reintentar login
+      const retry = await cl.auth.signInWithPassword({ email, password });
+      if (retry.error) return new Response(JSON.stringify({ error: retry.error.message }), { status: 400 });
+      data = retry.data;
+    } else if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+    }
 
-  const sub = TEST_USERS[rol] || TEST_USERS.estudiante;
-  const tokenData = btoa(JSON.stringify({ sub, email, rol, nombre, test: true }));
-  const token = TOKEN_PREFIJO + tokenData;
-  const esProd = import.meta.env.PROD;
+    if (!data.user) return new Response(JSON.stringify({ error: 'No se pudo crear sesión' }), { status: 400 });
 
-  cookies.set('sb-access-token', token, { path: '/', httpOnly: true, secure: esProd, sameSite: 'lax', maxAge: 86400 });
-  cookies.set('sb-refresh-token', token, { path: '/', httpOnly: true, secure: esProd, sameSite: 'lax', maxAge: 86400 });
+    // Asegurar rol correcto en usuarios
+    await cl.from('usuarios').upsert({ id: data.user.id, email, rol: user.rol }, { onConflict: 'id' });
 
-  return new Response(JSON.stringify({ success: true }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, rol: user.rol }), { status: 200 });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Error interno' }), { status: 500 });
+  }
 };
