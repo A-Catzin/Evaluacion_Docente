@@ -34,10 +34,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (!tokenAcceso || !tokenRefresco) return redirect('/auth');
 
   // 🧪 MODO TEST
-  if (tokenAcceso.startsWith('test_token_')) {
+  const testUser = cookies.get('test-user')?.value;
+  if (testUser) {
     try {
-      const payload = JSON.parse(atob(tokenAcceso.replace('test_token_', '')));
-      if (payload.test && payload.sub && payload.rol) {
+      const payload = JSON.parse(testUser);
+      if (payload.id && payload.rol) {
         for (const [prefijo, roles] of Object.entries(ROLES_POR_RUTA)) {
           if (url.pathname.startsWith(prefijo)) {
             if (!roles.includes(payload.rol)) return redirect('/?error=no-autorizado');
