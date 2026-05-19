@@ -19,15 +19,15 @@ import Layout from '../../layouts/Layout.astro';
 
 <script>
   var ROLES = {
-    'btn-admin': { email:'admin@test.sed360.com', pw:'test123', dash:'/admin/dashboard' },
-    'btn-coord': { email:'coord@test.sed360.com', pw:'test123', dash:'/coordinador/dashboard' },
-    'btn-doc': { email:'docente@test.sed360.com', pw:'test123', dash:'/docente/dashboard' },
-    'btn-est': { email:'est@test.sed360.com', pw:'test123', dash:'/estudiante/dashboard' }
+    'btn-admin': { email:'admin@test.sed360.com', dash:'/admin/dashboard' },
+    'btn-coord': { email:'coord@test.sed360.com', dash:'/coordinador/dashboard' },
+    'btn-doc': { email:'docente@test.sed360.com', dash:'/docente/dashboard' },
+    'btn-est': { email:'est@test.sed360.com', dash:'/estudiante/dashboard' }
   };
   Object.keys(ROLES).forEach(function(id) {
     document.getElementById(id).addEventListener('click', async function() {
       var r = ROLES[id]; this.disabled = true; this.textContent = 'Entrando...';
-      var res = await fetch('/api/auth/test-login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: r.email, password: r.pw }) });
+      var res = await fetch('/api/auth/test-login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: r.email }) });
       if (res.ok) { window.location.href = r.dash; }
       else { var d = await res.json(); alert(d.error || 'Error'); this.disabled = false; this.textContent = this.textContent.replace('Entrando...',''); }
     });
