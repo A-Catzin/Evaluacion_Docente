@@ -1,7 +1,111 @@
 ---
 import LayoutEstudiante from '../../../layouts/LayoutEstudiante.astro';
-const { grupo_id } = Astro.params;
+import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
+
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (!token || !refresh) return Astro.redirect('/auth');
+const cl = obtenerClienteSuperbase();
+const { data: s } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
+if (!s.user) return Astro.redirect('/auth');
+const { data: u } = await cl.from('usuarios').select('entidad_id,rol').eq('id', s.user.id).maybeSingle();
+if (!u || u.rol !== 'estudiante' || !u.entidad_id) return Astro.redirect('/');
+
+const cuatrimestre = await obtenerCuatrimestreActivo();
+const grupoId = parseInt(Astro.params.grupo_id || '0');
+
+const { data: grupo } = await cl.from('grupos').select('clave,docente_id,asignatura_id').eq('id', grupoId).maybeSingle();
+if (!grupo) return Astro.redirect('/estudiante/dashboard');
+
+const { data: docente } = await cl.from('docentes').select('nombre,apellidos').eq('id', grupo.docente_id).maybeSingle();
+const { data: asig } = await cl.from('asignaturas').select('nombre').eq('id', grupo.asignatura_id).maybeSingle();
+
+const { data: yaRespondio } = await cl.from('encuesta_control_envio').select('id').eq('estudiante_id', u.entidad_id).eq('grupo_id', grupoId).eq('cuatrimestre_id', cuatrimestre?.id).maybeSingle();
+
+const SECCIONES = [
+  { id:'asi', titulo:'A. Asistencia y Puntualidad (5)', items:['El docente inicia las sesiones puntualmente.','El docente asiste con regularidad a todas las clases.','El docente permanece y aprovecha el tiempo total de clase.','En caso de inasistencia, repone la clase o asigna actividades.','El docente lleva un registro constante de asistencia del grupo.'] },
+  { id:'org', titulo:'B. Organización de la Asignatura (5)', items:['Dio a conocer el plan de trabajo al inicio del curso.','Las clases demuestran una secuencia lógica y organizada.','Cumple en tiempo y forma con el calendario programado.','Las tareas y proyectos están bien distribuidos.','Se percibe preparación previa en cada clase.'] },
+  { id:'act', titulo:'C. Actitud y Empatía (5)', items:['Muestra entusiasmo e interés al impartir la clase.','Es respetuoso, tolerante y empático con todos.','Promueve un ambiente seguro, libre de burlas o acoso.','Se muestra accesible para resolver dudas.','Mantiene una conducta profesional, ética y justa.'] },
+  { id:'ens', titulo:'D. Estrategias de Enseñanza (6)', items:['Explica temas complejos con claridad y paciencia.','Utiliza ejemplos prácticos y casos reales.','Vincula la teoría con la práctica del campo laboral.','Aplica dinámicas que hacen la clase interactiva.','Fomenta el pensamiento crítico y resolución de problemas.','Se asegura de que el grupo comprenda antes de avanzar.'] },
+  { id:'dom', titulo:'E. Dominio del Contenido (5)', items:['Demuestra conocimiento profundo y actualizado.','Responde con seguridad y sustento técnico.','Aporta lecturas e información de vanguardia.','Muestra fluidez al exponer conceptos clave.','Guía debates hacia los objetivos del programa.'] },
+  { id:'eva', titulo:'F. Evaluación y Calificación (5)', items:['Explicó claramente los criterios de evaluación.','Las evaluaciones corresponden a lo visto en clase.','Entrega resultados dentro de los plazos establecidos.','La retroalimentación es clara y ayuda a mejorar.','Las calificaciones reflejan objetivamente mi desempeño.'] },
+  { id:'com', titulo:'G. Participación y Comunicación (5)', items:['Motiva a los estudiantes a participar activamente.','Escucha y respeta las diversas opiniones.','Responde mensajes y dudas en tiempo razonable.','Emplea un lenguaje accesible y profesional.','Fomenta el trabajo colaborativo y en equipo.'] },
+  { id:'ges', titulo:'H. Gestión del Grupo (5)', items:['Mantiene el orden y la disciplina en clase.','Maneja conflictos de forma asertiva y profesional.','Garantiza el respeto a las reglas de convivencia.','Promueve la participación equitativa de todos.','Mantiene el interés del grupo durante la clase.'] },
+  { id:'tec', titulo:'I. Uso de la Tecnología (5)', items:['Utiliza eficazmente la plataforma Moodle.','Integra herramientas digitales interactivas.','Los materiales digitales son claros y funcionales.','Demuestra fluidez en el manejo de recursos del aula.','Promueve el uso ético de la tecnología e IA.'] },
+  { id:'sat', titulo:'J. Satisfacción Global (5)', items:['He adquirido un aprendizaje significativo.','El desempeño cumplió mis expectativas.','Recomendaría a este docente a otros grupos.','Los contenidos aportan a mi perfil profesional.','En general, estoy altamente satisfecho(a).'] },
+];
 ---
-<LayoutEstudiante titulo="Encuesta">
-  <div class="animate-flotar-entrada w-full max-w-lg"><div class="bg-white rounded-3xl p-8 shadow-modal text-center text-slate-400"><p>Encuesta para grupo {grupo_id}</p><p class="text-sm mt-2">En desarrollo</p></div></div>
+
+<LayoutEstudiante titulo="Encuesta Docente">
+  <div class="animate-flotar-entrada w-full max-w-2xl mx-auto px-4 pb-12">
+    <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-modal mb-6">
+      <h1 class="text-xl font-bold text-tup mb-1">Evaluación Docente</h1>
+      <p class="text-slate-600 font-medium">{docente?.nombre} {docente?.apellidos}</p>
+      <p class="text-sm text-slate-400">{asig?.nombre || '—'} · Grupo {grupo?.clave || ''}</p>
+      <p class="text-xs text-slate-300 mt-2">Escala: 5=Siempre, 4=Casi siempre, 3=Regularmente, 2=Casi nunca, 1=Nunca</p>
+    </div>
+
+    {yaRespondio ? (
+      <div class="bg-emerald-50 rounded-2xl p-8 text-center border border-emerald-200">
+        <p class="text-emerald-800 font-semibold">✅ Ya completaste esta encuesta</p>
+        <a href="/estudiante/dashboard" class="inline-block mt-4 px-6 py-2.5 rounded-xl bg-tup text-white text-sm">Volver</a>
+      </div>
+    ) : (
+      <form id="form-encuesta" class="space-y-4">
+        {SECCIONES.map(sec => (
+          <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+            <button type="button" class="w-full px-5 py-3 flex items-center justify-between text-left hover:bg-slate-50" onclick="this.parentElement.querySelector('.sc').classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')">
+              <h3 class="text-sm font-bold text-tup">{sec.titulo}</h3>
+              <svg class="w-4 h-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sc px-5 pb-5 space-y-3">
+              {sec.items.map((item, i) => (
+                <div class="p-3 rounded-lg bg-slate-50">
+                  <p class="text-xs font-medium text-slate-700 mb-2">{i+1}. {item}</p>
+                  <div class="flex gap-1.5">
+                    {[1,2,3,4,5].map(v => (
+                      <label class="flex-1 flex flex-col items-center gap-0.5 p-1.5 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer transition-colors">
+                        <input type="radio" name={`${sec.id}${i+1}`} value={v} required class="sr-only peer" />
+                        <span class="text-xs font-bold text-slate-400 peer-checked:text-tup">{v}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Comentarios (opcional)</label>
+          <textarea id="comentarios" rows={3} placeholder="Observaciones, sugerencias o reconocimientos..." class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
+        </div>
+
+        <button type="submit" id="btn-enviar" class="w-full bg-tup text-white font-semibold py-4 rounded-2xl shadow-tarjeta hover:bg-tup/90 transition-all text-lg">Enviar Encuesta</button>
+      </form>
+    )}
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
 </LayoutEstudiante>
+
+<script is:inline define:vars={{ cuatrimestreId: cuatrimestre?.id, grupoId, docenteId: grupo?.docente_id, asignaturaId: grupo?.asignatura_id, estudianteId: u.entidad_id }}>
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
+
+  document.getElementById('form-encuesta')?.addEventListener('submit', async function(e){
+    e.preventDefault(); var btn=document.getElementById('btn-enviar'); btn.disabled=true; btn.textContent='Enviando...';
+    var data={docente_id:docenteId,grupo_id:grupoId,asignatura_id:asignaturaId,cuatrimestre_id:cuatrimestreId,ciclo:'26-3',comentarios:document.getElementById('comentarios').value.trim()||null};
+    var secciones=['asi','org','act','ens','dom','eva','com','ges','tec','sat']; var counts=[5,5,5,6,5,5,5,5,5,5]; var allOk=true;
+    secciones.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb)data[p+i]=parseInt(rb.value);else allOk=false}});
+    if(!allOk){toast('Responde todos los reactivos',true);btn.disabled=false;btn.textContent='Enviar Encuesta';return}
+    try{
+      var res=await fetch('/api/estudiante/encuesta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      if(res.ok){
+        // Marcar control de envío
+        await fetch('/api/estudiante/encuesta-control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estudiante_id:estudianteId,grupo_id:grupoId,cuatrimestre_id:cuatrimestreId})});
+        toast('¡Encuesta enviada! Gracias por tu participación',false);
+        setTimeout(function(){location.href='/estudiante/dashboard'},1500);
+      } else { var j=await res.json(); toast(j.error||'Error',true); btn.disabled=false; btn.textContent='Enviar Encuesta'; }
+    } catch(err) { toast('Error de conexión',true); btn.disabled=false; btn.textContent='Enviar Encuesta'; }
+  });
+</script>
