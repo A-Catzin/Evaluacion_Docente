@@ -11,7 +11,6 @@ const estudianteId = sesion.entidad_id;
 const cl = obtenerClienteSuperbase();
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
-const estudianteId = sesion.entidad_id;
 
 // Obtener grupos del estudiante con docentes
 const { data: inscripciones } = await cl.from('inscripciones').select('grupo_id').eq('estudiante_id', estudianteId).eq('cuatrimestre_id', cuatrimestre?.id);
