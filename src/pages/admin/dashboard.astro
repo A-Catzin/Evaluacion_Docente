@@ -15,15 +15,16 @@ const { data: obsData } = await cliente.from('observaciones').select('docente_id
 const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('docente_id');
 const { data: planData } = await cliente.from('planeaciones').select('docente_id').eq('estado', 'Aprobado');
 const { data: diagData } = await cliente.from('autodiagnosticos').select('docente_id');
+const { data: eeData } = await cliente.from('encuesta_estudiantil').select('docente_id');
 
 const obsSet = new Set((obsData||[]).map(o=>o.docente_id));
 const coordSet = new Set((coordData||[]).map(c=>c.docente_id));
 const planSet = new Set((planData||[]).map(p=>p.docente_id));
 const diagSet = new Set((diagData||[]).map(d=>d.docente_id));
+const eeSet = new Set((eeData||[]).map(e=>e.docente_id));
 
-interface FilaDashboard { id: number; nombre: string; apellidos: string; email: string; instrumentos: number; final360: number|null; cat360: string; }
 const filas: FilaDashboard[] = docentes.map(d => {
-  const inst = [obsSet.has(d.id)?1:0, coordSet.has(d.id)?1:0, planSet.has(d.id)?1:0, diagSet.has(d.id)?1:0];
+  const inst = [eeSet.has(d.id)?1:0, coordSet.has(d.id)?1:0, planSet.has(d.id)?1:0, obsSet.has(d.id)?1:0, diagSet.has(d.id)?1:0];
   const total = inst.reduce((a,b)=>a+b,0);
   return { id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email, instrumentos: total, final360: null, cat360: '—' };
 });

@@ -23,7 +23,10 @@ for (const d of docentes) {
   const f: FilaDocente = { id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email, num_empleado: d.num_empleado || '—', campus: d.campus || '—', turno: d.turno || '—', modalidad: d.modalidad || 'Escolarizado', activo: d.activo, cat360: '—', final360: null, promEst: null, promObs: null, promCoord: null, promPlan: null, promAuto: null };
   // Scores de calificacion_final
   const { data: cal } = await cliente.from('calificacion_final_docente').select('*').eq('docente_id', d.id).order('id', { ascending: false }).limit(1).maybeSingle();
-  if (cal) { f.cat360 = cal.categoria_final || '—'; f.final360 = cal.calificacion_final; f.promEst = cal.score_encuesta_estudiantil; }
+  if (cal) { f.cat360 = cal.categoria_final || '—'; f.final360 = cal.calificacion_final; }
+  // Encuesta Estudiantil
+  const { data: ee } = await cliente.from('encuesta_estudiantil').select('*').eq('docente_id', d.id).order('id', { ascending: false }).limit(1).maybeSingle();
+  if (ee) { const todos = [ee.asi1,ee.asi2,ee.asi3,ee.asi4,ee.asi5,ee.org1,ee.org2,ee.org3,ee.org4,ee.org5,ee.act1,ee.act2,ee.act3,ee.act4,ee.act5,ee.ens1,ee.ens2,ee.ens3,ee.ens4,ee.ens5,ee.ens6,ee.dom1,ee.dom2,ee.dom3,ee.dom4,ee.dom5,ee.eva1,ee.eva2,ee.eva3,ee.eva4,ee.eva5,ee.com1,ee.com2,ee.com3,ee.com4,ee.com5,ee.ges1,ee.ges2,ee.ges3,ee.ges4,ee.ges5,ee.tec1,ee.tec2,ee.tec3,ee.tec4,ee.tec5,ee.sat1,ee.sat2,ee.sat3,ee.sat4,ee.sat5].filter(v=>v) as number[]; if(todos.length>0) f.promEst = Math.round((todos.reduce((a,b)=>a+b,0)/todos.length/5)*100); }
   // Observación
   const { data: obs } = await cliente.from('observaciones').select('*').eq('docente_id', d.id).order('id', { ascending: false }).limit(1).maybeSingle();
   if (obs) { const r = [obs.cco1,obs.cco2,obs.cco3,obs.cco4,obs.cco5,obs.cco6,obs.cco7,obs.cme1,obs.cme2,obs.cme3,obs.cme4,obs.cme5,obs.cme6,obs.cme7,obs.cme8,obs.cme9,obs.ccom1,obs.ccom2,obs.ccom3,obs.ccom4,obs.cso1,obs.cso2,obs.cso3,obs.cso4,obs.cge1,obs.cge2,obs.cge3,obs.cge4,obs.cge5,obs.cge6,obs.cge7,obs.caf1,obs.caf2,obs.ctepe1,obs.ctepe2,obs.ctepe3,obs.ctepe4,obs.ctepe5,obs.ctepe6,obs.ctepe7,obs.cno1,obs.cno2,obs.cno3,obs.cno4,obs.cno5].filter(v=>v); if(r.length>0) f.promObs = Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100); }

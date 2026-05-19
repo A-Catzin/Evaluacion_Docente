@@ -285,3 +285,25 @@ export function obtenerCategoria(puntaje: number): { label: string; color: strin
   }
   return CATEGORIAS_FINAL.INSUFICIENTE;
 }
+
+export interface EncuestaEstudiantil {
+  id: number; docente_id: number; grupo_id: number; asignatura_id: number;
+  cuatrimestre_id: number; ciclo: string;
+  asi1:number|null;asi2:number|null;asi3:number|null;asi4:number|null;asi5:number|null;
+  org1:number|null;org2:number|null;org3:number|null;org4:number|null;org5:number|null;
+  act1:number|null;act2:number|null;act3:number|null;act4:number|null;act5:number|null;
+  ens1:number|null;ens2:number|null;ens3:number|null;ens4:number|null;ens5:number|null;ens6:number|null;
+  dom1:number|null;dom2:number|null;dom3:number|null;dom4:number|null;dom5:number|null;
+  eva1:number|null;eva2:number|null;eva3:number|null;eva4:number|null;eva5:number|null;
+  com1:number|null;com2:number|null;com3:number|null;com4:number|null;com5:number|null;
+  ges1:number|null;ges2:number|null;ges3:number|null;ges4:number|null;ges5:number|null;
+  tec1:number|null;tec2:number|null;tec3:number|null;tec4:number|null;tec5:number|null;
+  sat1:number|null;sat2:number|null;sat3:number|null;sat4:number|null;sat5:number|null;
+  comentarios: string|null; fecha_respuesta: string;
+}
+
+export function calcularPromedioEncuesta(ee: EncuestaEstudiantil): number {
+  const todos = [ee.asi1,ee.asi2,ee.asi3,ee.asi4,ee.asi5,ee.org1,ee.org2,ee.org3,ee.org4,ee.org5,ee.act1,ee.act2,ee.act3,ee.act4,ee.act5,ee.ens1,ee.ens2,ee.ens3,ee.ens4,ee.ens5,ee.ens6,ee.dom1,ee.dom2,ee.dom3,ee.dom4,ee.dom5,ee.eva1,ee.eva2,ee.eva3,ee.eva4,ee.eva5,ee.com1,ee.com2,ee.com3,ee.com4,ee.com5,ee.ges1,ee.ges2,ee.ges3,ee.ges4,ee.ges5,ee.tec1,ee.tec2,ee.tec3,ee.tec4,ee.tec5,ee.sat1,ee.sat2,ee.sat3,ee.sat4,ee.sat5].filter(v=>v) as number[];
+  if(todos.length===0)return 0;
+  return Math.round((todos.reduce((a,b)=>a+b,0)/todos.length/5)*100);
+}
