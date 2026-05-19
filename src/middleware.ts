@@ -5,6 +5,7 @@ const DOMINIO_PERMITIDO = '@tecplayacar.edu.mx';
 
 const RUTAS_PUBLICAS = [
   '/api/auth/guardar-sesion', '/api/auth/signout', '/api/auth/rol',
+  '/api/auth/test-login', '/auth/test',
   '/api/docente/autodiagnostico', '/api/coordinador/observacion',
   '/api/docente/planeacion', '/api/coordinador/planeacion', '/api/coordinador/evaluacion-coordinacion',
   '/api/admin/docentes-evaluados', '/api/estudiante/encuesta', '/api/estudiante/encuesta-control',
@@ -31,6 +32,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const tokenRefresco = cookies.get('sb-refresh-token')?.value;
 
   if (!tokenAcceso || !tokenRefresco) return redirect('/auth');
+
+  // 🧪 MODO TEST: si el token empieza con test_token_, saltar validación Supabase
+  if (tokenAcceso.startsWith('test_token_')) {
+    try {
+      const payload = JSON.parse(atob(tokenAcceso.replace('test_token_', '')));
+      if (payload.test && payload.sub && payload.rol) {
+        // Verificar autorización por rol con el rol del token
+        for (const [prefijo, roles] of Object.entries(ROLES_POR_RUTA)) {
+          if (url.pathname.startsWith(prefijo)) {
+            if (!roles.includes(payload.rol)) return redirect('/?error=no-autorizado');
+            break;
+          }
+        }
+        return next();
+      }
+    } catch { return redirect('/auth'); }
+  }
 
   try {
     const cliente = obtenerClienteSuperbase();
