@@ -3,17 +3,15 @@ import LayoutEstudiante from '../../layouts/LayoutEstudiante.astro';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 import { obtenerCuatrimestreActivo } from '../../services/catalogos';
 
-const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-if (!token || !refresh) return Astro.redirect('/auth');
+import { obtenerSesion } from '../../lib/sesion';
+
+const sesion = await obtenerSesion(Astro);
+if (!sesion || sesion.rol !== 'estudiante' || !sesion.entidad_id) return Astro.redirect('/auth');
+const estudianteId = sesion.entidad_id;
 const cl = obtenerClienteSuperbase();
-const { data: s } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
-if (!s.user) return Astro.redirect('/auth');
-const { data: u } = await cl.from('usuarios').select('entidad_id,rol').eq('id', s.user.id).maybeSingle();
-if (!u || u.rol !== 'estudiante' || !u.entidad_id) return Astro.redirect('/');
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
-const estudianteId = u.entidad_id;
+const estudianteId = sesion.entidad_id;
 
 // Obtener grupos del estudiante con docentes
 const { data: inscripciones } = await cl.from('inscripciones').select('grupo_id').eq('estudiante_id', estudianteId).eq('cuatrimestre_id', cuatrimestre?.id);

@@ -2,30 +2,11 @@
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerCuatrimestreActivo, obtenerOfertasAcademicas, obtenerCampus, obtenerTurnos } from '../../services/catalogos';
 import { obtenerAutodiagnostico } from '../../services/autodiagnostico';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { obtenerSesion } from '../../lib/sesion';
 
-const testUserRaw = Astro.cookies.get('test-user')?.value;
-const testUser = testUserRaw ? JSON.parse(testUserRaw) : null;
-const tokenAcceso = Astro.cookies.get('sb-access-token')?.value;
-const tokenRefresco = Astro.cookies.get('sb-refresh-token')?.value;
-
-let usuario: { entidad_id?: number | null; rol?: string } | null = null;
-
-if (testUser?.rol === 'docente') {
-  usuario = { rol: 'docente', entidad_id: null };
-  const cl = obtenerClienteSuperbase();
-  const { data: u } = await cl.from('usuarios').select('entidad_id').eq('id', testUser.id).maybeSingle();
-  if (u) usuario.entidad_id = u.entidad_id;
-} else {
-  if (!tokenAcceso || !tokenRefresco) return Astro.redirect('/auth');
-  const cliente = obtenerClienteSuperbase();
-  const { data: sesion } = await cliente.auth.setSession({ access_token: tokenAcceso, refresh_token: tokenRefresco });
-  if (!sesion.user) return Astro.redirect('/auth');
-  const { data: u } = await cliente.from('usuarios').select('entidad_id,rol').eq('id', sesion.user.id).maybeSingle();
-  usuario = u;
-}
-if (!usuario || usuario.rol !== 'docente') return Astro.redirect('/docente/dashboard');
-const docenteId = usuario.entidad_id || null;
+const sesion = await obtenerSesion(Astro);
+if (!sesion || sesion.rol !== 'docente') return Astro.redirect('/auth');
+const docenteId = sesion.entidad_id || null;
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
 if (!cuatrimestre) return Astro.redirect('/docente/dashboard');

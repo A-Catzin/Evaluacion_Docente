@@ -2,15 +2,11 @@
 import LayoutEstudiante from '../../../layouts/LayoutEstudiante.astro';
 import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
 import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
+import { obtenerSesion } from '../../../lib/sesion';
 
-const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-if (!token || !refresh) return Astro.redirect('/auth');
+const sesion = await obtenerSesion(Astro);
+if (!sesion || sesion.rol !== 'estudiante' || !sesion.entidad_id) return Astro.redirect('/auth');
 const cl = obtenerClienteSuperbase();
-const { data: s } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
-if (!s.user) return Astro.redirect('/auth');
-const { data: u } = await cl.from('usuarios').select('entidad_id,rol').eq('id', s.user.id).maybeSingle();
-if (!u || u.rol !== 'estudiante' || !u.entidad_id) return Astro.redirect('/');
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
 const grupoId = parseInt(Astro.params.grupo_id || '0');
@@ -21,7 +17,7 @@ if (!grupo) return Astro.redirect('/estudiante/dashboard');
 const { data: docente } = await cl.from('docentes').select('nombre,apellidos').eq('id', grupo.docente_id).maybeSingle();
 const { data: asig } = await cl.from('asignaturas').select('nombre').eq('id', grupo.asignatura_id).maybeSingle();
 
-const { data: yaRespondio } = await cl.from('encuesta_control_envio').select('id').eq('estudiante_id', u.entidad_id).eq('grupo_id', grupoId).eq('cuatrimestre_id', cuatrimestre?.id).maybeSingle();
+const { data: yaRespondio } = await cl.from('encuesta_control_envio').select('id').eq('estudiante_id', sesion.entidad_id).eq('grupo_id', grupoId).eq('cuatrimestre_id', cuatrimestre?.id).maybeSingle();
 
 const SECCIONES = [
   { id:'asi', titulo:'A. Asistencia y Puntualidad (5)', items:['El docente inicia las sesiones puntualmente.','El docente asiste con regularidad a todas las clases.','El docente permanece y aprovecha el tiempo total de clase.','En caso de inasistencia, repone la clase o asigna actividades.','El docente lleva un registro constante de asistencia del grupo.'] },
@@ -89,7 +85,7 @@ const SECCIONES = [
   </div>
 </LayoutEstudiante>
 
-<script is:inline define:vars={{ cuatrimestreId: cuatrimestre?.id, grupoId, docenteId: grupo?.docente_id, asignaturaId: grupo?.asignatura_id, estudianteId: u.entidad_id }}>
+<script is:inline define:vars={{ cuatrimestreId: cuatrimestre?.id, grupoId, docenteId: grupo?.docente_id, asignaturaId: grupo?.asignatura_id, estudianteId: sesion.entidad_id }}>
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
 
   document.getElementById('form-encuesta')?.addEventListener('submit', async function(e){
