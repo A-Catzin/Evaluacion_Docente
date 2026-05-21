@@ -87,28 +87,68 @@ const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asi
           </tr></thead>
           <tbody class="divide-y">{filas.map(f => {
             const grupos = grupoMap.get(f.id) || [];
-            return (<>
-              <tr class="hover:bg-slate-50 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.expand-icon').classList.toggle('rotate-180')">
-            <td class="px-2 py-2 text-center font-medium">{f.nombre} {f.apellidos}<span class="expand-icon inline-block transition-transform ml-1 text-[10px]">▼</span></td><td class="px-2 py-2 text-center text-slate-600 text-[10px]">{f.email}</td><td class="px-2 py-2 text-center">{f.campus || '—'}</td><td class="px-2 py-2 text-center">{f.turno || '—'}</td><td class="px-2 py-2 text-center">{f.modalidad || '—'}</td><td class="px-2 py-2 text-center text-xs text-slate-400">—</td>
-            <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{f.cat360}</span></td>
-            <td class="px-2 py-2 text-center font-bold {colorScore(f.final360)}">{fmt(f.final360)}</td>
-            <td class="px-2 py-2 text-center {colorScore(f.promEst)}">{fmt(f.promEst)}</td>
-            <td class="px-2 py-2 text-center {colorScore(f.promObs)}">{fmt(f.promObs)}</td>
-            <td class="px-2 py-2 text-center {colorScore(f.promCoord)}">{fmt(f.promCoord)}</td>
-            <td class="px-2 py-2 text-center {colorScore(f.promPlan)}">{fmt(f.promPlan)}</td>
-            <td class="px-2 py-2 text-center {colorScore(f.promAuto)}">{fmt(f.promAuto)}</td>
-          </tr>
-          {grupos.length > 0 && (
-            <tr class="hidden bg-slate-50/50">
-              <td colspan="13" class="px-4 py-3">
-                <table class="w-full text-[10px]"><thead><tr class="bg-slate-100"><th class="text-center px-2 py-1">Materia</th><th class="text-center px-2 py-1">Modalidad</th><th class="text-center px-2 py-1">Turno</th><th class="text-center px-2 py-1">Est.</th><th class="text-center px-2 py-1">Obs.</th><th class="text-center px-2 py-1">Coord.</th><th class="text-center px-2 py-1">Plan.</th><th class="text-center px-2 py-1">Auto.</th></tr></thead>
-                <tbody>{grupos.map(g => (<tr class="hover:bg-white"><td class="text-center px-2 py-1 font-medium">{asigMap.get(g.asignatura_id) || g.clave}</td><td class="text-center px-2 py-1">{g.modalidad || '—'}</td><td class="text-center px-2 py-1">{g.turno_grupo || '—'}</td><td class="text-center px-2 py-1">{fmt(f.promEst)}</td><td class="text-center px-2 py-1">{fmt(f.promObs)}</td><td class="text-center px-2 py-1">{fmt(f.promCoord)}</td><td class="text-center px-2 py-1">{fmt(f.promPlan)}</td><td class="text-center px-2 py-1">{fmt(f.promAuto)}</td></tr>))}</tbody></table>
-              </td>
-            </tr>
-          )}</>);
+            const tieneMaterias = grupos.length > 0;
+            return (
+              <tr class="hover:bg-slate-50">
+                <td class="px-2 py-2 text-center font-medium">{f.nombre} {f.apellidos}</td>
+                <td class="px-2 py-2 text-center text-slate-600 text-[10px]">{f.email}</td>
+                <td class="px-2 py-2 text-center">{f.campus || '—'}</td>
+                <td class="px-2 py-2 text-center">{f.turno || '—'}</td>
+                <td class="px-2 py-2 text-center">{f.modalidad || '—'}</td>
+                <td class="px-2 py-2 text-center">
+                  {tieneMaterias ? (
+                    <button class="px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20" onclick={`verMaterias(event, ${f.id})`}>📊 Ver</button>
+                  ) : (
+                    <span class="text-[10px] text-slate-300">Sin materias</span>
+                  )}
+                </td>
+                <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{f.cat360}</span></td>
+                <td class="px-2 py-2 text-center font-bold {colorScore(f.final360)}">{fmt(f.final360)}</td>
+                <td class="px-2 py-2 text-center {colorScore(f.promEst)}">{fmt(f.promEst)}</td>
+                <td class="px-2 py-2 text-center {colorScore(f.promObs)}">{fmt(f.promObs)}</td>
+                <td class="px-2 py-2 text-center {colorScore(f.promCoord)}">{fmt(f.promCoord)}</td>
+                <td class="px-2 py-2 text-center {colorScore(f.promPlan)}">{fmt(f.promPlan)}</td>
+                <td class="px-2 py-2 text-center {colorScore(f.promAuto)}">{fmt(f.promAuto)}</td>
+              </tr>
+            );
           })}</tbody>
         </table>
       )}
     </div>
   </div>
+
+  <!-- Modal de materias -->
+  <div id="modal-materias" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-white rounded-3xl p-6 shadow-modal max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto animate-flotar-entrada">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modal-titulo" class="text-lg font-bold text-tup"></h3>
+        <button onclick="document.getElementById('modal-materias').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+      </div>
+      <div id="modal-contenido"></div>
+    </div>
+  </div>
 </LayoutAdmin>
+
+<script is:inline define:vars={{ gruposJson: JSON.stringify(Array.from(grupoMap.entries()).map(([k,v]) => [k, v])), asigJson: JSON.stringify(Object.fromEntries(asigMap)) }}>
+  var gruposData = JSON.parse(gruposJson);
+  var asigData = JSON.parse(asigJson);
+  var grupoMap2 = new Map(gruposData);
+
+  function fmtModal(n) { return n != null ? Math.round(n) : '—'; }
+
+  function verMaterias(e, docenteId) {
+    e.stopPropagation();
+    var grupos = grupoMap2.get(docenteId) || [];
+    var nombre = e.target.closest('tr').querySelector('td').textContent.trim();
+
+    document.getElementById('modal-titulo').textContent = 'Materias — ' + nombre;
+    var html = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-center px-2 py-2">Materia</th><th class="text-center px-2 py-2">Modalidad</th><th class="text-center px-2 py-2">Turno</th></tr></thead><tbody>';
+    grupos.forEach(function(g) {
+      html += '<tr><td class="text-center px-2 py-2 font-medium">' + (asigData[g.asignatura_id] || g.clave) + '</td><td class="text-center px-2 py-2">' + (g.modalidad || '—') + '</td><td class="text-center px-2 py-2">' + (g.turno_grupo || '—') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('modal-contenido').innerHTML = html;
+    document.getElementById('modal-materias').classList.remove('hidden');
+    document.getElementById('modal-materias').classList.add('flex');
+  }
+</script>
