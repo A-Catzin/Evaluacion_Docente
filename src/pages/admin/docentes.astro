@@ -59,6 +59,12 @@ const filas = docentes.map(d => {
   let final360 = 0; for (let i=0;i<5;i++) if (disponibles[i]) final360 += disponibles[i]*pesos[i];
   return { ...d, promObs, promCoord, promPlan, promAuto, promEst, final360: final360||null, cat360: cat360(Math.round(final360)) };
 });
+
+// Grupos por docente (para expandir)
+const { data: gruposData } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id,modalidad,turno_grupo').in('docente_id', ids);
+const grupoMap = new Map<number, any[]>(); for (const g of (gruposData || [])) { if (!grupoMap.has(g.docente_id)) grupoMap.set(g.docente_id, []); grupoMap.get(g.docente_id)!.push(g); }
+const { data: asigData } = await cliente.from('asignaturas').select('id,nombre');
+const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asigMap.set(a.id, a.nombre);
 ---
 
 <LayoutAdmin titulo="Docentes — Admin">
@@ -79,8 +85,11 @@ const filas = docentes.map(d => {
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Cat. 360</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Final</th>
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Est.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Obs.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Coord.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Plan.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Auto.</th>
           </tr></thead>
-          <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50">
-            <td class="px-2 py-2 text-center font-medium">{f.nombre} {f.apellidos}</td><td class="px-2 py-2 text-center text-slate-600 text-[10px]">{f.email}</td><td class="px-2 py-2 text-center">{f.campus || '—'}</td><td class="px-2 py-2 text-center">{f.turno || '—'}</td><td class="px-2 py-2 text-center">{f.modalidad || '—'}</td><td class="px-2 py-2 text-center text-xs text-slate-400">—</td>
+          <tbody class="divide-y">{filas.map(f => {
+            const grupos = grupoMap.get(f.id) || [];
+            return (<>
+              <tr class="hover:bg-slate-50 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.expand-icon').classList.toggle('rotate-180')">
+            <td class="px-2 py-2 text-center font-medium">{f.nombre} {f.apellidos}<span class="expand-icon inline-block transition-transform ml-1 text-[10px]">▼</span></td><td class="px-2 py-2 text-center text-slate-600 text-[10px]">{f.email}</td><td class="px-2 py-2 text-center">{f.campus || '—'}</td><td class="px-2 py-2 text-center">{f.turno || '—'}</td><td class="px-2 py-2 text-center">{f.modalidad || '—'}</td><td class="px-2 py-2 text-center text-xs text-slate-400">—</td>
             <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{f.cat360}</span></td>
             <td class="px-2 py-2 text-center font-bold {colorScore(f.final360)}">{fmt(f.final360)}</td>
             <td class="px-2 py-2 text-center {colorScore(f.promEst)}">{fmt(f.promEst)}</td>
@@ -88,7 +97,16 @@ const filas = docentes.map(d => {
             <td class="px-2 py-2 text-center {colorScore(f.promCoord)}">{fmt(f.promCoord)}</td>
             <td class="px-2 py-2 text-center {colorScore(f.promPlan)}">{fmt(f.promPlan)}</td>
             <td class="px-2 py-2 text-center {colorScore(f.promAuto)}">{fmt(f.promAuto)}</td>
-          </tr>))}</tbody>
+          </tr>
+          {grupos.length > 0 && (
+            <tr class="hidden bg-slate-50/50">
+              <td colspan="13" class="px-4 py-3">
+                <table class="w-full text-[10px]"><thead><tr class="bg-slate-100"><th class="text-center px-2 py-1">Materia</th><th class="text-center px-2 py-1">Modalidad</th><th class="text-center px-2 py-1">Turno</th><th class="text-center px-2 py-1">Est.</th><th class="text-center px-2 py-1">Obs.</th><th class="text-center px-2 py-1">Coord.</th><th class="text-center px-2 py-1">Plan.</th><th class="text-center px-2 py-1">Auto.</th></tr></thead>
+                <tbody>{grupos.map(g => (<tr class="hover:bg-white"><td class="text-center px-2 py-1 font-medium">{asigMap.get(g.asignatura_id) || g.clave}</td><td class="text-center px-2 py-1">{g.modalidad || '—'}</td><td class="text-center px-2 py-1">{g.turno_grupo || '—'}</td><td class="text-center px-2 py-1">{fmt(f.promEst)}</td><td class="text-center px-2 py-1">{fmt(f.promObs)}</td><td class="text-center px-2 py-1">{fmt(f.promCoord)}</td><td class="text-center px-2 py-1">{fmt(f.promPlan)}</td><td class="text-center px-2 py-1">{fmt(f.promAuto)}</td></tr>))}</tbody></table>
+              </td>
+            </tr>
+          )}</>);
+          })}</tbody>
         </table>
       )}
     </div>
