@@ -26,10 +26,32 @@ let filas: FilaUsuario[] = [];
 let errorMsg = '';
 
 try {
-  let query = cliente.from('usuarios').select('id, email, rol, entidad_id');
-  if (rolFiltro) query = query.eq('rol', rolFiltro);
-  const { data: usuarios, error } = await query.order('email');
-  if (error) throw error;
+  // Para docentes y estudiantes: mostrar todos, no solo los que iniciaron sesión
+  if (rolFiltro === 'docente') {
+    const { data: docs, error } = await cliente.from('docentes').select('*').order('apellidos');
+    if (error) throw error;
+    for (const doc of (docs || [])) {
+      filas.push({
+        id: doc.email, email: doc.email, rol: 'docente',
+        nombre: doc.nombre, apellidos: doc.apellidos,
+        campus: doc.campus || '—', turno: doc.turno || '—',
+        modalidad: doc.modalidad || '—', materias: doc.oferta_academica || '—',
+      });
+    }
+  } else if (rolFiltro === 'estudiante') {
+    const { data: ests, error } = await cliente.from('estudiantes').select('*').order('apellidos');
+    if (error) throw error;
+    for (const est of (ests || [])) {
+      filas.push({
+        id: est.email, email: est.email, rol: 'estudiante',
+        nombre: est.nombre, apellidos: est.apellidos,
+      });
+    }
+  } else {
+    let query = cliente.from('usuarios').select('id, email, rol, entidad_id');
+    if (rolFiltro) query = query.eq('rol', rolFiltro);
+    const { data: usuarios, error } = await query.order('email');
+    if (error) throw error;
 
   for (const u of (usuarios || [])) {
     const fila: FilaUsuario = { id: u.id, email: u.email, rol: u.rol, nombre: '', apellidos: '' };
@@ -106,8 +128,11 @@ try {
       if (!fila.nombre.toLowerCase().includes(t) && !u.email.toLowerCase().includes(t)) continue;
     }
 
-    filas.push(fila);
+      filas.push(fila);
+    }
   }
+
+  // Filtrar por búsqueda
 } catch (e) {
   errorMsg = e instanceof Error ? e.message : 'Error al cargar usuarios';
 }
