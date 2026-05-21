@@ -39,7 +39,7 @@ try {
       });
     }
   } else if (rolFiltro === 'estudiante') {
-    const { data: ests, error } = await cliente.from('estudiantes').select('*').order('apellidos');
+    const { data: ests, error } = await cliente.from('estudiantes').select('*').limit(2000).order('apellidos');
     if (error) throw error;
     for (const est of (ests || [])) {
       filas.push({
@@ -122,17 +122,15 @@ try {
       fila.nombre = u.email.split('@')[0].replace(/[._]/g, ' ');
     }
 
-    // Filtrar por búsqueda
-    if (busqueda) {
-      const t = busqueda.toLowerCase();
-      if (!fila.nombre.toLowerCase().includes(t) && !u.email.toLowerCase().includes(t)) continue;
-    }
-
-      filas.push(fila);
+    filas.push(fila);
     }
   }
 
-  // Filtrar por búsqueda
+  // Filtrar por búsqueda (aplica a todos los roles)
+  if (busqueda) {
+    const t = busqueda.toLowerCase();
+    filas = filas.filter(f => f.nombre.toLowerCase().includes(t) || f.email.toLowerCase().includes(t));
+  }
 } catch (e) {
   errorMsg = e instanceof Error ? e.message : 'Error al cargar usuarios';
 }
@@ -146,6 +144,13 @@ const COLOR_ROL: Record<string, string> = {
   docente: 'bg-emerald-50 text-emerald-700', estudiante: 'bg-slate-50 text-slate-700'
 };
 
+// Conteos para botones rápidos
+const { count: totalDocs } = await cliente.from('docentes').select('*', { count: 'exact', head: true });
+const { count: totalEsts } = await cliente.from('estudiantes').select('*', { count: 'exact', head: true });
+const { count: totalCoord } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'coordinador');
+const { count: totalAdmin } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'superadmin');
+const conteos: Record<string, number> = { superadmin: totalAdmin || 0, coordinador: totalCoord || 0, docente: totalDocs || 0, estudiante: totalEsts || 0 };
+
 function formatear(n: number | undefined): string {
   return n !== undefined && n !== null ? Math.round(n).toString() : '—';
 }
@@ -157,6 +162,20 @@ function formatear(n: number | undefined): string {
       <h1 class="text-3xl font-bold text-tup">Gestión de Usuarios</h1>
       <span class="text-sm text-slate-400">{filas.length} usuarios</span>
     </div>
+
+    <!-- Botones de rol rápido (cuando no hay filtro) -->
+    {!rolFiltro && !busqueda && (
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        {ROLES.map(r => (
+          <a href={`?rol=${r}`} class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center block">
+            <p class="text-2xl mb-1">{r==='superadmin'?'🔑':r==='coordinador'?'📋':r==='docente'?'👨‍🏫':'🎒'}</p>
+            <p class="text-lg font-bold text-tup">{ETIQUETAS_ROL[r]}</p>
+            <p class="text-3xl font-bold text-slate-600 mt-2">{conteos[r]}</p>
+            <p class="text-xs text-slate-400 mt-1">usuarios</p>
+          </a>
+        ))}
+      </div>
+    )}
 
     <!-- Filtros -->
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
