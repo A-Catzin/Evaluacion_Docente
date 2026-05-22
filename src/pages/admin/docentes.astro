@@ -97,7 +97,7 @@ const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asi
                 <td class="px-2 py-2 text-center">{f.modalidad || '—'}</td>
                 <td class="px-2 py-2 text-center">
                   {tieneMaterias ? (
-                    <button class="px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20" onclick={`verMaterias(event, ${f.id})`}>📊 Ver</button>
+                    <button class="btn-ver-materias px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20" data-docente-id={f.id} data-nombre={`${f.nombre} ${f.apellidos}`}>📊 Ver</button>
                   ) : (
                     <span class="text-[10px] text-slate-300">Sin materias</span>
                   )}
@@ -134,14 +134,10 @@ const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asi
   var asigData = JSON.parse(asigJson);
   var grupoMap2 = new Map(gruposData);
 
-  function fmtModal(n) { return n != null ? Math.round(n) : '—'; }
-
-  function verMaterias(e, docenteId) {
-    e.stopPropagation();
+  function verMaterias(docenteId, nombreDocente) {
     var grupos = grupoMap2.get(docenteId) || [];
-    var nombre = e.target.closest('tr').querySelector('td').textContent.trim();
 
-    document.getElementById('modal-titulo').textContent = 'Materias — ' + nombre;
+    document.getElementById('modal-titulo').textContent = 'Materias — ' + nombreDocente;
     var html = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-center px-2 py-2">Materia</th><th class="text-center px-2 py-2">Modalidad</th><th class="text-center px-2 py-2">Turno</th></tr></thead><tbody>';
     grupos.forEach(function(g) {
       html += '<tr><td class="text-center px-2 py-2 font-medium">' + (asigData[g.asignatura_id] || g.clave) + '</td><td class="text-center px-2 py-2">' + (g.modalidad || '—') + '</td><td class="text-center px-2 py-2">' + (g.turno_grupo || '—') + '</td></tr>';
@@ -151,4 +147,11 @@ const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asi
     document.getElementById('modal-materias').classList.remove('hidden');
     document.getElementById('modal-materias').classList.add('flex');
   }
+
+  // Asignar eventos a los botones después de cargar
+  document.querySelectorAll('.btn-ver-materias').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      verMaterias(parseInt(this.dataset.docenteId), this.dataset.nombre);
+    });
+  });
 </script>
