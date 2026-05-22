@@ -31,7 +31,7 @@
 `usuarios` — Sincronizado con `auth.users`, 4 roles, auto-creación al login
 
 ### Evaluaciones (5 instrumentos)
-`autodiagnosticos` (24 ítems), `planeaciones` (PDF + rúbrica), `observaciones` (43 ítems, 8 secciones), `evaluacion_coordinacion` (15 ítems, 5 categorías), `encuesta_estudiantil` (51 ítems, 10 secciones)
+`autodiagnosticos` (24 ítems), `planeaciones` (PDF + rúbrica), `observaciones` (45 ítems, 8 secciones), `evaluacion_coordinacion` (15 ítems, 5 categorías), `encuesta_estudiantil` (51 ítems, 10 secciones)
 
 ### Control
 `encuesta_control_envio` (anonimato), `calificacion_final_docente` (GENERATED)
