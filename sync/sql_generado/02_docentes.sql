@@ -1,4 +1,4 @@
--- Docentes (2 apellidos + 1-2 nombres)
+-- Docentes (master + Reporte_clases)
 INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Fray Martin', 'Aguayo Mendez', 'tup-d1624@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
 INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Jesus Alfonso', 'Aguilar Escamilla', 'tup-d1389@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
 INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Marcel', 'Alamilla', 'tup-d1120@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
@@ -340,3 +340,147 @@ INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Maria Del Rocio
 INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Guadalupe', 'Mendez Izquierdo', 'tup-d1809@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
 INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Amy Camila', 'Gonzalez Requena', 'tup-dajedrez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
 INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Jesus', 'Puentes Aguirre', 'tup-d1810@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MARTINEZ LARA MARCO ANTONIO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Marco Antonio', 'Martinez Lara', 'docente_marco.antonio_martinez.lara@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: TUN CASTILLO LUCILA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Lucila', 'Tun Castillo', 'docente_lucila_tun.castillo@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: JASSO RODRIGUEZ SHANTAL PATRICIA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Shantal Patricia', 'Jasso Rodriguez', 'docente_shantal.patricia_jasso.rodriguez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: GONZALEZ CARDENAS JOSE GABRIEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Jose Gabriel', 'Gonzalez Cardenas', 'docente_jose.gabriel_gonzalez.cardenas@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MORENO ALZATE BRENDA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Brenda', 'Moreno Alzate', 'docente_brenda_moreno.alzate@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CHAVARRIA MORALES ARMANDO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Armando', 'Chavarria Morales', 'docente_armando_chavarria.morales@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ALCOCER URBIETA LEYDI JACQUELIN
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Leydi Jacquelin', 'Alcocer Urbieta', 'docente_leydi.jacquelin_alcocer.urbieta@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: SANCHEZ  RODRIGUEZ MIGUEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Miguel', 'Sanchez Rodriguez', 'docente_miguel_sanchez.rodriguez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: GONZALEZ CARDENAS VICTOR MANUEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Victor Manuel', 'Gonzalez Cardenas', 'docente_victor.manuel_gonzalez.cardenas@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ORDOÑEZ CRUZ LESLY
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Lesly', 'Ordoñez Cruz', 'docente_lesly_ordoñez.cruz@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MARTÍN PECH LIZBETH JANET
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Lizbeth Janet', 'Martín Pech', 'docente_lizbeth.janet_martín.pech@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PEREZ DOMINGUEZ ALMA ISABEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Alma Isabel', 'Perez Dominguez', 'docente_alma.isabel_perez.dominguez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: GUTIERREZ CORTEZ JAVIER YOVANI
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Javier Yovani', 'Gutierrez Cortez', 'docente_javier.yovani_gutierrez.cortez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: GONZALEZ MONTE JOSUE TOMAS
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Josue Tomas', 'Gonzalez Monte', 'docente_josue.tomas_gonzalez.monte@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ROSARIO SOSA JORGE ALBERTO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Jorge Alberto', 'Rosario Sosa', 'docente_jorge.alberto_rosario.sosa@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: GOMEZ LAGUNAS ROCIO JANNET
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Rocio Jannet', 'Gomez Lagunas', 'docente_rocio.jannet_gomez.lagunas@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ORTIZ ANTILLON ANA NOEMI
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Ana Noemi', 'Ortiz Antillon', 'docente_ana.noemi_ortiz.antillon@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CAÑIVE RODRIGUEZ YAIMA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Yaima', 'Cañive Rodriguez', 'docente_yaima_cañive.rodriguez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: GARRIDO POSADAS JOSE ALBERTO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Jose Alberto', 'Garrido Posadas', 'docente_jose.alberto_garrido.posadas@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PATIÑO SANTIAGO MARIA GUADALUPE
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Maria Guadalupe', 'Patiño Santiago', 'docente_maria.guadalupe_patiño.santiago@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ARIAS GONZALEZ FRANCA ALEJANDRA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Franca Alejandra', 'Arias Gonzalez', 'docente_franca.alejandra_arias.gonzalez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ARGUELLO AZPURUA MARYORIE GERALDINE
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Maryorie Geraldine', 'Arguello Azpurua', 'docente_maryorie.geraldine_arguello.azpurua@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: DZUL ITZAH NIDIA GUADALUPE
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Nidia Guadalupe', 'Dzul Itzah', 'docente_nidia.guadalupe_dzul.itzah@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CARVALLO ORTIZ GEORGINA MARIA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Georgina Maria', 'Carvallo Ortiz', 'docente_georgina.maria_carvallo.ortiz@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: LEÓN GARCÍA VICTOR GUADALUPE
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Victor Guadalupe', 'León García', 'docente_victor.guadalupe_león.garcía@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: SANCHEZ DE DIOS DEMI NAOMI
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Dios Demi Naomi', 'Sanchez De', 'docente_dios.demi.naomi_sanchez.de@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CASANOVA GAMBOA WILBERT HUMBERTO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Wilbert Humberto', 'Casanova Gamboa', 'docente_wilbert.humberto_casanova.gamboa@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PUENTES AGUIRRE JESUS
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Jesus', 'Puentes Aguirre', 'docente_jesus_puentes.aguirre@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CANELA VALLE JOSE LUIS
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Jose Luis', 'Canela Valle', 'docente_jose.luis_canela.valle@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MONTEMAYOR GONZÁLEZ JOSÉ LUIS
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('José Luis', 'Montemayor González', 'docente_josé.luis_montemayor.gonzález@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PEREZ SAAVEDRA DANIEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Daniel', 'Perez Saavedra', 'docente_daniel_perez.saavedra@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PRADO HIGAREDA ANDREA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Andrea', 'Prado Higareda', 'docente_andrea_prado.higareda@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MARQUEZ ALAMILLA DANIELA GEORGINA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Daniela Georgina', 'Marquez Alamilla', 'docente_daniela.georgina_marquez.alamilla@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PEREZ EDGAR DANIELA AURORA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Daniela Aurora', 'Perez Edgar', 'docente_daniela.aurora_perez.edgar@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: HEDDING RODRIGUEZ ALEJANDRA BERENICE
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Alejandra Berenice', 'Hedding Rodriguez', 'docente_alejandra.berenice_hedding.rodriguez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: POOL ROBLES JOSE GONZALO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Jose Gonzalo', 'Pool Robles', 'docente_jose.gonzalo_pool.robles@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: FAJARDO GONZALEZ ISRAEL JESREEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Israel Jesreel', 'Fajardo Gonzalez', 'docente_israel.jesreel_fajardo.gonzalez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PEREZ PROF.- JUAN FRANCISCO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Juan Francisco', 'Perez Prof.-', 'docente_juan.francisco_perez.prof.-@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MARFIL GOMEZ  WILLY EFREN
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Willy Efren', 'Marfil Gomez', 'docente_willy.efren_marfil.gomez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: SANTOS CUMI FARITH AZAEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Farith Azael', 'Santos Cumi', 'docente_farith.azael_santos.cumi@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PEREZ RAMIREZ HECTOR LEONEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Hector Leonel', 'Perez Ramirez', 'docente_hector.leonel_perez.ramirez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: FRIAS VENTURA ARMANDO JACOB
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Armando Jacob', 'Frias Ventura', 'docente_armando.jacob_frias.ventura@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ZAVALA SALVADOR DENNYS ELIZABETH
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Dennys Elizabeth', 'Zavala Salvador', 'docente_dennys.elizabeth_zavala.salvador@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ANTONIO LOPEZ NOHE
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Nohe', 'Antonio Lopez', 'docente_nohe_antonio.lopez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MAY GONGORA JUAN CARLOS
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Juan Carlos', 'May Gongora', 'docente_juan.carlos_may.gongora@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: SILVA LEÓN ÁNGEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Ángel', 'Silva León', 'docente_ángel_silva.león@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PIÑA VALLE ANDREA S.
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Andrea S.', 'Piña Valle', 'docente_andrea.s._piña.valle@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CLEMENTE MARTINEZ MARIA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Maria', 'Clemente Martinez', 'docente_maria_clemente.martinez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ARANDA HANSMANN BLANCA MARIA TERESA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Blanca Maria Teresa', 'Aranda Hansmann', 'docente_blanca.maria.teresa_aranda.hansmann@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PEREZ GALLEGOS LUIS MIGUEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Luis Miguel', 'Perez Gallegos', 'docente_luis.miguel_perez.gallegos@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MENDEZ IZQUIERDO GUADALUPE
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Guadalupe', 'Mendez Izquierdo', 'docente_guadalupe_mendez.izquierdo@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: VÁZQUEZ GUTIERREZ LUIS ROBERTO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Luis Roberto', 'Vázquez Gutierrez', 'docente_luis.roberto_vázquez.gutierrez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: HERNANDEZ BAILON JULIO CESAR
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Julio Cesar', 'Hernandez Bailon', 'docente_julio.cesar_hernandez.bailon@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: ESCOTO VARELA DANIEL JOSEPH
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Daniel Joseph', 'Escoto Varela', 'docente_daniel.joseph_escoto.varela@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: FLOTA GARIBAY ELBERTH ABEL
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Elberth Abel', 'Flota Garibay', 'docente_elberth.abel_flota.garibay@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: IBAÑEZ PARAMO CARLOS SHARICK
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Carlos Sharick', 'Ibañez Paramo', 'docente_carlos.sharick_ibañez.paramo@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: BRAVO CASTAÑEDA YESSICA LIZBETH
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Yessica Lizbeth', 'Bravo Castañeda', 'docente_yessica.lizbeth_bravo.castañeda@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: PRECIADO HERRERA LEONARDO JAVIER
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Leonardo Javier', 'Preciado Herrera', 'docente_leonardo.javier_preciado.herrera@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: RUIZ MARTINEZ PEDRO ANTONIO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Pedro Antonio', 'Ruiz Martinez', 'docente_pedro.antonio_ruiz.martinez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CATZIM PAT OSCAR DAVID
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Oscar David', 'Catzim Pat', 'docente_oscar.david_catzim.pat@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CHAVEZ  MENDOZA MIGUEL ALEJANDRO
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Miguel Alejandro', 'Chavez Mendoza', 'docente_miguel.alejandro_chavez.mendoza@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: RIOS RODRIGUEZ MARIA JOSE
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Maria Jose', 'Rios Rodriguez', 'docente_maria.jose_rios.rodriguez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CARDENAS HERNANDEZ RUTH MONSERRAT
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Ruth Monserrat', 'Cardenas Hernandez', 'docente_ruth.monserrat_cardenas.hernandez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: JIMENEZ SIERRA OLIVER ALAIN
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Oliver Alain', 'Jimenez Sierra', 'docente_oliver.alain_jimenez.sierra@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: DE LA CRUZ GOMEZ MAYIBE
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Cruz Gomez Mayibe', 'De La', 'docente_cruz.gomez.mayibe_de.la@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MONTAÑO GOMEZ ROSA ELVIA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Rosa Elvia', 'Montaño Gomez', 'docente_rosa.elvia_montaño.gomez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: CHAN SANCHEZ NAYELY
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Nayely', 'Chan Sanchez', 'docente_nayely_chan.sanchez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: HERNANDEZ MIRANDA GRISELL DEL CARMEN
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Grisell Del Carmen', 'Hernandez Miranda', 'docente_grisell.del.carmen_hernandez.miranda@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: MORALES MONTAÑO EVELIN MAYANIN
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Evelin Mayanin', 'Morales Montaño', 'docente_evelin.mayanin_morales.montaño@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: GONZÁLEZ YÁÑEZ YESENIA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Yesenia', 'González Yáñez', 'docente_yesenia_gonzález.yáñez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: SUAREZ PISTE MAGALY ALEJANDRA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Magaly Alejandra', 'Suarez Piste', 'docente_magaly.alejandra_suarez.piste@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
+-- Reporte_clases: REYES HERNANDEZ TILA VIRGINIA
+INSERT INTO docentes (nombre, apellidos, email, activo) VALUES ('Tila Virginia', 'Reyes Hernandez', 'docente_tila.virginia_reyes.hernandez@tecplayacar.edu.mx', true) ON CONFLICT (email) DO NOTHING;
