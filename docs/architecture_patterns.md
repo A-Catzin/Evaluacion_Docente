@@ -1,82 +1,80 @@
 # Patrones de Arquitectura — SED-360 v2
 
-## 1. Service Layer
+## 1. Service Layer (8 servicios)
 
 ```
 src/services/
-├── catalogos.ts        # cuatrimestres, licenciaturas, asignaturas, ofertas, campus, turnos
+├── catalogos.ts        # cuatrimestres, ofertas, campus, turnos, asignaturas
 ├── docentes.ts         # docentes, grupos
 ├── estudiantes.ts      # estudiantes, inscripciones
-├── instrumentos.ts     # EE, CA, PD, OC, AE
+├── instrumentos.ts     # CA, PD, OC, AE (legacy)
 ├── calificaciones.ts   # calificacion_final_docente
-├── autodiagnostico.ts  # auto-evaluación 24 reactivos
-├── observaciones.ts    # observación de clase 43 reactivos
-├── planeaciones.ts     # gestión de planeaciones + subida PDF
-└── usuarios.ts         # gestión de roles y perfiles
+├── autodiagnostico.ts  # auto-evaluación 24 ítems
+├── observaciones.ts    # observación de clase
+├── planeaciones.ts     # subida PDF + rúbrica
+├── encuesta.ts         # encuesta estudiantil
+└── usuarios.ts         # gestión de roles
 ```
 
-## 2. Subida de Archivos (Storage)
-
-**Patrón: Subida directa cliente → Supabase Storage**
-
-```
-Navegador                    Supabase Storage           Backend (Astro SSR)
-   │                              │                         │
-   ├─ selecciona PDF              │                         │
-   ├─ supabase.storage.upload()──→│                         │
-   │                              ├─ guarda archivo         │
-   │←────── URL pública ──────────┤                         │
-   │                              │                         │
-   ├─ POST /api/... con URL ──────────────────────────────→│
-   │                              │                         ├─ guarda registro BD
-```
-
-**Ventajas:**
-- El archivo NUNCA pasa por Vercel (ahorra bandwidth)
-- Subida directa más rápida
-- Supabase gestiona la seguridad del bucket
-
-## 3. Layouts por Rol
+## 2. Layouts por Rol (5 variantes)
 
 ```
 src/layouts/
 ├── BaseLayout.astro        # Shell HTML común
 ├── Layout.astro            # Páginas públicas (landing, auth)
-├── LayoutAdmin.astro       # Sidebar fijo
-├── LayoutCoordinador.astro # Top nav
-├── LayoutDocente.astro     # Top nav
-└── LayoutEstudiante.astro  # Full-screen
+├── LayoutAdmin.astro       # Sidebar colapsable (Académico, Personal, Configuración)
+├── LayoutCoordinador.astro # Top nav (CA, Observación, Planeaciones)
+├── LayoutDocente.astro     # Top nav (Dashboard, Autodiagnóstico, Planeaciones)
+└── LayoutEstudiante.astro  # Full-screen centrado
 ```
 
-## 4. Autorización (Middleware)
+## 3. Middleware — Dominio + 4 Roles
 
-Mapa `ROLES_POR_RUTA`:
 ```
-/admin/*        → superadmin
-/coordinador/*  → coordinador, superadmin
-/docente/*      → docente, superadmin, coordinador
-/estudiante/*   → estudiante, superadmin
+RUTAS_PUBLICAS → next()
+    ↓
+Cookies de sesión → validar dominio @tecplayacar.edu.mx
+    ↓
+Mapa ROLES_POR_RUTA:
+  /admin/*        → superadmin
+  /coordinador/*  → coordinador, superadmin
+  /docente/*      → docente, superadmin, coordinador
+  /estudiante/*   → estudiante, superadmin
 ```
 
-## 5. Flujo de Autenticación
+## 4. Flujo de Autenticación
 
 ```
 /auth → Google OAuth → Supabase → /#access_token=...
     ↓
 POST /api/auth/guardar-sesion → cookies
     ↓
-GET /api/auth/rol → redirigir según rol
+GET /api/auth/rol → redirect por rol
 ```
 
-## 6. Anonimato de Encuesta Estudiantil
+## 5. Subida de Archivos
 
-Dos tablas separadas:
-- `encuesta_estudiantil_respuestas` — SIN `estudiante_id`
-- `encuesta_control_envio` — CON `estudiante_id` (solo registra QUE respondió)
+```
+Navegador                    Supabase Storage           Backend (Astro SSR)
+   │                              │                         │
+   ├─ FormData con PDF           │                         │
+   ├─ POST /api/docente/subir-archivo ──────────────────→│
+   │                              │                         ├─ upload a Storage
+   │                              │←── URL ────────────────│
+   │                              │                         ├─ INSERT en BD
+   │←── 201 ✅ ────────────────────────────────────────────│
+```
 
-## 7. Limpieza de Archivos al Cerrar Ciclo
+El archivo sube del navegador → servidor → Storage. URLs firmadas para bucket privado.
 
-Al finalizar un cuatrimestre, el superadmin ejecuta limpieza:
-- Borra prefijo `{cuatrimestre_id}/` del bucket `planeaciones`
-- Muestra cuántos archivos y MB se liberan
-- Solo superadmin puede ejecutarlo
+## 6. Evaluación por Materia
+
+Las evaluaciones se vinculan a `asignatura_id` y `grupo_id`. Un docente puede tener diferentes puntajes según la materia. El admin muestra promedio general + desglose por materia en modal.
+
+## 7. Importación de Datos (CSV → SQL)
+
+```
+docs/base_datos/*.csv → sync/generar_sql.py → sql_generado/*.sql → Supabase SQL Editor
+```
+
+3 CSVs: docentes (347), alumnos (1010), clases (213). El script genera chunks de 100 líneas para evitar timeouts.

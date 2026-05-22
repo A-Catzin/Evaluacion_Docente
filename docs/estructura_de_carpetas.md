@@ -2,68 +2,40 @@
 
 ```text
 /
-├── docs/                       # Documentación técnica
-│   ├── documentacion/          # Documentación por módulo
+├── docs/                       # Documentación
+│   ├── documentacion/          # Docs por módulo
 │   ├── formularios/            # Especificaciones de formularios
 │   │   ├── autodiagnostico.md
-│   │   ├── observacion.md
-│   │   └── gestion_planeaciones_docentes.md
-│   ├── contexto.md
-│   ├── requerimientos.md
-│   ├── architecture_patterns.md
-│   ├── estructura_de_carpetas.md
-│   ├── ui_ux_guidelines.md
-│   ├── roadmap.md
+│   │   ├── evaluacion_docente_alumnos.md
+│   │   ├── evalucion_coordinacion_academica.md
+│   │   ├── gestion_planeaciones_docentes.md
+│   │   └── observaciones/     # observacion.md, virtual, ejecutivo
+│   ├── base_datos/             # CSVs fuente
+│   ├── contexto.md, requerimientos.md, architecture_patterns.md
+│   ├── estructura_de_carpetas.md, roadmap.md, ui_ux_guidelines.md
 │   └── sistema_evaluacion.md
-├── public/
+├── public/                     # Assets estáticos
 ├── src/
-│   ├── components/             # UI atómica (futuro)
-│   ├── features/               # Módulos por dominio (futuro)
-│   ├── layouts/
-│   │   ├── BaseLayout.astro
-│   │   ├── Layout.astro
-│   │   ├── LayoutAdmin.astro
-│   │   ├── LayoutCoordinador.astro
-│   │   ├── LayoutDocente.astro
-│   │   └── LayoutEstudiante.astro
-│   ├── lib/
-│   │   └── supabaseClient.ts
-│   ├── pages/
-│   │   ├── index.astro
-│   │   ├── auth.astro
-│   │   ├── auth/callback.astro
-│   │   ├── api/auth/           # guardar-sesion, signout, rol
-│   │   ├── api/admin/          # cambiar-rol, catalogos, ofertas
-│   │   ├── api/coordinador/    # observacion
-│   │   ├── api/docente/        # autodiagnostico
-│   │   ├── admin/              # dashboard, docentes, usuarios, roles, ofertas, campus, turnos, cuatrimestres, instrumentos
-│   │   ├── coordinador/        # dashboard, captura/{observacion,planeacion}, reportes
-│   │   ├── docente/            # dashboard, autodiagnostico, mis-grupos
-│   │   └── estudiante/         # dashboard, encuesta
-│   ├── services/
-│   │   ├── catalogos.ts
-│   │   ├── docentes.ts
-│   │   ├── estudiantes.ts
-│   │   ├── instrumentos.ts
-│   │   ├── calificaciones.ts
-│   │   ├── autodiagnostico.ts
-│   │   ├── observaciones.ts
-│   │   └── usuarios.ts
-│   └── types/
-│       └── supabase.ts
+│   ├── components/             # UI (futuro)
+│   ├── layouts/               # 5 layouts
+│   ├── lib/                   # supabaseClient, auth, sesion
+│   ├── pages/                 # 30+ páginas Astro
+│   │   ├── admin/             # dashboard, docentes, coordinadores, usuarios, instrumentos, catálogos
+│   │   ├── coordinador/       # dashboard, captura, planeaciones
+│   │   ├── docente/           # dashboard, autodiagnostico, planeaciones
+│   │   ├── estudiante/        # dashboard, encuesta
+│   │   ├── api/               # 15+ endpoints
+│   │   ├── auth/              # login, callback, test
+│   │   └── index.astro
+│   ├── services/              # 10 servicios
+│   └── types/                 # supabase.ts (25+ interfaces)
+├── sync/                      # Sincronización
+│   ├── sql_generado/          # 27 SQL chunks para importar
+│   └── .env.example
 ├── supabase/
-│   └── migrations/
-│       ├── 001_esquema_v2.sql
-│       ├── 002_rls_v2.sql
-│       ├── 003_autodiagnostico.sql
-│       ├── 004_rls_docente_perfil.sql
-│       ├── 005_rls_usuario_update.sql
-│       ├── 006_ofertas_academicas.sql
-│       ├── 007_campus_turnos.sql
-│       └── 008_observaciones.sql
-├── .env
-├── astro.config.mjs
-├── package.json
+│   └── migrations/            # 028 archivos SQL
 ├── tailwind.config.mjs
-└── tsconfig.json
+├── astro.config.mjs
+├── tsconfig.json
+└── package.json
 ```

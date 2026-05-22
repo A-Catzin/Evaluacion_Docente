@@ -1,4 +1,4 @@
-# Blueprint Técnico: SED-360 v2
+# Blueprint Técnico: SED-360 v2 — Mayo 2026
 
 ## 1. Stack Tecnológico
 
@@ -7,57 +7,50 @@
 | Frontend | Astro SSR | 4.16.18 |
 | CSS | Tailwind CSS | 3.4.17 |
 | Backend/DB | Supabase (PostgreSQL) | — |
-| Auth | Supabase Auth + Google OAuth | — |
 | Storage | Supabase Storage (bucket `planeaciones`) | — |
-| Validación | Zod | — |
-| Gráficos | Chart.js (CDN) | — |
+| Auth | Supabase Auth + Google OAuth | — |
+| Importación | Scripts Python + SQL chunked | — |
 | Despliegue | Vercel | — |
-| Seguridad DNS | Cloudflare WAF | — |
 
 ## 2. Autenticación
 
-- **Google OAuth**: Login exclusivo con cuentas Google del dominio `@tecplayacar.edu.mx`
-- **Flujo implícito**: Tokens en hash de URL → guardados en cookies via endpoint
-- **Middleware**: Validación de dominio + autorización por rol en cada request
-- **Roles**: `superadmin`, `coordinador`, `docente`, `estudiante` (ENUM en tabla `usuarios`)
+- **Google OAuth**: Login exclusivo con cuentas del dominio `@tecplayacar.edu.mx`
+- **Flujo implícito**: Tokens en hash → cookies → redirect por rol
+- **Middleware**: Validación de dominio + autorización por prefijo de ruta
+- **Roles**: `superadmin`, `coordinador`, `docente`, `estudiante`
 
-## 3. Base de Datos (20+ tablas)
+## 3. Base de Datos (25+ tablas)
 
-### Catálogo
-- `cuatrimestres` — Periodos académicos (clave, fechas, activo, cerrado)
-- `licenciaturas` — Carreras (clave, nombre, facultad)
-- `ofertas_academicas` — Catálogo de carreras (normalizado)
-- `campus` — Campus institucionales (normalizado)
-- `turnos` — Turnos académicos (normalizado)
-- `docentes` — Profesores (nombre, email, num_empleado, campus, turno, oferta, apellidos separados)
-- `asignaturas` — Materias (clave, nombre, créditos, ligadas a oferta_academica_id)
-- `grupos` — Grupos de clase (docente + asignatura + cuatrimestre)
-- `estudiantes` — Alumnos (nombre, email, matrícula, licenciatura)
-- `inscripciones` — Relación estudiante ↔ grupo (UNIQUE)
+### Catálogo (normalizado)
+`cuatrimestres`, `ofertas_academicas`, `campus`, `turnos`, `asignaturas`
+
+### Entidades
+`docentes` (341, con saeko_id), `estudiantes` (1010, con saeko_id), `grupos` (47, con modalidad y turno), `inscripciones`
 
 ### Auth
-- `usuarios` — Sincronizado con `auth.users` (id UUID, email, rol, entidad_id)
+`usuarios` — Sincronizado con `auth.users`, 4 roles, auto-creación al login
 
-### Evaluaciones
-- `autodiagnosticos` — Auto-evaluación docente: 24 reactivos Likert 1-5
-- `observaciones` — Observación de clase: 43 reactivos en 8 secciones (A-H)
-- `planeaciones` — Gestión de planeaciones: subida PDF + rúbrica coordinador 4 criterios
-- `encuesta_estudiantil_respuestas` — EE: calidad_general (1-6) + 18 ítems Likert (1-4), ANÓNIMA
-- `encuesta_control_envio` — Control de envío (estudiante_id, grupo_id, UNIQUE)
-- `evaluacion_coordinacion` — CA: 0-75 puntos, 6 dimensiones
-- `evaluacion_planeacion` — PD: 11 criterios 0-2, puntos_totales GENERATED
-- `observacion_clase` — OC: 0-10 puntos, 5 dimensiones
-- `autoevaluacion_docente` — AE: 10 ítems 1-3
+### Evaluaciones (5 instrumentos)
+`autodiagnosticos` (24 ítems), `planeaciones` (PDF + rúbrica), `observaciones` (43 ítems, 8 secciones), `evaluacion_coordinacion` (15 ítems, 5 categorías), `encuesta_estudiantil` (51 ítems, 10 secciones)
 
-### Resultados
-- `calificacion_final_docente` — 5 scores individuales + calificación_final GENERATED + categoría
+### Control
+`encuesta_control_envio` (anonimato), `calificacion_final_docente` (GENERATED)
+
+### Editor
+`instrumento_preguntas` — Preguntas editables con tipo de respuesta y opciones
 
 ## 4. Supabase Storage
 
-| Bucket | Uso | Tamaño máx/archivo |
-|--------|-----|-------------------|
-| `planeaciones` | PDFs de planeaciones docentes | 5 MB |
+| Bucket | Uso | Tamaño |
+|--------|-----|--------|
+| `planeaciones` | PDFs de planeaciones (privado) | 5 MB/archivo |
 
-- Subida directa del navegador a Supabase (sin pasar por Vercel)
-- Archivos organizados por: `{cuatrimestre_id}/{docente_id}/{archivo}.pdf`
-- Limpieza automática al cerrar cuatrimestre
+URLs firmadas para acceso seguro. Limpieza al cerrar cuatrimestre.
+
+## 5. Migraciones (28 archivos)
+
+`001` a `028` en `supabase/migrations/`. Cubren esquema completo, RLS, catálogos, 5 instrumentos, fórmulas, seed data, limpieza.
+
+## 6. Importación de Datos
+
+27 archivos SQL en `sync/sql_generado/` generados desde CSVs en `docs/base_datos/`. Orden: `00_limpiar` → `01_ofertas` → `02_docentes` → `03_asignaturas` → `04_estudiantes_*` → `05_grupos` → `06_inscripciones_*`.
