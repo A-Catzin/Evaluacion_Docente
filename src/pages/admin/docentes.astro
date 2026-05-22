@@ -5,9 +5,13 @@ import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const todos = await obtenerDocentes();
-const docentes = busqueda
-  ? todos.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()) || (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase()))
-  : todos;
+// Solo mostrar docentes que tienen al menos 1 grupo asignado
+const { data: docsConGrupo } = await cliente.from('grupos').select('docente_id');
+const docsActivos = new Set((docsConGrupo || []).map(g => g.docente_id));
+const docentes = todos.filter(d => docsActivos.has(d.id));
+const docentesFiltrados = busqueda
+  ? docentes.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()) || (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase()))
+  : docentes;
 
 const cliente = obtenerClienteSuperbase();
 const ids = docentes.map(d => d.id);
