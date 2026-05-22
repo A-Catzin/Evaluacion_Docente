@@ -4,6 +4,7 @@ import { obtenerDocentes } from '../../services/docentes';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
+const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();
 // Solo mostrar docentes que tienen al menos 1 grupo asignado
 const { data: docsConGrupo } = await cliente.from('grupos').select('docente_id');
@@ -13,7 +14,6 @@ const docentesFiltrados = busqueda
   ? docentes.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()) || (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase()))
   : docentes;
 
-const cliente = obtenerClienteSuperbase();
 const ids = docentes.map(d => d.id);
 
 // Batch queries — una sola llamada por tipo de dato
