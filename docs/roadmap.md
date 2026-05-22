@@ -59,10 +59,12 @@
 - [x] `/admin/docentes` con desglose por materia en modal
 - [x] Migración 028: columnas `asignatura_id` en evaluaciones
 
-## Fase 9: Importación de Datos ✅
-- [x] SQL chunks desde CSVs (docentes, estudiantes, grupos, inscripciones)
-- [x] Script Python generador de SQL
+## Fase 9: Importación de Datos ✅ (parcial)
+- [x] Script Python generador de SQL chunks desde CSVs
+- [x] SQL ejecutable manualmente en Supabase (27 archivos en `sync/sql_generado/`)
 - [x] Match por email con fallback por apellidos
+- [ ] Importar CSV desde panel admin sin SQL manual (UI + API pendiente)
+- [ ] 39 docentes sin grupo — match pendiente de resolver
 
 ## Fase 10: Pendientes 🔲
 - [ ] Sincronización automática con Saeko API

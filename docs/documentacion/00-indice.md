@@ -1,16 +1,18 @@
 # Documentación Técnica — SED-360 v2
 
-> Plataforma de Evaluación Docente 360° — TUP Playacar
+> Plataforma de Evaluación Docente 360° — Tecnológico Universitario Playacar
 
 ## Índice de Módulos
 
 | # | Módulo | Archivo | Estado |
 |---|--------|---------|--------|
-| 01 | [Esquema Core SQL v2](01-esquema-core.md) | `supabase/migrations/001_esquema_v2.sql` | ⚠️ Legacy v1 |
-| 02 | [Tipos del Sistema v2](02-tipos-sistema.md) | `src/types/supabase.ts` | ⚠️ Legacy v1 |
-| 08 | [Resumen de Implementación](08-resumen-implementacion.md) | Completo | ✅ v2 |
+| 01 | [Esquema Core SQL v1](01-esquema-core.md) | Legacy | ⚠️ No vigente |
+| 02 | [Tipos del Sistema v1](02-tipos-sistema.md) | Legacy | ⚠️ No vigente |
+| 08 | [Resumen de Implementación v2](08-resumen-implementacion.md) | Completo | ✅ Fuente vigente |
 
-> **Nota**: Los documentos 01-07 son de la versión anterior (v1). Consultar `docs/sistema_evaluacion.md` y `docs/arquitecture_patterns.md` para la arquitectura v2 actual.
+> **Documentos vigentes**: `docs/contexto.md`, `docs/requerimientos.md`, `docs/architecture_patterns.md`, `docs/roadmap.md`, `docs/estructura_de_carpetas.md`, `docs/documentacion/08-resumen-implementacion.md`
+>
+> Los documentos 01-07 son **legacy v1** y no deben usarse como referencia para la implementación actual.
 
 ## Convenciones v2
 
@@ -19,13 +21,15 @@
 - **Tipado**: TypeScript estricto, prohibido `any`
 - **Seguridad**: RLS en todas las tablas + middleware de dominio y roles
 - **Auth**: Google OAuth, flujo implícito con cookies
+- **Fórmula**: `EE(35%) + CA(20%) + PD(15%) + OC(25%) + AE(5%)`
 
 ## Stack v2
 
-| Capa | Tecnología |
-|------|-----------|
-| Frontend | Astro 4.16.18 SSR + Tailwind CSS 3 |
-| Backend | Supabase (PostgreSQL + Auth + RLS) |
-| Validación | Zod |
-| Gráficos | Chart.js (CDN) |
-| Despliegue | Vercel + Cloudflare WAF |
+| Capa | Tecnología | Estado |
+|------|-----------|--------|
+| Frontend | Astro 4.16.18 SSR + Tailwind CSS 3 | ✅ Implementado |
+| Backend | Supabase (PostgreSQL + Auth + RLS) | ✅ Implementado |
+| Storage | Supabase Storage (bucket privado `planeaciones`) | ✅ Implementado |
+| Validación | Zod | ✅ Implementado |
+| Gráficos | Chart.js (CDN) | ✅ Implementado |
+| Despliegue | Vercel + Cloudflare WAF | 🔲 Pendiente |

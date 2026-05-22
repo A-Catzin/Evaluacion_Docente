@@ -38,15 +38,17 @@ Un docente puede subir **una planeación por cada asignatura** que imparte. La u
 | Tamaño máximo | 5 MB |
 | Nomenclatura | **Automática**: `{Asignatura}_{Grupo}_{Apellido}_{Ciclo}.pdf` |
 | Ejemplo | `Farmacologia_3A_Perez_26-3.pdf` |
-| Destino | Supabase Storage — bucket `planeaciones` |
+| Destino | Supabase Storage — bucket `planeaciones` (privado) |
+| Acceso | URLs firmadas temporales (1 hora) |
 | Ruta | `{cuatrimestre_id}/{docente_id}/{archivo}.pdf` |
 
-### Flujo técnico
+### Flujo técnico (vigente v2)
 1. Docente selecciona PDF en el formulario
-2. El navegador sube el archivo **directo a Supabase Storage** (no pasa por Vercel)
-3. Supabase devuelve la URL pública
-4. El formulario envía los metadatos + URL al backend
-5. Backend guarda registro en tabla `planeaciones`
+2. El archivo se envía al servidor Astro (POST `/api/docente/subir-archivo`)
+3. El servidor sube el archivo a Supabase Storage (bucket privado `planeaciones`)
+4. Se guarda el path y metadatos en la tabla `planeaciones`
+5. Para visualizar: el sistema genera una **URL firmada temporal** (`createSignedUrl`)
+6. Las URLs firmadas expiran en 1 hora — solo usuarios autorizados pueden acceder
 
 ## 3. Módulo del Coordinador (Evaluación)
 

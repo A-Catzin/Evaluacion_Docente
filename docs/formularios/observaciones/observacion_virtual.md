@@ -61,7 +61,7 @@ Este documento define la estructura y métricas para el sistema de acompañamien
 
 ---
 
-## 4. Implementación Técnica (Supabase/Next.js)
+## 4. Implementación Técnica (Supabase — Astro SSR + PostgreSQL)
 
 ### Tabla: `observaciones_virtuales`
 Para tu arquitectura de datos, se recomienda la siguiente estructura:

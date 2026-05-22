@@ -1,6 +1,14 @@
 # Sistema de Evaluación Docente 360° — Especificación Técnica Completa
 > Tecnológico Universitario Playacar
-> Cuatrimestre de referencia: 26-1
+> Cuatrimestre de referencia: 26-3
+
+> ⚠️ **NOTA**: Este documento es la especificación original (v1). La implementación actual (v2) usa una fórmula actualizada y PostgreSQL/Supabase. Consultar `docs/contexto.md`, `docs/requerimientos.md` y `docs/roadmap.md` para la versión vigente.
+
+## Fórmula actualizada (v2 — vigente)
+```
+Nota Final = (EE × 0.35) + (CA × 0.20) + (PD × 0.15) + (OC × 0.25) + (AE × 0.05)
+```
+La fórmula original v1 era: `(EE × 0.40) + (CA × 0.25) + (PD × 0.15) + (OC × 0.15) + (AE × 0.05)` — ver sección histórica abajo.
 
 ---
 
@@ -26,7 +34,13 @@ Nota Final = (EE × 0.40) + (CA × 0.25) + (PD × 0.15) + (OC × 0.15) + (AE × 
 | Observación de Clase                | OC    | 15%  | 0–10 puntos     | (puntos/10) × 100    |
 | Auto-evaluación Docente             | AE    | 5%   | 0–1 (normaliz.) | puntos × 100         |
 
-### Rangos de Calificación Final
+> 📜 **FÓRMULA HISTÓRICA (v1 — NO VIGENTE)**:
+> ```
+> Nota Final = (EE × 0.40) + (CA × 0.25) + (PD × 0.15) + (OC × 0.15) + (AE × 0.05)
+> ```
+> Reemplazada en v2 por 35/20/15/25/5.
+
+### Rangos de Calificación Final (vigente v2)
 
 | Rango     | Categoría     | Color sugerido |
 |-----------|---------------|----------------|
@@ -46,7 +60,7 @@ Nota Final = (EE × 0.40) + (CA × 0.25) + (PD × 0.15) + (OC × 0.15) + (AE × 
 ### Tabla: `cuatrimestres`
 ```sql
 CREATE TABLE cuatrimestres (
-  id              INT PRIMARY KEY AUTO_INCREMENT,
+  id              SERIAL PRIMARY KEY,
   clave           VARCHAR(10) NOT NULL,        -- ej: "26-1"
   nombre          VARCHAR(50) NOT NULL,        -- ej: "Enero–Abril 2026"
   fecha_inicio    DATE NOT NULL,
@@ -59,7 +73,7 @@ CREATE TABLE cuatrimestres (
 ### Tabla: `licenciaturas`
 ```sql
 CREATE TABLE licenciaturas (
-  id              INT PRIMARY KEY AUTO_INCREMENT,
+  id              SERIAL PRIMARY KEY,
   clave           VARCHAR(10) NOT NULL,
   nombre          VARCHAR(100) NOT NULL,
   facultad        VARCHAR(100),
@@ -70,7 +84,7 @@ CREATE TABLE licenciaturas (
 ### Tabla: `docentes`
 ```sql
 CREATE TABLE docentes (
-  id              INT PRIMARY KEY AUTO_INCREMENT,
+  id              SERIAL PRIMARY KEY,
   nombre          VARCHAR(100) NOT NULL,
   apellidos       VARCHAR(100) NOT NULL,
   email           VARCHAR(150) UNIQUE NOT NULL,
@@ -85,7 +99,7 @@ CREATE TABLE docentes (
 ### Tabla: `asignaturas`
 ```sql
 CREATE TABLE asignaturas (
-  id              INT PRIMARY KEY AUTO_INCREMENT,
+  id              SERIAL PRIMARY KEY,
   clave           VARCHAR(20) NOT NULL,
   nombre          VARCHAR(150) NOT NULL,
   licenciatura_id INT REFERENCES licenciaturas(id),
@@ -98,7 +112,7 @@ CREATE TABLE asignaturas (
 ### Tabla: `grupos`
 ```sql
 CREATE TABLE grupos (
-  id              INT PRIMARY KEY AUTO_INCREMENT,
+  id              SERIAL PRIMARY KEY,
   clave           VARCHAR(20) NOT NULL,        -- ej: "A", "B", "101"
   asignatura_id   INT REFERENCES asignaturas(id),
   docente_id      INT REFERENCES docentes(id),
@@ -111,7 +125,7 @@ CREATE TABLE grupos (
 ### Tabla: `estudiantes`
 ```sql
 CREATE TABLE estudiantes (
-  id              INT PRIMARY KEY AUTO_INCREMENT,
+  id              SERIAL PRIMARY KEY,
   nombre          VARCHAR(100) NOT NULL,
   apellidos       VARCHAR(100) NOT NULL,
   email           VARCHAR(150) UNIQUE NOT NULL,
@@ -126,7 +140,7 @@ CREATE TABLE estudiantes (
 ### Tabla: `inscripciones`
 ```sql
 CREATE TABLE inscripciones (
-  id              INT PRIMARY KEY AUTO_INCREMENT,
+  id              SERIAL PRIMARY KEY,
   estudiante_id   INT REFERENCES estudiantes(id),
   grupo_id        INT REFERENCES grupos(id),
   cuatrimestre_id INT REFERENCES cuatrimestres(id),
@@ -142,7 +156,7 @@ CREATE TABLE inscripciones (
 #### Tabla: `encuesta_estudiantil_respuestas`
 ```sql
 CREATE TABLE encuesta_estudiantil_respuestas (
-  id                  INT PRIMARY KEY AUTO_INCREMENT,
+  id                  SERIAL PRIMARY KEY,
   estudiante_id       INT REFERENCES estudiantes(id),
   docente_id          INT REFERENCES docentes(id),
   grupo_id            INT REFERENCES grupos(id),
@@ -192,7 +206,7 @@ CREATE TABLE encuesta_estudiantil_respuestas (
 #### Tabla: `evaluacion_coordinacion`
 ```sql
 CREATE TABLE evaluacion_coordinacion (
-  id                  INT PRIMARY KEY AUTO_INCREMENT,
+  id                  SERIAL PRIMARY KEY,
   docente_id          INT REFERENCES docentes(id),
   coordinador_id      INT REFERENCES usuarios(id),   -- quien evalúa
   cuatrimestre_id     INT REFERENCES cuatrimestres(id),
@@ -222,7 +236,7 @@ CREATE TABLE evaluacion_coordinacion (
 #### Tabla: `evaluacion_planeacion`
 ```sql
 CREATE TABLE evaluacion_planeacion (
-  id                      INT PRIMARY KEY AUTO_INCREMENT,
+  id                      SERIAL PRIMARY KEY,
   docente_id              INT REFERENCES docentes(id),
   evaluador_id            INT REFERENCES usuarios(id),
   cuatrimestre_id         INT REFERENCES cuatrimestres(id),
@@ -261,7 +275,7 @@ CREATE TABLE evaluacion_planeacion (
 #### Tabla: `observacion_clase`
 ```sql
 CREATE TABLE observacion_clase (
-  id                  INT PRIMARY KEY AUTO_INCREMENT,
+  id                  SERIAL PRIMARY KEY,
   docente_id          INT REFERENCES docentes(id),
   observador_id       INT REFERENCES usuarios(id),
   cuatrimestre_id     INT REFERENCES cuatrimestres(id),
@@ -293,7 +307,7 @@ CREATE TABLE observacion_clase (
 #### Tabla: `autoevaluacion_docente`
 ```sql
 CREATE TABLE autoevaluacion_docente (
-  id                  INT PRIMARY KEY AUTO_INCREMENT,
+  id                  SERIAL PRIMARY KEY,
   docente_id          INT REFERENCES docentes(id),
   cuatrimestre_id     INT REFERENCES cuatrimestres(id),
   fecha_respuesta     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -333,7 +347,7 @@ CREATE TABLE autoevaluacion_docente (
 ```sql
 -- Esta tabla se calcula/actualiza al cerrar el cuatrimestre
 CREATE TABLE calificacion_final_docente (
-  id                  INT PRIMARY KEY AUTO_INCREMENT,
+  id                  SERIAL PRIMARY KEY,
   docente_id          INT REFERENCES docentes(id),
   cuatrimestre_id     INT REFERENCES cuatrimestres(id),
   -- Scores individuales normalizados (0–100)
@@ -344,10 +358,10 @@ CREATE TABLE calificacion_final_docente (
   score_autoevaluacion         DECIMAL(5,2),   -- peso 5%
   -- Calificación final ponderada
   calificacion_final  DECIMAL(5,2) GENERATED ALWAYS AS (
-    (score_encuesta_estudiantil * 0.40) +
-    (score_coordinacion * 0.25) +
+    (score_encuesta_estudiantil * 0.35  -- actualizado v2) +
+    (score_coordinacion * 0.20  -- actualizado v2) +
     (score_planeacion * 0.15) +
-    (score_observacion * 0.15) +
+    (score_observacion * 0.25  -- actualizado v2) +
     (score_autoevaluacion * 0.05)
   ) STORED,
   -- Categoría final calculada
@@ -364,7 +378,7 @@ CREATE TABLE calificacion_final_docente (
 ### Tabla: `usuarios` (sistema de autenticación/roles)
 ```sql
 CREATE TABLE usuarios (
-  id              INT PRIMARY KEY AUTO_INCREMENT,
+  id              SERIAL PRIMARY KEY,
   email           VARCHAR(150) UNIQUE NOT NULL,
   password_hash   VARCHAR(255) NOT NULL,
   -- rol: 'superadmin' | 'coordinador' | 'docente' | 'estudiante'

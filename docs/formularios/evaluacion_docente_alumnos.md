@@ -103,7 +103,7 @@ Cada reactivo se evaluará utilizando la siguiente escala estandarizada:
 
 ## 5. Diseño del Esquema de Datos (Supabase)
 
-Para el desarrollo del módulo usando la arquitectura del proyecto (Next.js + Supabase), se plantea la siguiente segmentación para preservar el anonimato:
+Para el desarrollo del módulo usando la arquitectura del proyecto (Astro SSR + Supabase), se plantea la siguiente segmentación para preservar el anonimato:
 
 ### Tabla de Control de Acceso: `evaluaciones_control`
 *Evita el doble registro sin ligar las respuestas directamente al alumno.*
