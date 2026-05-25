@@ -24,7 +24,7 @@ SET apellido_paterno = SPLIT_PART(apellidos, ' ', 1),
 WHERE apellido_paterno IS NULL AND apellidos IS NOT NULL;
 
 -- 2. Tabla de autodiagnósticos
-CREATE TABLE IF NOT EXISTS IF NOT EXISTS autodiagnosticos (
+CREATE TABLE autodiagnosticos (
   id                SERIAL PRIMARY KEY,
   docente_id        INT REFERENCES docentes(id),
   cuatrimestre_id   INT REFERENCES cuatrimestres(id),
@@ -71,24 +71,24 @@ CREATE TABLE IF NOT EXISTS IF NOT EXISTS autodiagnosticos (
 -- 3. RLS
 ALTER TABLE autodiagnosticos ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Docente inserta su autodiagnóstico" ON autodiagnosticos
+CREATE POLICY "Docente inserta su autodiagnóstico" ON autodiagnosticos
   FOR INSERT WITH CHECK (
     EXISTS (SELECT 1 FROM usuarios u WHERE u.id = auth.uid() AND u.entidad_id = docente_id AND u.rol = 'docente')
   );
 
-DROP POLICY IF EXISTS "Docente lee su autodiagnóstico" ON autodiagnosticos
+CREATE POLICY "Docente lee su autodiagnóstico" ON autodiagnosticos
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM usuarios u WHERE u.id = auth.uid() AND u.entidad_id = docente_id AND u.rol = 'docente')
   );
 
-DROP POLICY IF EXISTS "Staff lee autodiagnósticos" ON autodiagnosticos
+CREATE POLICY "Staff lee autodiagnósticos" ON autodiagnosticos
   FOR SELECT USING (public.rol_usuario(auth.uid()) IN ('superadmin','coordinador'));
 -- =============================================================
 -- Migración 008: Observación de Clase (Formulario Coordinador)
 -- 43 reactivos en 8 secciones (A-H)
 -- =============================================================
 
-CREATE TABLE IF NOT EXISTS IF NOT EXISTS observaciones (
+CREATE TABLE observaciones (
   id                SERIAL PRIMARY KEY,
   docente_id        INT REFERENCES docentes(id),
   evaluador_id      UUID REFERENCES usuarios(id),
@@ -129,11 +129,11 @@ CREATE TABLE IF NOT EXISTS IF NOT EXISTS observaciones (
 
 -- RLS
 ALTER TABLE observaciones ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Coordinador inserta observación" ON observaciones
+CREATE POLICY "Coordinador inserta observación" ON observaciones
   FOR INSERT WITH CHECK (public.rol_usuario(auth.uid()) IN ('superadmin','coordinador'));
-DROP POLICY IF EXISTS "Staff lee observaciones" ON observaciones
+CREATE POLICY "Staff lee observaciones" ON observaciones
   FOR SELECT USING (public.rol_usuario(auth.uid()) IN ('superadmin','coordinador'));
-DROP POLICY IF EXISTS "Docente lee sus observaciones" ON observaciones
+CREATE POLICY "Docente lee sus observaciones" ON observaciones
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM usuarios u WHERE u.id = auth.uid() AND u.entidad_id = docente_id AND u.rol = 'docente')
   );
@@ -145,7 +145,7 @@ DROP POLICY IF EXISTS "Docente lee sus observaciones" ON observaciones
 ALTER TABLE asignaturas ADD COLUMN IF NOT EXISTS oferta_academica_id INT REFERENCES ofertas_academicas(id);
 
 -- 2. Tabla de planeaciones
-CREATE TABLE IF NOT EXISTS IF NOT EXISTS planeaciones (
+CREATE TABLE planeaciones (
   id SERIAL PRIMARY KEY,
   docente_id INT REFERENCES docentes(id),
   cuatrimestre_id INT REFERENCES cuatrimestres(id),
@@ -175,10 +175,10 @@ CREATE TABLE IF NOT EXISTS IF NOT EXISTS planeaciones (
 -- 3. RLS
 ALTER TABLE planeaciones ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Docente gestiona sus planeaciones" ON planeaciones FOR ALL
+CREATE POLICY "Docente gestiona sus planeaciones" ON planeaciones FOR ALL
   USING (EXISTS (SELECT 1 FROM usuarios u WHERE u.id = auth.uid() AND u.entidad_id = docente_id AND u.rol = 'docente'));
 
-DROP POLICY IF EXISTS "Staff lee y evalúa planeaciones" ON planeaciones FOR ALL
+CREATE POLICY "Staff lee y evalúa planeaciones" ON planeaciones FOR ALL
   USING (public.rol_usuario(auth.uid()) IN ('superadmin','coordinador'));
 
 -- Corregir: DECIMAL(5,2) permite 100.00
@@ -192,7 +192,7 @@ ALTER TABLE planeaciones ALTER COLUMN puntaje_promedio TYPE DECIMAL(5,2);
 -- Si ya tiene datos viejos, los limpiamos.
 DROP TABLE IF EXISTS evaluacion_coordinacion CASCADE;
 
-CREATE TABLE IF NOT EXISTS evaluacion_coordinacion (
+CREATE TABLE evaluacion_coordinacion (
   id SERIAL PRIMARY KEY,
   docente_id INT REFERENCES docentes(id),
   evaluador_id UUID REFERENCES usuarios(id),
@@ -234,16 +234,16 @@ CREATE TABLE IF NOT EXISTS evaluacion_coordinacion (
 );
 
 ALTER TABLE evaluacion_coordinacion ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Coordinador inserta evaluación" ON evaluacion_coordinacion FOR INSERT
+CREATE POLICY "Coordinador inserta evaluación" ON evaluacion_coordinacion FOR INSERT
   WITH CHECK (public.rol_usuario(auth.uid()) IN ('superadmin','coordinador'));
-DROP POLICY IF EXISTS "Staff lee evaluaciones" ON evaluacion_coordinacion FOR SELECT
+CREATE POLICY "Staff lee evaluaciones" ON evaluacion_coordinacion FOR SELECT
   USING (public.rol_usuario(auth.uid()) IN ('superadmin','coordinador'));
-DROP POLICY IF EXISTS "Docente lee su evaluación" ON evaluacion_coordinacion FOR SELECT
+CREATE POLICY "Docente lee su evaluación" ON evaluacion_coordinacion FOR SELECT
   USING (EXISTS (SELECT 1 FROM usuarios u WHERE u.id = auth.uid() AND u.entidad_id = docente_id AND u.rol = 'docente'));
 
 CREATE INDEX idx_ec_docente ON evaluacion_coordinacion(docente_id);
 -- Migración 011: Tabla de preguntas editables para instrumentos
-CREATE TABLE IF NOT EXISTS IF NOT EXISTS instrumento_preguntas (
+CREATE TABLE instrumento_preguntas (
   id SERIAL PRIMARY KEY,
   instrumento VARCHAR(50) NOT NULL, -- 'autodiagnostico','observacion','coordinacion','planeacion','encuesta'
   seccion VARCHAR(10),              -- 'A','B', etc. o NULL
@@ -256,8 +256,8 @@ CREATE TABLE IF NOT EXISTS IF NOT EXISTS instrumento_preguntas (
 );
 
 ALTER TABLE instrumento_preguntas ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Staff gestiona preguntas" ON instrumento_preguntas FOR ALL USING (public.rol_usuario(auth.uid()) = 'superadmin');
-DROP POLICY IF EXISTS "Todos leen preguntas" ON instrumento_preguntas FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Staff gestiona preguntas" ON instrumento_preguntas FOR ALL USING (public.rol_usuario(auth.uid()) = 'superadmin');
+CREATE POLICY "Todos leen preguntas" ON instrumento_preguntas FOR SELECT USING (auth.uid() IS NOT NULL);
 
 -- Seed: preguntas de autodiagnóstico (24 reactivos)
 INSERT INTO instrumento_preguntas (instrumento, seccion, orden, texto) VALUES
