@@ -17,7 +17,7 @@ const instrumentos = [
   { nombre: 'Autoevaluación Docente', peso: '5%', total: autodiag || 0, reactivos: 24, escala: '1-5', ruta: '/docente/autodiagnostico', editar: '/admin/instrumentos/editar?inst=autodiagnostico', color: 'border-l-purple-500' },
   { nombre: 'Planeación Docente', peso: '15%', total: planeacionesAprobadas || 0, reactivos: 4, escala: '1-5', ruta: '/coordinador/planeaciones', editar: '/admin/instrumentos/editar?inst=planeacion', color: 'border-l-amber-500' },
   { nombre: 'Coordinación Académica', peso: '20%', total: coordinacion || 0, reactivos: 15, escala: '1-5', ruta: '/coordinador/captura/coordinacion', editar: '/admin/instrumentos/editar?inst=coordinacion', color: 'border-l-purple-500' },
-  { nombre: 'Encuesta Estudiantil', peso: '35%', total: encuestas || 0, reactivos: 19, escala: '1-6 / 1-4', ruta: null, editar: null, color: 'border-l-slate-400' },
+  { nombre: 'Encuesta Estudiantil', peso: '35%', total: encuestas || 0, reactivos: 10, escala: 'Automático (Saeko CSV)', ruta: null, editar: null, color: 'border-l-slate-400' },
 ];
 
 const observacionesGrupo = [
