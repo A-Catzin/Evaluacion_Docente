@@ -1,6 +1,27 @@
 -- =============================================================
--- Migración v2: Esquema Completo SED-360
+-- Migración 001: Esquema Base SED-360 v2
 -- =============================================================
+-- LIMPIEZA PREVIA (ignorar errores si no existen)
+-- =============================================================
+DROP TABLE IF EXISTS calificacion_final_docente CASCADE;
+DROP TABLE IF EXISTS evaluacion_coordinacion CASCADE;
+DROP TABLE IF EXISTS observaciones CASCADE;
+DROP TABLE IF EXISTS planeaciones CASCADE;
+DROP TABLE IF EXISTS autodiagnosticos CASCADE;
+DROP TABLE IF EXISTS encuesta_estudiantil CASCADE;
+DROP TABLE IF EXISTS encuesta_control_envio CASCADE;
+DROP TABLE IF EXISTS inscripciones CASCADE;
+DROP TABLE IF EXISTS grupos CASCADE;
+DROP TABLE IF EXISTS asignaturas CASCADE;
+DROP TABLE IF EXISTS estudiantes CASCADE;
+DROP TABLE IF EXISTS docentes CASCADE;
+DROP TABLE IF EXISTS licenciaturas CASCADE;
+DROP TABLE IF EXISTS ofertas_academicas CASCADE;
+DROP TABLE IF EXISTS campus CASCADE;
+DROP TABLE IF EXISTS turnos CASCADE;
+DROP TABLE IF EXISTS cuatrimestres CASCADE;
+DROP TABLE IF EXISTS usuarios CASCADE;
+DROP TABLE IF EXISTS instrumento_preguntas CASCADE;
 -- Adaptado para PostgreSQL + Supabase Auth
 -- Cuatrimestre de referencia: 26-1
 -- =============================================================
@@ -16,7 +37,7 @@ DROP MATERIALIZED VIEW IF EXISTS resultados_agregados;
 -- =============================================================
 
 -- 1.1 Cuatrimestres
-CREATE TABLE cuatrimestres (
+DROP TABLE IF EXISTS cuatrimestres (
     id              SERIAL PRIMARY KEY,
     clave           VARCHAR(10) NOT NULL UNIQUE,
     nombre          VARCHAR(50) NOT NULL,
@@ -28,7 +49,7 @@ CREATE TABLE cuatrimestres (
 );
 
 -- 1.2 Licenciaturas
-CREATE TABLE licenciaturas (
+DROP TABLE IF EXISTS licenciaturas (
     id              SERIAL PRIMARY KEY,
     clave           VARCHAR(10) NOT NULL UNIQUE,
     nombre          VARCHAR(100) NOT NULL,
@@ -37,7 +58,7 @@ CREATE TABLE licenciaturas (
 );
 
 -- 1.3 Docentes
-CREATE TABLE docentes (
+DROP TABLE IF EXISTS docentes (
     id              SERIAL PRIMARY KEY,
     nombre          VARCHAR(100) NOT NULL,
     apellidos       VARCHAR(100) NOT NULL,
@@ -50,7 +71,7 @@ CREATE TABLE docentes (
 );
 
 -- 1.4 Asignaturas
-CREATE TABLE asignaturas (
+DROP TABLE IF EXISTS asignaturas (
     id              SERIAL PRIMARY KEY,
     clave           VARCHAR(20) NOT NULL UNIQUE,
     nombre          VARCHAR(150) NOT NULL,
@@ -61,7 +82,7 @@ CREATE TABLE asignaturas (
 );
 
 -- 1.5 Grupos
-CREATE TABLE grupos (
+DROP TABLE IF EXISTS grupos (
     id              SERIAL PRIMARY KEY,
     clave           VARCHAR(20) NOT NULL,
     asignatura_id   INT REFERENCES asignaturas(id),
@@ -72,7 +93,7 @@ CREATE TABLE grupos (
 );
 
 -- 1.6 Estudiantes
-CREATE TABLE estudiantes (
+DROP TABLE IF EXISTS estudiantes (
     id              SERIAL PRIMARY KEY,
     nombre          VARCHAR(100) NOT NULL,
     apellidos       VARCHAR(100) NOT NULL,
@@ -85,7 +106,7 @@ CREATE TABLE estudiantes (
 );
 
 -- 1.7 Inscripciones (estudiante ↔ grupo)
-CREATE TABLE inscripciones (
+DROP TABLE IF EXISTS inscripciones (
     id              SERIAL PRIMARY KEY,
     estudiante_id   INT REFERENCES estudiantes(id),
     grupo_id        INT REFERENCES grupos(id),
@@ -100,7 +121,7 @@ CREATE TABLE inscripciones (
 
 -- Modificar tabla usuarios existente (si existe de v1, se recrea)
 DROP TABLE IF EXISTS usuarios CASCADE;
-CREATE TABLE usuarios (
+DROP TABLE IF EXISTS usuarios (
     id              UUID REFERENCES auth.users PRIMARY KEY,
     email           TEXT UNIQUE NOT NULL,
     rol             VARCHAR(20) CHECK (rol IN ('superadmin','coordinador','docente','estudiante')) NOT NULL,
@@ -133,7 +154,7 @@ CREATE TRIGGER on_auth_user_created
 -- =============================================================
 
 -- 3.1 Instrumento 1: Encuesta Estudiantil (EE) — 40%
-CREATE TABLE encuesta_estudiantil_respuestas (
+DROP TABLE IF EXISTS encuesta_estudiantil_respuestas (
     id                  SERIAL PRIMARY KEY,
     docente_id          INT REFERENCES docentes(id),
     grupo_id            INT REFERENCES grupos(id),
@@ -167,7 +188,7 @@ CREATE TABLE encuesta_estudiantil_respuestas (
 );
 
 -- 3.1b Tabla de control de envío (anónimo — solo registra QUE respondió)
-CREATE TABLE encuesta_control_envio (
+DROP TABLE IF EXISTS encuesta_control_envio (
     id              SERIAL PRIMARY KEY,
     estudiante_id   INT REFERENCES estudiantes(id),
     grupo_id        INT REFERENCES grupos(id),
@@ -177,7 +198,7 @@ CREATE TABLE encuesta_control_envio (
 );
 
 -- 3.2 Instrumento 2: Evaluación por Coordinación (CA) — 25%
-CREATE TABLE evaluacion_coordinacion (
+DROP TABLE IF EXISTS evaluacion_coordinacion (
     id                  SERIAL PRIMARY KEY,
     docente_id          INT REFERENCES docentes(id),
     coordinador_id      UUID REFERENCES usuarios(id),
@@ -198,7 +219,7 @@ CREATE TABLE evaluacion_coordinacion (
 );
 
 -- 3.3 Instrumento 3: Planeación Docente (PD) — 15%
-CREATE TABLE evaluacion_planeacion (
+DROP TABLE IF EXISTS evaluacion_planeacion (
     id                      SERIAL PRIMARY KEY,
     docente_id              INT REFERENCES docentes(id),
     evaluador_id            UUID REFERENCES usuarios(id),
@@ -238,7 +259,7 @@ CREATE TABLE evaluacion_planeacion (
 );
 
 -- 3.4 Instrumento 4: Observación de Clase (OC) — 15%
-CREATE TABLE observacion_clase (
+DROP TABLE IF EXISTS observacion_clase (
     id                  SERIAL PRIMARY KEY,
     docente_id          INT REFERENCES docentes(id),
     observador_id       UUID REFERENCES usuarios(id),
@@ -261,7 +282,7 @@ CREATE TABLE observacion_clase (
 );
 
 -- 3.5 Instrumento 5: Auto-evaluación Docente (AE) — 5%
-CREATE TABLE autoevaluacion_docente (
+DROP TABLE IF EXISTS autoevaluacion_docente (
     id                  SERIAL PRIMARY KEY,
     docente_id          INT REFERENCES docentes(id),
     cuatrimestre_id     INT REFERENCES cuatrimestres(id),
@@ -292,7 +313,7 @@ CREATE TABLE autoevaluacion_docente (
 -- 4. CALIFICACIÓN FINAL
 -- =============================================================
 
-CREATE TABLE calificacion_final_docente (
+DROP TABLE IF EXISTS calificacion_final_docente (
     id                  SERIAL PRIMARY KEY,
     docente_id          INT REFERENCES docentes(id),
     cuatrimestre_id     INT REFERENCES cuatrimestres(id),
@@ -485,8 +506,9 @@ CREATE POLICY "Admin gestiona calificaciones" ON calificacion_final_docente
 -- Migración 006: Catálogo de Ofertas Académicas
 -- Tabla reutilizable en todos los formularios
 
-CREATE TABLE IF NOT EXISTS ofertas_academicas (
-  id      SERIAL PRIMARY KEY,
+DROP TABLE IF EXISTS IF NOT EXISTS ofertas_academicas (
+ CASCADE;
+CREATE TABLE IF NOT EXISTS      SERIAL PRIMARY KEY,
   nombre  VARCHAR(100) NOT NULL UNIQUE,
   activa  BOOLEAN DEFAULT TRUE
 );
@@ -504,8 +526,9 @@ INSERT INTO ofertas_academicas (nombre) VALUES
 ON CONFLICT (nombre) DO NOTHING;
 -- Migración 007: Catálogos de Campus y Turnos
 
-CREATE TABLE IF NOT EXISTS campus (
-  id      SERIAL PRIMARY KEY,
+DROP TABLE IF EXISTS IF NOT EXISTS campus (
+ CASCADE;
+CREATE TABLE IF NOT EXISTS      SERIAL PRIMARY KEY,
   nombre  VARCHAR(100) NOT NULL UNIQUE,
   activo  BOOLEAN DEFAULT TRUE
 );
@@ -521,8 +544,9 @@ INSERT INTO campus (nombre) VALUES
 ON CONFLICT (nombre) DO NOTHING;
 
 -- Turnos
-CREATE TABLE IF NOT EXISTS turnos (
-  id      SERIAL PRIMARY KEY,
+DROP TABLE IF EXISTS IF NOT EXISTS turnos (
+ CASCADE;
+CREATE TABLE IF NOT EXISTS      SERIAL PRIMARY KEY,
   nombre  VARCHAR(50) NOT NULL UNIQUE,
   activo  BOOLEAN DEFAULT TRUE
 );
