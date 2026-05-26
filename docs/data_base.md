@@ -107,6 +107,15 @@
 | `nombre` | `varchar` |  Unique |
 | `activo` | `bool` |  Nullable |
 
+## Table `coordinador_docentes`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `coordinador_id` | `uuid` |  Nullable |
+| `docente_id` | `int4` |  Nullable |
+
 ## Table `cuatrimestres`
 
 ### Columns
@@ -142,6 +151,7 @@
 | `campus` | `varchar` |  Nullable |
 | `turno` | `varchar` |  Nullable |
 | `oferta_academica` | `text` |  Nullable |
+| `modalidad` | `text` |  Nullable |
 
 ## Table `encuesta_control_envio`
 
