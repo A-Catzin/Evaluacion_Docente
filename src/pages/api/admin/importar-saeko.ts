@@ -94,9 +94,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       await cl.from('asignaturas').upsert(asigsArr, { onConflict: 'clave' });
     }
 
+    // ─── Resolver IDs para FKs ───
+    const { data: docsDB } = await cl.from('docentes').select('id,email').in('email', [...docentesMap.values()].map(v => v.email));
+    const emailToId = new Map<string, number>(); for (const d of (docsDB || [])) emailToId.set(d.email, d.id);
+
+    const { data: asigsDB } = await cl.from('asignaturas').select('id,clave').in('clave', [...asigsMap.keys()]);
+    const claveToId = new Map<string, number>(); for (const a of (asigsDB || [])) claveToId.set(a.clave, a.id);
+
     // Evaluaciones en chunks de 50
     let evaluaciones = 0, errores = 0;
-    const evaluacionesIds: number[] = [];
     for (let i = 0; i < rows.length; i += 50) {
       const chunk = rows.slice(i, i + 50);
       const inserts: any[] = [];
@@ -107,7 +113,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           const ciclo = r['Ciclo escolar']?.trim() || '';
           const prom = parseFloat(r['Promedio'] || '0') || 0;
           if (!docente_nom || !clave) { errores++; continue; }
+          const docInfo = docentesMap.get(docente_nom);
+          if (!docInfo?.email) { errores++; continue; }
+          const docenteId = emailToId.get(docInfo.email);
+          const asignaturaId = claveToId.get(clave);
+          // Insertar sin grupo_id (se vinculará después)
           inserts.push({
+            docente_id: docenteId || null,
+            asignatura_id: asignaturaId || null,
             ciclo, promedio_general: prom,
             prom_asistencia: parseFloat(r['Asistencia']||'0')||0,
             prom_organizacion: parseFloat(r['Organización']||'0')||0,
@@ -125,10 +138,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           evaluaciones++;
         } catch { errores++; }
       }
-      if (inserts.length > 0) {
-        const { data } = await cl.from('encuesta_estudiantil').insert(inserts).select('id');
-        if (data) evaluacionesIds.push(...data.map((d: any) => d.id));
-      }
+      if (inserts.length > 0) await cl.from('encuesta_estudiantil').insert(inserts);
     }
 
     return new Response(JSON.stringify({
