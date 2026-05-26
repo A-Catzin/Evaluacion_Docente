@@ -148,10 +148,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         } catch { errores++; }
       }
       if (inserts.length > 0) {
-        for (const ins of inserts) {
-          const { error } = await cl.from('encuesta_estudiantil').upsert(ins, { onConflict: 'docente_id,asignatura_id,ciclo' });
-          if (error) console.error('[Importar] Upsert error:', error.message);
-        }
+        await cl.from('encuesta_estudiantil').upsert(inserts, { onConflict: 'docente_id,asignatura_id,ciclo' });
       }
     }
 
