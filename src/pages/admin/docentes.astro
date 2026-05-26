@@ -11,7 +11,6 @@ const docentesFiltrados = busqueda
   : todos;
 
 const ids = docentesFiltrados.map(d => d.id);
-const cliente = obtenerClienteSuperbase();
 
 // Batch queries — una sola llamada por tipo de dato
 const [{ data: calData }, { data: obsData }, { data: coordData }, { data: planData }, { data: diagData }, { data: eeData }] = await Promise.all([
