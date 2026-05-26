@@ -2,6 +2,11 @@ import type { APIRoute } from 'astro';
 import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
 
 export const GET: APIRoute = async ({ url }) => {
+  const all = url.searchParams.get('all');
+  if (all === '1') {
+    const { data: docs } = await cl.from('docentes').select('id,nombre,apellidos,email').eq('activo', true).order('apellidos');
+    return new Response(JSON.stringify(docs || []), { headers: { 'Content-Type': 'application/json' } });
+  }
   const cId = url.searchParams.get('coordinador');
   if (!cId) return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
   const cl = obtenerClienteSuperbase();
