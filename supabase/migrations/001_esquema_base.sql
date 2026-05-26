@@ -1,5 +1,5 @@
 -- Limpieza previa
-DROP TABLE IF EXISTS calificacion_final_docente, evaluacion_coordinacion, observaciones, planeaciones, autodiagnosticos, encuesta_estudiantil, encuesta_control_envio, inscripciones, grupos, asignaturas, estudiantes, docentes, licenciaturas, ofertas_academicas, campus, turnos, cuatrimestres, usuarios, instrumento_preguntas CASCADE;
+DROP TABLE IF EXISTS calificacion_final_docente, evaluacion_coordinacion, observaciones, planeaciones, autodiagnosticos, encuesta_estudiantil, encuesta_estudiantil_respuestas, encuesta_control_envio, inscripciones, grupos, asignaturas, estudiantes, docentes, licenciaturas, ofertas_academicas, campus, turnos, cuatrimestres, usuarios, instrumento_preguntas, evaluacion_planeacion, observacion_clase, autoevaluacion_docente, evaluaciones, cargas_academicas, periodos CASCADE;
 
 -- =============================================================
 -- Migración v2: Esquema Completo SED-360
