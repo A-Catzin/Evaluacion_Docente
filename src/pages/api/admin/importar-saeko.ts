@@ -153,8 +153,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return new Response(JSON.stringify({
       success: true, total: rows.length,
       docentes: docentesMap.size, asignaturas: asigsMap.size,
-      grupos: gruposSet.size, evaluaciones, errores,
-      ultimos_ids: evaluacionesIds.slice(-10),
+      grupos: gruposSet.size, evaluaciones, errores
     }), { status: 200 });
   } catch (err) {
     console.error('[Importar]', err);
