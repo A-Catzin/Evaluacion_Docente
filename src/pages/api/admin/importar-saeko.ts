@@ -95,11 +95,20 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     // ─── Resolver IDs para FKs ───
-    const { data: docsDB } = await cl.from('docentes').select('id,email').in('email', [...docentesMap.values()].map(v => v.email));
-    const emailToId = new Map<string, number>(); for (const d of (docsDB || [])) emailToId.set(d.email, d.id);
+    const emails = [...docentesMap.values()].map(v => v.email).filter(Boolean);
+    const claves = [...asigsMap.keys()];
+    let emailToId = new Map<string, number>();
+    let claveToId = new Map<string, number>();
 
-    const { data: asigsDB } = await cl.from('asignaturas').select('id,clave').in('clave', [...asigsMap.keys()]);
-    const claveToId = new Map<string, number>(); for (const a of (asigsDB || [])) claveToId.set(a.clave, a.id);
+    if (emails.length > 0) {
+      const { data: docsDB } = await cl.from('docentes').select('id,email').in('email', emails);
+      for (const d of (docsDB || [])) emailToId.set(d.email, d.id);
+    }
+    if (claves.length > 0) {
+      const { data: asigsDB } = await cl.from('asignaturas').select('id,clave').in('clave', claves);
+      for (const a of (asigsDB || [])) claveToId.set(a.clave, a.id);
+    }
+    console.log('[Importar] EmailToId:', emailToId.size, 'ClaveToId:', claveToId.size);
 
     // Evaluaciones en chunks de 50
     let evaluaciones = 0, errores = 0;
