@@ -6,15 +6,12 @@ import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 const busqueda = Astro.url.searchParams.get('q') || '';
 const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();
-// Solo mostrar docentes que tienen al menos 1 grupo asignado
-const { data: docsConGrupo } = await cliente.from('grupos').select('docente_id');
-const docsActivos = new Set((docsConGrupo || []).map(g => g.docente_id));
-const docentes = todos.filter(d => docsActivos.has(d.id));
 const docentesFiltrados = busqueda
-  ? docentes.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()) || (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase()))
-  : docentes;
+  ? todos.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()) || (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase()))
+  : todos;
 
-const ids = docentes.map(d => d.id);
+const ids = docentesFiltrados.map(d => d.id);
+const cliente = obtenerClienteSuperbase();
 
 // Batch queries — una sola llamada por tipo de dato
 const [{ data: calData }, { data: obsData }, { data: coordData }, { data: planData }, { data: diagData }, { data: eeData }] = await Promise.all([
@@ -42,7 +39,7 @@ function fmt(n: number|null|undefined): string { return n != null ? Math.round(n
 function colorScore(n: number|null|undefined): string { if (!n) return 'text-slate-400'; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
 function cat360(p: number|null|undefined): string { if (!p) return '—'; if (p>=90) return 'Sobresaliente'; if (p>=80) return 'Distinguido'; if (p>=70) return 'Bueno'; if (p>=60) return 'Aprobado'; if (p>=50) return 'A mejorar'; return 'Insuficiente'; }
 
-const filas = docentes.map(d => {
+const filas = docentesFiltrados.map(d => {
   const cal = calMap.get(d.id);
   const obs = obsMap.get(d.id);
   const coord = coordMap.get(d.id);
