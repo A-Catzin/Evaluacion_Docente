@@ -147,7 +147,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           evaluaciones++;
         } catch { errores++; }
       }
-      if (inserts.length > 0) await cl.from('encuesta_estudiantil').insert(inserts);
+      if (inserts.length > 0) {
+        // Upsert: si ya existe para este docente+asignatura+ciclo, actualiza
+        await cl.from('encuesta_estudiantil').upsert(inserts, { 
+          onConflict: 'docente_id,asignatura_id,ciclo',
+          ignoreDuplicates: false 
+        });
+      }
     }
 
     return new Response(JSON.stringify({
