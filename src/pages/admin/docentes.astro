@@ -6,9 +6,13 @@ import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 const busqueda = Astro.url.searchParams.get('q') || '';
 const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();
+// Solo docentes que tienen evaluaciones registradas (en proceso de calificación)
+const { data: docsConEval } = await cliente.from('encuesta_estudiantil').select('docente_id');
+const docsEvaluados = new Set((docsConEval || []).map(e => e.docente_id));
+const docentes = todos.filter(d => docsEvaluados.has(d.id));
 const docentesFiltrados = busqueda
-  ? todos.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()) || (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase()))
-  : todos;
+  ? docentes.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()) || (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase()))
+  : docentes;
 
 const ids = docentesFiltrados.map(d => d.id);
 
