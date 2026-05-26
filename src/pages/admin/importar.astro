@@ -29,6 +29,15 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
       </form>
     </div>
 
+    <!-- Barra de progreso -->
+    <div id="barra-progreso" class="hidden bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
+      <p class="text-sm font-medium text-slate-700 mb-2" id="progreso-texto">Procesando...</p>
+      <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+        <div id="progreso-fill" class="h-full bg-tup rounded-full transition-all duration-300" style="width:0%"></div>
+      </div>
+      <p class="text-xs text-slate-400 mt-1" id="progreso-num">0 / 0</p>
+    </div>
+
     <!-- Resultado -->
     <div id="resultado" class="hidden bg-white rounded-2xl p-6 shadow-tarjeta">
       <h2 id="resultado-titulo" class="text-lg font-bold mb-4"></h2>
@@ -50,13 +59,40 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 
     var btn = document.getElementById('btn-subir');
     btn.disabled = true; btn.textContent = 'Procesando...';
-    toast('Procesando archivo...', false);
+
+    // Contar filas totales para la barra
+    var text = await file.text();
+    var lines = text.split('\n').filter(function(l) { return l.trim(); });
+    var total = lines.length - 1; // menos el header
+
+    // Mostrar barra de progreso
+    var barra = document.getElementById('barra-progreso');
+    barra.classList.remove('hidden');
+    document.getElementById('progreso-num').textContent = '0 / ' + total;
+
+    // Simular progreso mientras se procesa
+    var progress = 0;
+    var interval = setInterval(function() {
+      progress = Math.min(progress + Math.ceil(total / 50), total - 1);
+      var pct = Math.round((progress / total) * 100);
+      document.getElementById('progreso-fill').style.width = pct + '%';
+      document.getElementById('progreso-num').textContent = progress + ' / ' + total;
+      document.getElementById('progreso-texto').textContent = 'Procesando filas...';
+    }, 500);
 
     var formData = new FormData();
     formData.append('file', file);
 
     try {
       var res = await fetch('/api/admin/importar-saeko', { method: 'POST', body: formData });
+      clearInterval(interval);
+
+      // Completar barra
+      document.getElementById('progreso-fill').style.width = '100%';
+      document.getElementById('progreso-num').textContent = total + ' / ' + total;
+      document.getElementById('progreso-texto').textContent = '¡Completado!';
+      setTimeout(function() { barra.classList.add('hidden'); }, 1500);
+
       var data = await res.json();
 
       if (res.ok) {
