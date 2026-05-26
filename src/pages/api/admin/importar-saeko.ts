@@ -119,7 +119,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         try {
           const docente_nom = r['Nombre del docente']?.trim() || '';
           const clave = r['Asignatura Clave']?.trim() || '';
-          const ciclo = r['Ciclo escolar']?.trim() || '';
+          const ciclo = (r['Ciclo escolar']?.trim() || '').substring(0, 30);
           const prom = parseFloat(r['Promedio'] || '0') || 0;
           if (!docente_nom || !clave) { errores++; continue; }
           const docInfo = docentesMap.get(docente_nom);
