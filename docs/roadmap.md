@@ -5,22 +5,21 @@
 ## Fase 1: Setup e Infraestructura ✅
 - [x] Astro SSR + Tailwind + TypeScript
 - [x] Supabase (PostgreSQL, Auth Google, Storage)
-- [x] Esquema SQL v2 (25+ tablas, RLS, triggers)
-- [x] Middleware 4 roles + dominio
+- [x] Esquema SQL v2 (9 migraciones: 4 consolidadas + 5 fixes)
+- [x] Middleware 3 roles + dominio
 - [x] 5 layouts por rol
-- [x] Servicios CRUD (10 archivos)
-- [x] Dashboards principales (4 roles)
-- [x] Sidebar admin colapsable por grupos
+- [x] Servicios CRUD
+- [x] Dashboards principales (3 roles)
+- [x] Sidebar admin colapsable por grupos (Académico, Personal, Configuración)
 
 ## Fase 2: Admin Dashboard ✅
 - [x] KPIs, ranking docentes con progreso
-- [x] Gestión de docentes con buscador (72 activos con materias)
+- [x] Gestión de docentes con buscador y modal por materia
 - [x] Gestión de coordinadores con métricas + docentes evaluados
-- [x] Gestión de usuarios simplificada (4 roles con conteos)
+- [x] Gestión de usuarios simplificada
 - [x] Catálogos CRUD: ofertas, campus, turnos, asignaturas, cuatrimestres
 - [x] Roles: cambio rápido con un clic
 - [x] Editor de preguntas con tipo de respuesta y opciones
-- [x] Importación CSV desde admin (docentes/estudiantes)
 
 ## Fase 3: Autodiagnóstico Docente ✅
 - [x] Wizard 4 pasos (identificación, datos, 24 reactivos, cierre)
@@ -48,28 +47,45 @@
 - [x] Cálculo Prom. Coord. normalizado a 100
 - [x] Categoría automática: excelente/buena/aceptable/deficiente
 
-## Fase 7: Encuesta Estudiantil ✅
-- [x] 51 reactivos en 10 secciones (A-J)
-- [x] Anonimato garantizado (tabla de control separada)
-- [x] Dashboard estudiante: pendientes/completadas
-- [x] Wizard con secciones colapsables
+## Fase 7: Encuesta Estudiantil (Saeko) ✅
+- [x] Eliminado rol estudiante y encuesta manual
+- [x] Encuesta reemplazada por importación CSV desde Saeko
+- [x] Tabla `encuesta_estudiantil` simplificada a 10 promedios por categoría
+- [x] `score_normalizado = promedio_general × 20` (GENERATED column)
+- [x] UNIQUE en `(docente_id, asignatura_id, ciclo)`
+- [x] RLS desactivado (API valida superadmin)
 
 ## Fase 8: Evaluación por Materia ✅
-- [x] Grupos vinculados a asignaturas con modalidad y turno
-- [x] `/admin/docentes` con desglose por materia en modal
-- [x] Migración 028: columnas `asignatura_id` en evaluaciones
+- [x] Grupos vinculados a asignaturas con modalidad, turno y clave
+- [x] `/admin/docentes` con tabla principal (promedio general)
+- [x] Modal "Ver materias" con scores por materia: EE, Obs, Plan, Coord, Auto
+- [x] Columna "Grupos" en el modal con la clave del grupo (ej: `26-2 PED 11 02A`)
+- [x] Desduplicación de grupos por `(docente_id, asignatura_id, clave_grupo)`
+- [x] Migraciones consolidadas: 28+ → 9 (4 base + 5 fixes)
 
-## Fase 9: Importación de Datos ✅ (parcial)
-- [x] Script Python generador de SQL chunks desde CSVs
-- [x] SQL ejecutable manualmente en Supabase (27 archivos en `sync/sql_generado/`)
-- [x] Match por email con fallback por apellidos
-- [ ] Importar CSV desde panel admin sin SQL manual (UI + API pendiente)
-- [ ] 39 docentes sin grupo — match pendiente de resolver
+## Fase 9: Importación de Datos ✅
+- [x] API `importar-saeko.ts`: agrupa evaluaciones por docente+asignatura+ciclo
+- [x] UI `/admin/importar` con barra de progreso
+- [x] Batch upsert de ofertas, docentes, asignaturas, grupos, evaluaciones
+- [x] Match de emails reales desde `docentes_tecplayacar.csv`
+- [x] Grupos creados automáticamente con modalidad y turno desde CSV
+- [x] 79-80 docentes importados, 138 asignaturas, 259 grupos, ~4500 evaluaciones
 
-## Fase 10: Pendientes 🔲
+## Fase 10: Reestructuración y Ajustes ✅
+- [x] 28+ migraciones consolidadas en 9 (001-004 base + 005-009 fixes)
+- [x] Eliminados 6 archivos de estudiante
+- [x] 341 docentes maestros cargados vía CSV maestro
+- [x] `/admin/docentes` filtrado solo a docentes con evaluaciones
+- [x] Columna Turno eliminada de tabla principal
+- [x] Modal "Agregar Usuario" con vinculación coordinador↔docentes
+- [x] Sidebar admin colapsable por grupos
+- [x] Columna `ciclo` ampliada a VARCHAR(30)
+
+## Fase 11: Pendientes 🔲
 - [ ] Sincronización automática con Saeko API
-- [ ] Importar CSV desde panel admin (sin SQL manual)
 - [ ] Despliegue en Vercel + Cloudflare WAF
-- [ ] Resolver 39 docentes sin grupos (match pendiente)
+- [ ] Dashboard de coordinador funcional
+- [ ] Dashboard de docente funcional
 - [ ] Paginación en tablas grandes
 - [ ] Exportar CSV/PDF de reportes
+- [ ] UNIQUE constraint en `grupos` para evitar duplicados en futuros imports

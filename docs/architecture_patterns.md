@@ -1,12 +1,11 @@
 # Patrones de Arquitectura — SED-360 v2
 
-## 1. Service Layer (8 servicios)
+## 1. Service Layer (10 servicios)
 
 ```
 src/services/
 ├── catalogos.ts        # cuatrimestres, ofertas, campus, turnos, asignaturas
 ├── docentes.ts         # docentes, grupos
-├── estudiantes.ts      # estudiantes, inscripciones
 ├── instrumentos.ts     # CA, PD, OC, AE (legacy)
 ├── calificaciones.ts   # calificacion_final_docente
 ├── autodiagnostico.ts  # auto-evaluación 24 ítems
@@ -16,6 +15,8 @@ src/services/
 └── usuarios.ts         # gestión de roles
 ```
 
+La importación CSV Saeko no usa service layer — va directo desde el endpoint API `importar-saeko.ts` con Supabase client.
+
 ## 2. Layouts por Rol (5 variantes)
 
 ```
@@ -24,11 +25,12 @@ src/layouts/
 ├── Layout.astro            # Páginas públicas (landing, auth)
 ├── LayoutAdmin.astro       # Sidebar colapsable (Académico, Personal, Configuración)
 ├── LayoutCoordinador.astro # Top nav (CA, Observación, Planeaciones)
-├── LayoutDocente.astro     # Top nav (Dashboard, Autodiagnóstico, Planeaciones)
-└── LayoutEstudiante.astro  # Full-screen centrado
+└── LayoutDocente.astro     # Top nav (Dashboard, Autodiagnóstico, Planeaciones)
 ```
 
-## 3. Middleware — Dominio + 4 Roles
+> ⚠️ `LayoutEstudiante.astro` eliminado — el rol estudiante fue removido.
+
+## 3. Middleware — Dominio + 3 Roles
 
 ```
 RUTAS_PUBLICAS → next()
@@ -39,7 +41,6 @@ Mapa ROLES_POR_RUTA:
   /admin/*        → superadmin
   /coordinador/*  → coordinador, superadmin
   /docente/*      → docente, superadmin, coordinador
-  /estudiante/*   → estudiante, superadmin
 ```
 
 ## 4. Flujo de Autenticación
@@ -69,12 +70,26 @@ El archivo sube del navegador → servidor → Storage. URLs firmadas para bucke
 
 ## 6. Evaluación por Materia
 
-Las evaluaciones se vinculan a `asignatura_id` y `grupo_id`. Un docente puede tener diferentes puntajes según la materia. El admin muestra promedio general + desglose por materia en modal.
+Las evaluaciones (EE, Obs, Plan) se vinculan a `asignatura_id`. Coord y Auto son por docente. En `/admin/docentes`:
+- **Fila principal**: promedio general de todas las materias
+- **Modal**: desglose por materia con scores individuales (EE, Obs, Plan) + generales (Coord, Auto)
+- Grupos desduplicados por `(docente_id + asignatura_id + clave_grupo)` con un Set en server-side
 
-## 7. Importación de Datos (CSV → SQL)
+## 7. Importación de Datos (CSV Saeko → API)
 
 ```
-docs/base_datos/*.csv → sync/generar_sql.py → sql_generado/*.sql → Supabase SQL Editor
+CSV Saeko (.csv)                              API Astro SSR                    Supabase
+     │                                              │                              │
+     ├─ POST /api/admin/importar-saeko (FormData) ──→│                              │
+     │                                              ├─ Parse CSV, filtrar Completada│
+     │                                              ├─ Agrupar por doc+asig+ciclo   │
+     │                                              ├─ Batch upsert ofertas ───────→│
+     │                                              ├─ Batch upsert docentes ──────→│
+     │                                              ├─ Batch upsert asignaturas ───→│
+     │                                              ├─ Resolver IDs (email→id, clave→id)
+     │                                              ├─ Insert grupos (dedup) ──────→│
+     │                                              ├─ Upsert encuesta_estudiantil ─→│
+     │←── 200 { success, total, docentes, ... } ────│                              │
 ```
 
-3 CSVs: docentes (347), alumnos (1010), clases (213). El script genera chunks de 100 líneas para evitar timeouts.
+La UI en `/admin/importar` usa `FormData` con barra de progreso. La API valida sesión superadmin.

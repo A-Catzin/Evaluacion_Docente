@@ -1,8 +1,26 @@
-# Sistema de Evaluación Docente 360° — Especificación Técnica Completa
-> Tecnológico Universitario Playacar
-> Cuatrimestre de referencia: 26-3
+# ⚠️ LEGACY v1 — NO VIGENTE
 
-> ⚠️ **NOTA**: Este documento es la especificación original (v1). La implementación actual (v2) usa una fórmula actualizada y PostgreSQL/Supabase. Consultar `docs/contexto.md`, `docs/requerimientos.md` y `docs/roadmap.md` para la versión vigente.
+> **Este documento es la especificación original (v1) y YA NO ES VIGENTE.**
+>
+> Para la implementación actual (v2) consultar los siguientes documentos:
+> - `docs/contexto.md` — Visión general, actores (3 roles), modelo de calificación
+> - `docs/roadmap.md` — Estado actual de fases completadas
+> - `docs/requerimientos.md` — Blueprint técnico con stack y BD actual
+> - `docs/architecture_patterns.md` — Patrones de arquitectura y flujos
+> - `docs/documentacion/08-resumen-implementacion.md` — Resumen de lo implementado
+> - `docs/documentacion/09-importacion-saeko.md` — Sistema de importación CSV
+> - `docs/documentacion/10-admin-docentes.md` — Página de docentes reestructurada
+>
+> **Cambios mayores de v1 a v2:**
+> - Rol estudiante eliminado (encuestas vía CSV Saeko)
+> - Fórmula: `40/25/15/15/05` → `35/20/15/25/05`
+> - Encuesta: 51 reactivos manuales → 10 promedios desde Saeko
+> - 28+ migraciones → 9 consolidadas (001-004 + 005-009)
+> - Stack: pasó de MySQL/PHP a Astro SSR + Supabase PostgreSQL
+>
+> ---
+>
+> # Sistema de Evaluación Docente 360° — Especificación Técnica Completa (LEGACY v1)
 
 ## Fórmula actualizada (v2 — vigente)
 ```
