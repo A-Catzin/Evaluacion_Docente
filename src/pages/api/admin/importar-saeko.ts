@@ -183,7 +183,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         } catch { errores++; }
       }
       if (inserts.length > 0) {
-        const { error } = await cl.from('encuesta_estudiantil').upsert(inserts, { onConflict: 'docente_id,asignatura_id,ciclo' });
+        // Deduplicar por (docente_id, asignatura_id, ciclo) para evitar error de upsert
+        const seen = new Set<string>();
+        const uniqueInserts = inserts.filter(ins => {
+          const key = `${ins.docente_id}|${ins.asignatura_id}|${ins.ciclo}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        const { error } = await cl.from('encuesta_estudiantil').upsert(uniqueInserts, { onConflict: 'docente_id,asignatura_id,ciclo' });
         if (error) console.error('[Importar] Upsert error:', error.message);
       }
     }
