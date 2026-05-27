@@ -110,6 +110,39 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
     console.log('[Importar] EmailToId:', emailToId.size, 'ClaveToId:', claveToId.size);
 
+    // ─── Crear grupos ───
+    const gruposArr: any[] = [];
+    const grupoToDocAsig = new Map<string, { docente_email: string; clave_asig: string }>();
+    for (const r of rows) {
+      const grupo_raw = r['Grupo']?.trim() || '';
+      const docente_nom = r['Nombre del docente']?.trim() || '';
+      const clave = r['Asignatura Clave']?.trim() || '';
+      if (!grupo_raw || !docente_nom || !clave) continue;
+      const key = grupo_raw + '||' + docente_nom + '||' + clave;
+      if (grupoToDocAsig.has(key)) continue;
+      const docInfo = docentesMap.get(docente_nom);
+      if (!docInfo?.email) continue;
+      grupoToDocAsig.set(key, { docente_email: docInfo.email, clave_asig: clave });
+    }
+
+    for (const [key, val] of grupoToDocAsig) {
+      const grupo_raw = key.split('||')[0];
+      const parts = grupo_raw.split(' - ');
+      const grupo_base = parts[0].trim();
+      const turno = parts[1]?.trim() || '';
+      const modalidad = 'Escolarizado';
+      const clave_grupo = grupo_base.replace(/\s+/g, '_').substring(0, 50);
+      const docenteId = emailToId.get(val.docente_email);
+      const asignaturaId = claveToId.get(val.clave_asig);
+      if (!docenteId || !asignaturaId) continue;
+      gruposArr.push({ clave: clave_grupo, docente_id: docenteId, asignatura_id: asignaturaId, modalidad, turno_grupo: turno });
+    }
+
+    if (gruposArr.length > 0) {
+      await cl.from('grupos').upsert(gruposArr, { onConflict: 'clave' });
+    }
+    console.log('[Importar] Grupos creados:', gruposArr.length);
+
     // Evaluaciones en chunks de 50
     let evaluaciones = 0, errores = 0;
     for (let i = 0; i < rows.length; i += 50) {

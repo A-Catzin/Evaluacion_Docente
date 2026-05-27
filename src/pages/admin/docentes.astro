@@ -7,7 +7,7 @@ const busqueda = Astro.url.searchParams.get('q') || '';
 const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();
 // Solo docentes que tienen evaluaciones registradas (en proceso de calificación)
-const { data: docsConEval } = await cliente.from('encuesta_estudiantil').select('docente_id');
+const { data: docsConEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const docsEvaluados = new Set((docsConEval || []).map(e => e.docente_id));
 const docentes = todos.filter(d => docsEvaluados.has(d.id));
 const docentesFiltrados = busqueda
