@@ -141,8 +141,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     console.log('[Importar] Grupos a crear:', gruposArr.length, 'ejemplo:', JSON.stringify(gruposArr[0]));
 
     if (gruposArr.length > 0) {
-      const { error: gErr } = await cl.from('grupos').upsert(gruposArr, { onConflict: 'clave' });
-      console.log('[Importar] Grupos upsert:', gErr ? gErr.message : 'OK');
+      const { error: gErr } = await cl.from('grupos').insert(gruposArr);
+      console.log('[Importar] Grupos insert:', gErr ? gErr.message : 'OK (' + gruposArr.length + ')');
     }
 
     // Evaluaciones en chunks de 50 (insert, no upsert para evitar conflictos)
@@ -183,8 +183,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         } catch { errores++; }
       }
       if (inserts.length > 0) {
-        const { error } = await cl.from('encuesta_estudiantil').insert(inserts);
-        if (error) console.error('[Importar] Insert error:', error.message);
+        const { error } = await cl.from('encuesta_estudiantil').upsert(inserts, { onConflict: 'docente_id,asignatura_id,ciclo' });
+        if (error) console.error('[Importar] Upsert error:', error.message);
       }
     }
 
