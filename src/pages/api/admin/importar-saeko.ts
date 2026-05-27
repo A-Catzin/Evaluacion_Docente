@@ -145,61 +145,68 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       console.log('[Importar] Grupos insert:', gErr ? gErr.message : 'OK (' + gruposArr.length + ')');
     }
 
-    // Evaluaciones en chunks de 50 (insert, no upsert para evitar conflictos)
-    let evaluaciones = 0, errores = 0;
-    for (let i = 0; i < rows.length; i += 50) {
-      const chunk = rows.slice(i, i + 50);
-      const inserts: any[] = [];
-      for (const r of chunk) {
-        try {
-          const docente_nom = r['Nombre del docente']?.trim() || '';
-          const clave = r['Asignatura Clave']?.trim() || '';
-          const ciclo = (r['Ciclo escolar']?.trim() || '').substring(0, 30);
-          const prom = parseFloat(r['Promedio'] || '0') || 0;
-          if (!docente_nom || !clave) { errores++; continue; }
-          const docInfo = docentesMap.get(docente_nom);
-          if (!docInfo?.email) { errores++; continue; }
-          const docenteId = emailToId.get(docInfo.email);
-          const asignaturaId = claveToId.get(clave);
-          // Insertar sin grupo_id (se vinculará después)
-          inserts.push({
-            docente_id: docenteId || null,
-            asignatura_id: asignaturaId || null,
-            ciclo, promedio_general: prom,
-            prom_asistencia: parseFloat(r['Asistencia']||'0')||0,
-            prom_organizacion: parseFloat(r['Organización']||'0')||0,
-            prom_actitud: parseFloat(r['Actitud']||'0')||0,
-            prom_ensenanza: parseFloat(r['Enseñanza']||'0')||0,
-            prom_dominio: parseFloat(r['Dominio del contenido']||'0')||0,
-            prom_evaluacion: parseFloat(r['Evaluación y calificación']||'0')||0,
-            prom_comunicacion: parseFloat(r['Participación y comunicación']||'0')||0,
-            prom_gestion: parseFloat(r['Gestión del grupo']||'0')||0,
-            prom_tecnologia: parseFloat(r['Tecnología']||'0')||0,
-            prom_satisfaccion: parseFloat(r['Satisfacción global del estudiante']||'0')||0,
-            comentarios: r['Comentarios'] || null,
-            total_respuestas: 1,
-          });
-          evaluaciones++;
-        } catch { errores++; }
-      }
-      if (inserts.length > 0) {
-        // Deduplicar por (docente_id, asignatura_id, ciclo) para evitar error de upsert
-        const seen = new Set<string>();
-        const uniqueInserts = inserts.filter(ins => {
-          const key = `${ins.docente_id}|${ins.asignatura_id}|${ins.ciclo}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        const { error } = await cl.from('encuesta_estudiantil').upsert(uniqueInserts, { onConflict: 'docente_id,asignatura_id,ciclo' });
-        if (error) console.error('[Importar] Upsert error:', error.message);
-      }
+    // ─── Agrupar evaluaciones por docente+asignatura+ciclo (promedios reales) ───
+    const gruposEval = new Map<string, any>();
+    for (const r of rows) {
+      try {
+        const docente_nom = r['Nombre del docente']?.trim() || '';
+        const clave = r['Asignatura Clave']?.trim() || '';
+        const ciclo = (r['Ciclo escolar']?.trim() || '').substring(0, 30);
+        if (!docente_nom || !clave) continue;
+        const docInfo = docentesMap.get(docente_nom);
+        if (!docInfo?.email) continue;
+        const key = `${docInfo.email}|${clave}|${ciclo}`;
+        if (!gruposEval.has(key)) {
+          gruposEval.set(key, { docente_email: docInfo.email, clave, ciclo, t: 0, sAsi:0, sOrg:0, sAct:0, sEns:0, sDom:0, sEva:0, sCom:0, sGes:0, sTec:0, sSat:0, sGen:0, comments: [] as string[] });
+        }
+        const g = gruposEval.get(key);
+        g.t++;
+        g.sAsi += parseFloat(r['Asistencia']||'0')||0;
+        g.sOrg += parseFloat(r['Organización']||'0')||0;
+        g.sAct += parseFloat(r['Actitud']||'0')||0;
+        g.sEns += parseFloat(r['Enseñanza']||'0')||0;
+        g.sDom += parseFloat(r['Dominio del contenido']||'0')||0;
+        g.sEva += parseFloat(r['Evaluación y calificación']||'0')||0;
+        g.sCom += parseFloat(r['Participación y comunicación']||'0')||0;
+        g.sGes += parseFloat(r['Gestión del grupo']||'0')||0;
+        g.sTec += parseFloat(r['Tecnología']||'0')||0;
+        g.sSat += parseFloat(r['Satisfacción global del estudiante']||'0')||0;
+        g.sGen += parseFloat(r['Promedio']||'0')||0;
+        const c = r['Comentarios']?.trim();
+        if (c && c !== '.') g.comments.push(c);
+      } catch {}
+    }
+    console.log('[Importar] Grupos de eval:', gruposEval.size);
+
+    const inserts: any[] = [];
+    let evaluaciones = 0;
+    for (const [, g] of gruposEval) {
+      const docenteId = emailToId.get(g.docente_email);
+      const asignaturaId = claveToId.get(g.clave);
+      if (!docenteId || !asignaturaId) continue;
+      const t = g.t;
+      inserts.push({
+        docente_id: docenteId, asignatura_id: asignaturaId, ciclo: g.ciclo,
+        total_respuestas: t,
+        prom_asistencia: +(g.sAsi/t).toFixed(2), prom_organizacion: +(g.sOrg/t).toFixed(2),
+        prom_actitud: +(g.sAct/t).toFixed(2), prom_ensenanza: +(g.sEns/t).toFixed(2),
+        prom_dominio: +(g.sDom/t).toFixed(2), prom_evaluacion: +(g.sEva/t).toFixed(2),
+        prom_comunicacion: +(g.sCom/t).toFixed(2), prom_gestion: +(g.sGes/t).toFixed(2),
+        prom_tecnologia: +(g.sTec/t).toFixed(2), prom_satisfaccion: +(g.sSat/t).toFixed(2),
+        promedio_general: +(g.sGen/t).toFixed(2),
+        comentarios: g.comments.length > 0 ? g.comments.join(' | ') : null,
+      });
+      evaluaciones++;
+    }
+    for (let i = 0; i < inserts.length; i += 50) {
+      const { error } = await cl.from('encuesta_estudiantil').upsert(inserts.slice(i, i+50), { onConflict: 'docente_id,asignatura_id,ciclo' });
+      if (error) console.error('[Importar] Upsert error:', error.message);
     }
 
     return new Response(JSON.stringify({
       success: true, total: rows.length,
       docentes: docentesMap.size, asignaturas: asigsMap.size,
-      grupos: gruposSet.size, evaluaciones, errores
+      grupos: gruposSet.size, evaluaciones
     }), { status: 200 });
   } catch (err) {
     console.error('[Importar]', err);
