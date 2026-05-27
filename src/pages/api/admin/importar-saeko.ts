@@ -118,11 +118,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const docente_nom = r['Nombre del docente']?.trim() || '';
       const clave = r['Asignatura Clave']?.trim() || '';
       if (!grupo_raw || !docente_nom || !clave) continue;
-      const key = grupo_raw + '||' + docente_nom + '||' + clave;
-      if (grupoToDocAsig.has(key)) continue;
       const docInfo = docentesMap.get(docente_nom);
       if (!docInfo?.email) continue;
-      grupoToDocAsig.set(key, { docente_email: docInfo.email, clave_asig: clave });
+      const key = grupo_raw + '||' + clave;
+      if (!grupoToDocAsig.has(key)) {
+        grupoToDocAsig.set(key, { docente_email: docInfo.email, clave_asig: clave });
+      }
     }
 
     for (const [key, val] of grupoToDocAsig) {
@@ -137,13 +138,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       if (!docenteId || !asignaturaId) continue;
       gruposArr.push({ clave: clave_grupo, docente_id: docenteId, asignatura_id: asignaturaId, modalidad, turno_grupo: turno });
     }
+    console.log('[Importar] Grupos a crear:', gruposArr.length, 'ejemplo:', JSON.stringify(gruposArr[0]));
 
     if (gruposArr.length > 0) {
-      await cl.from('grupos').upsert(gruposArr, { onConflict: 'clave' });
+      const { error: gErr } = await cl.from('grupos').upsert(gruposArr, { onConflict: 'clave' });
+      console.log('[Importar] Grupos upsert:', gErr ? gErr.message : 'OK');
     }
-    console.log('[Importar] Grupos creados:', gruposArr.length);
 
-    // Evaluaciones en chunks de 50
+    // Evaluaciones en chunks de 50 (insert, no upsert para evitar conflictos)
     let evaluaciones = 0, errores = 0;
     for (let i = 0; i < rows.length; i += 50) {
       const chunk = rows.slice(i, i + 50);
@@ -181,7 +183,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         } catch { errores++; }
       }
       if (inserts.length > 0) {
-        await cl.from('encuesta_estudiantil').upsert(inserts, { onConflict: 'docente_id,asignatura_id,ciclo' });
+        const { error } = await cl.from('encuesta_estudiantil').insert(inserts);
+        if (error) console.error('[Importar] Insert error:', error.message);
       }
     }
 
