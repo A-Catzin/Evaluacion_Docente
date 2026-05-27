@@ -54,6 +54,7 @@ export interface Docente {
   foto_url: string | null;
   campus?: string | null;
   turno?: string | null;
+  modalidad?: string | null;
   oferta_academica?: string | null;
   activo: boolean;
 }

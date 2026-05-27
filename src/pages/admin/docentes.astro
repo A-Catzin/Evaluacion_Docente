@@ -6,65 +6,99 @@ import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 const busqueda = Astro.url.searchParams.get('q') || '';
 const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();
-// Solo docentes que tienen evaluaciones registradas (en proceso de calificación)
 const { data: docsConEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const docsEvaluados = new Set((docsConEval || []).map(e => e.docente_id));
 const docentes = todos.filter(d => docsEvaluados.has(d.id));
 const docentesFiltrados = busqueda
-  ? docentes.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()) || (d.num_empleado || '').toLowerCase().includes(busqueda.toLowerCase()))
+  ? docentes.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()))
   : docentes;
 
 const ids = docentesFiltrados.map(d => d.id);
 
-// Batch queries — una sola llamada por tipo de dato
-const [{ data: calData }, { data: obsData }, { data: coordData }, { data: planData }, { data: diagData }, { data: eeData }] = await Promise.all([
-  cliente.from('calificacion_final_docente').select('*').in('docente_id', ids).order('id', { ascending: false }),
-  cliente.from('observaciones').select('docente_id, cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids).order('id', { ascending: false }),
+// Batch queries — generales
+const [{ data: coordData }, { data: diagData }, { data: eeData }] = await Promise.all([
   cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).order('id', { ascending: false }),
-  cliente.from('planeaciones').select('docente_id,puntaje_promedio').in('docente_id', ids).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false }),
   cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).order('id', { ascending: false }),
-  cliente.from('encuesta_estudiantil').select('docente_id,score_normalizado').in('docente_id', ids).order('id', { ascending: false }),
+  cliente.from('encuesta_estudiantil').select('docente_id,asignatura_id,score_normalizado').in('docente_id', ids).order('id', { ascending: false }),
 ]);
 
-// Índices para búsqueda rápida
-const calMap = new Map(); for (const c of (calData || [])) calMap.set(c.docente_id, c);
-const obsMap = new Map(); for (const o of (obsData || [])) if (!obsMap.has(o.docente_id)) obsMap.set(o.docente_id, o);
 const coordMap = new Map(); for (const c of (coordData || [])) if (!coordMap.has(c.docente_id)) coordMap.set(c.docente_id, c);
-const planMap = new Map(); for (const p of (planData || [])) if (!planMap.has(p.docente_id)) planMap.set(p.docente_id, p);
 const diagMap = new Map(); for (const d of (diagData || [])) if (!diagMap.has(d.docente_id)) diagMap.set(d.docente_id, d);
-const eeMap = new Map(); for (const e of (eeData || [])) if (!eeMap.has(e.docente_id)) eeMap.set(e.docente_id, e);
 
-function calcObs(obs: any): number {
-  const r = [obs.cco1,obs.cco2,obs.cco3,obs.cco4,obs.cco5,obs.cco6,obs.cco7,obs.cme1,obs.cme2,obs.cme3,obs.cme4,obs.cme5,obs.cme6,obs.cme7,obs.cme8,obs.cme9,obs.ccom1,obs.ccom2,obs.ccom3,obs.ccom4,obs.cso1,obs.cso2,obs.cso3,obs.cso4,obs.cge1,obs.cge2,obs.cge3,obs.cge4,obs.cge5,obs.cge6,obs.cge7,obs.caf1,obs.caf2,obs.ctepe1,obs.ctepe2,obs.ctepe3,obs.ctepe4,obs.ctepe5,obs.ctepe6,obs.ctepe7,obs.cno1,obs.cno2,obs.cno3,obs.cno4,obs.cno5].filter(v=>v);
-  if (r.length===0) return 0; return Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100);
+// Per-materia: Map<docente_id, Map<asignatura_id, score>>
+const eePorDocente = new Map<number, Map<number, number>>();
+for (const e of (eeData || [])) {
+  if (!eePorDocente.has(e.docente_id)) eePorDocente.set(e.docente_id, new Map());
+  eePorDocente.get(e.docente_id)!.set(e.asignatura_id, e.score_normalizado);
 }
+
+// Observaciones por docente+asignatura
+const { data: obsData } = await cliente.from('observaciones').select('docente_id,asignatura_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids);
+const obsPorDocente = new Map<number, Map<number, number>>();
+for (const o of (obsData || [])) {
+  const r = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);
+  if (r.length === 0) continue;
+  const prom = Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100);
+  if (!obsPorDocente.has(o.docente_id)) obsPorDocente.set(o.docente_id, new Map());
+  obsPorDocente.get(o.docente_id)!.set(o.asignatura_id, prom);
+}
+
+// Grupos deduplicados por docente+asignatura+clave (colapsa inserts repetidos, preserva grupos distintos)
+const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id,modalidad,clave').in('docente_id', ids);
+const grupoMap = new Map<number, { asignatura_id: number; modalidad: string; clave_grupo: string }[]>();
+const seenGrupos = new Set<string>();
+for (const g of (gruposData || [])) {
+  const key = `${g.docente_id}|${g.asignatura_id}|${g.clave}`;
+  if (seenGrupos.has(key)) continue;
+  seenGrupos.add(key);
+  if (!grupoMap.has(g.docente_id)) grupoMap.set(g.docente_id, []);
+  grupoMap.get(g.docente_id)!.push({ asignatura_id: g.asignatura_id, modalidad: g.modalidad || '—', clave_grupo: g.clave || '—' });
+}
+const { data: asigData } = await cliente.from('asignaturas').select('id,clave,nombre');
+const asigMap = new Map<number, {clave:string;nombre:string}>(); for (const a of (asigData || [])) asigMap.set(a.id, a);
+
+// Planeaciones por docente+asignatura
+const { data: planData } = await cliente.from('planeaciones').select('docente_id,asignatura_id,puntaje_promedio').in('docente_id', ids).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false });
+const planPorDocente = new Map<number, Map<number, number>>();
+for (const p of (planData || [])) {
+  if (!planPorDocente.has(p.docente_id)) planPorDocente.set(p.docente_id, new Map());
+  if (!planPorDocente.get(p.docente_id)!.has(p.asignatura_id)) planPorDocente.get(p.docente_id)!.set(p.asignatura_id, p.puntaje_promedio);
+}
+
 function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
 function colorScore(n: number|null|undefined): string { if (!n) return 'text-slate-400'; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
 function cat360(p: number|null|undefined): string { if (!p) return '—'; if (p>=90) return 'Sobresaliente'; if (p>=80) return 'Distinguido'; if (p>=70) return 'Bueno'; if (p>=60) return 'Aprobado'; if (p>=50) return 'A mejorar'; return 'Insuficiente'; }
 
+// Fila principal — promedio general de todas las materias
 const filas = docentesFiltrados.map(d => {
-  const cal = calMap.get(d.id);
-  const obs = obsMap.get(d.id);
   const coord = coordMap.get(d.id);
-  const plan = planMap.get(d.id);
   const diag = diagMap.get(d.id);
-  const ee = eeMap.get(d.id);
-  const promObs = obs ? calcObs(obs) : 0;
+  const eeMap = eePorDocente.get(d.id);
+  const obsMap2 = obsPorDocente.get(d.id);
+  const planMap2 = planPorDocente.get(d.id);
+  
+  // Promedios generales de todas las materias
+  let sumEst = 0, sumObs = 0, sumPlan = 0, count = 0;
+  const grupos = grupoMap.get(d.id) || [];
+  for (const g of grupos) {
+    const est = eeMap?.get(g.asignatura_id);
+    const obs = obsMap2?.get(g.asignatura_id);
+    const plan = planMap2?.get(g.asignatura_id);
+    if (est || obs || plan) count++;
+    if (est) sumEst += est;
+    if (obs) sumObs += obs;
+    if (plan) sumPlan += plan;
+  }
+  const promEst = count > 0 ? Math.round(sumEst / count) : 0;
+  const promObs = count > 0 ? Math.round(sumObs / count) : 0;
+  const promPlan = count > 0 ? Math.round(sumPlan / count) : 0;
   const promCoord = coord?.score_normalizado ? Math.round(coord.score_normalizado) : 0;
-  const promPlan = plan?.puntaje_promedio || 0;
   const promAuto = diag?.puntaje_total ? Math.round((diag.puntaje_total/120)*100) : 0;
-  const promEst = ee?.score_normalizado ? Math.round(ee.score_normalizado) : 0;
   const pesos = [0.35,0.20,0.15,0.25,0.05];
   const disponibles = [promEst, promCoord, promPlan, promObs, promAuto];
   let final360 = 0; for (let i=0;i<5;i++) if (disponibles[i]) final360 += disponibles[i]*pesos[i];
   return { ...d, promObs, promCoord, promPlan, promAuto, promEst, final360: final360||null, cat360: cat360(Math.round(final360)) };
 });
-
-// Grupos por docente (para expandir)
-const { data: gruposData } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id,modalidad,turno_grupo').in('docente_id', ids);
-const grupoMap = new Map<number, any[]>(); for (const g of (gruposData || [])) { if (!grupoMap.has(g.docente_id)) grupoMap.set(g.docente_id, []); grupoMap.get(g.docente_id)!.push(g); }
-const { data: asigData } = await cliente.from('asignaturas').select('id,nombre');
-const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asigMap.set(a.id, a.nombre);
 ---
 
 <LayoutAdmin titulo="Docentes — Admin">
@@ -72,7 +106,7 @@ const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asi
     <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm text-slate-400">{filas.length} docentes</span></div>
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
-        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre, email o empleado..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
         {busqueda && (<a href="/admin/docentes" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
@@ -81,7 +115,7 @@ const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asi
       {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>) : (
         <table class="w-full text-[11px] whitespace-nowrap">
           <thead><tr class="bg-slate-50 border-b">
-            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Email</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Campus</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Turno</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Modalidad</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Materias</th>
+            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Email</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Campus</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Modalidad</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Materias</th>
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Cat. 360</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Final</th>
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Est.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Obs.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Coord.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Plan.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Auto.</th>
           </tr></thead>
@@ -93,7 +127,6 @@ const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asi
                 <td class="px-2 py-2 text-center font-medium">{f.nombre} {f.apellidos}</td>
                 <td class="px-2 py-2 text-center text-slate-600 text-[10px]">{f.email}</td>
                 <td class="px-2 py-2 text-center">{f.campus || '—'}</td>
-                <td class="px-2 py-2 text-center">{f.turno || '—'}</td>
                 <td class="px-2 py-2 text-center">{f.modalidad || '—'}</td>
                 <td class="px-2 py-2 text-center">
                   {tieneMaterias ? (
@@ -117,30 +150,58 @@ const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asi
     </div>
   </div>
 
-  <!-- Modal de materias -->
   <div id="modal-materias" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm" onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="bg-white rounded-3xl p-6 shadow-modal max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto animate-flotar-entrada">
-      <div class="flex items-center justify-between mb-4">
-        <h3 id="modal-titulo" class="text-lg font-bold text-tup"></h3>
-        <button onclick="document.getElementById('modal-materias').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
-      </div>
+    <div class="bg-white rounded-3xl p-6 shadow-modal max-w-4xl w-full mx-4 max-h-[80vh] overflow-auto animate-flotar-entrada">
+      <div class="flex items-center justify-between mb-4"><h3 id="modal-titulo" class="text-lg font-bold text-tup"></h3><button onclick="document.getElementById('modal-materias').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button></div>
       <div id="modal-contenido"></div>
     </div>
   </div>
 </LayoutAdmin>
 
-<script is:inline define:vars={{ gruposJson: JSON.stringify(Array.from(grupoMap.entries()).map(([k,v]) => [k, v])), asigJson: JSON.stringify(Object.fromEntries(asigMap)) }}>
+<script is:inline define:vars={{
+  gruposJson: JSON.stringify(Array.from(grupoMap.entries()).map(([k,v]) => [k, v])),
+  asigJson: JSON.stringify(Object.fromEntries(asigMap)),
+  eeJson: JSON.stringify(Array.from(eePorDocente.entries()).map(([k,v]) => [k, Array.from(v.entries())])),
+  obsJson: JSON.stringify(Array.from(obsPorDocente.entries()).map(([k,v]) => [k, Array.from(v.entries())])),
+  planJson: JSON.stringify(Array.from(planPorDocente.entries()).map(([k,v]) => [k, Array.from(v.entries())])),
+  coordJson: JSON.stringify(Array.from(coordMap.entries()).map(([k,v]) => [k, v.score_normalizado])),
+  diagJson: JSON.stringify(Array.from(diagMap.entries()).map(([k,v]) => [k, v.puntaje_total]))
+}}>
   var gruposData = JSON.parse(gruposJson);
   var asigData = JSON.parse(asigJson);
+  var eeData2 = JSON.parse(eeJson);
+  var obsData2 = JSON.parse(obsJson);
+  var planData2 = JSON.parse(planJson);
+  var coordData2 = JSON.parse(coordJson);
+  var diagData2 = JSON.parse(diagJson);
+  // Reconstruir Maps externos e internos (Map<K, Map<K,V>>)
   var grupoMap2 = new Map(gruposData);
+  var eeMap2 = new Map(eeData2.map(function(e){return [e[0], new Map(e[1])];}));
+  var obsMap2 = new Map(obsData2.map(function(e){return [e[0], new Map(e[1])];}));
+  var planMap2 = new Map(planData2.map(function(e){return [e[0], new Map(e[1])];}));
+  var coordMap2 = new Map(coordData2);
+  var diagMap2 = new Map(diagData2);
+
+  function fmt(n){ return n != null ? Math.round(n) : '—'; }
 
   function verMaterias(docenteId, nombreDocente) {
     var grupos = grupoMap2.get(docenteId) || [];
+    var eeDoc = eeMap2.get(docenteId);
+    var obsDoc = obsMap2.get(docenteId);
+    var planDoc = planMap2.get(docenteId);
+    var coordScore = coordMap2.get(docenteId);
+    var diagScore = diagMap2.get(docenteId);
+    var promCoord = coordScore ? Math.round(coordScore) : 0;
+    var promAuto = diagScore ? Math.round((diagScore/120)*100) : 0;
 
     document.getElementById('modal-titulo').textContent = 'Materias — ' + nombreDocente;
-    var html = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-center px-2 py-2">Materia</th><th class="text-center px-2 py-2">Modalidad</th><th class="text-center px-2 py-2">Turno</th></tr></thead><tbody>';
+    var html = '<table class="w-full text-[11px]"><thead><tr class="bg-slate-100"><th class="text-center px-1 py-1">Clave</th><th class="text-center px-1 py-1">Materia</th><th class="text-center px-1 py-1">Mod.</th><th class="text-center px-1 py-1">Grupos</th><th class="text-center px-1 py-1">Est.</th><th class="text-center px-1 py-1">Obs.</th><th class="text-center px-1 py-1">Plan.</th><th class="text-center px-1 py-1">Coord.</th><th class="text-center px-1 py-1">Auto.</th></tr></thead><tbody>';
     grupos.forEach(function(g) {
-      html += '<tr><td class="text-center px-2 py-2 font-medium">' + (asigData[g.asignatura_id] || g.clave) + '</td><td class="text-center px-2 py-2">' + (g.modalidad || '—') + '</td><td class="text-center px-2 py-2">' + (g.turno_grupo || '—') + '</td></tr>';
+      var a = asigData[g.asignatura_id] || {clave: '—', nombre: '—'};
+      var eeScore = eeDoc ? eeDoc.get(g.asignatura_id) : null;
+      var obsScore = obsDoc ? obsDoc.get(g.asignatura_id) : null;
+      var planScore = planDoc ? planDoc.get(g.asignatura_id) : null;
+      html += '<tr><td class="text-center px-1 py-1">'+a.clave+'</td><td class="text-center px-1 py-1 font-medium">'+a.nombre+'</td><td class="text-center px-1 py-1">'+(g.modalidad||'—')+'</td><td class="text-center px-1 py-1 text-[10px] text-slate-600">'+g.clave_grupo+'</td><td class="text-center px-1 py-1">'+fmt(eeScore!=null?Math.round(eeScore):null)+'</td><td class="text-center px-1 py-1">'+fmt(obsScore)+'</td><td class="text-center px-1 py-1">'+fmt(planScore)+'</td><td class="text-center px-1 py-1">'+fmt(promCoord||null)+'</td><td class="text-center px-1 py-1">'+fmt(promAuto||null)+'</td></tr>';
     });
     html += '</tbody></table>';
     document.getElementById('modal-contenido').innerHTML = html;
@@ -148,7 +209,6 @@ const asigMap = new Map<number, string>(); for (const a of (asigData || [])) asi
     document.getElementById('modal-materias').classList.add('flex');
   }
 
-  // Asignar eventos a los botones después de cargar
   document.querySelectorAll('.btn-ver-materias').forEach(function(btn) {
     btn.addEventListener('click', function() {
       verMaterias(parseInt(this.dataset.docenteId), this.dataset.nombre);
