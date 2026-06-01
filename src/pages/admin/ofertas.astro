@@ -8,6 +8,7 @@ const ofertas = await obtenerOfertasAcademicas();
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Ofertas Académicas</h1>
+      <button id="btn-limpiar" class="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-xs font-medium hover:bg-amber-100 border border-amber-200">🧹 Limpiar duplicados</button>
     </div>
 
     <!-- Formulario para agregar -->
@@ -110,5 +111,15 @@ const ofertas = await obtenerOfertasAcademicas();
   // Cancelar
   document.querySelectorAll('.btn-cancelar').forEach(function (btn) {
     btn.addEventListener('click', function () { location.reload(); });
+  });
+  document.getElementById('btn-limpiar').addEventListener('click', async function() {
+    if (!confirm('¿Limpiar ofertas duplicadas? Se eliminarán las versiones en MAYÚSCULAS conservando las de formato correcto.')) return;
+    this.disabled = true; this.textContent = 'Limpiando...';
+    try {
+      var res = await fetch('/api/admin/limpiar-ofertas', { method: 'POST' });
+      var d = await res.json();
+      if (d.success) { toast('Se eliminaron ' + d.cleaned + ' duplicados', false); setTimeout(function() { location.reload() }, 800); }
+      else { toast(d.error || 'Error', true); this.disabled = false; this.textContent = '🧹 Limpiar duplicados'; }
+    } catch(e) { toast('Error de conexión', true); this.disabled = false; this.textContent = '🧹 Limpiar duplicados'; }
   });
 </script>
