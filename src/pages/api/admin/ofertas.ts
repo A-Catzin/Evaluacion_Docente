@@ -40,6 +40,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
 
+    if (action === 'delete') {
+      const { id } = body;
+      if (!id) return new Response(JSON.stringify({ error: 'ID requerido' }), { status: 400 });
+      const { error } = await cliente.from('ofertas_academicas').delete().eq('id', id);
+      if (error) return new Response(JSON.stringify({ error: 'Error al eliminar' }), { status: 400 });
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }
+
     return new Response(JSON.stringify({ error: 'Acción no válida' }), { status: 400 });
   } catch {
     return new Response(JSON.stringify({ error: 'Error interno' }), { status: 500 });

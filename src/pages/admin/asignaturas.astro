@@ -1,54 +1,51 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { obtenerOfertasAcademicas } from '../../services/catalogos';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
-const ofertas = await obtenerOfertasAcademicas();
-const cliente = obtenerClienteSuperbase();
-const { data: asignaturas } = await cliente.from('asignaturas').select('*, ofertas_academicas(nombre)').order('nombre');
 const busqueda = Astro.url.searchParams.get('q') || '';
-const ofertaFiltro = Astro.url.searchParams.get('oferta') || '';
+const cliente = obtenerClienteSuperbase();
+const { data: asignaturas } = await cliente.from('asignaturas').select('*').order('nombre');
 
-let items = (asignaturas || []).map(a => ({ ...a, oferta_nombre: a.ofertas_academicas?.nombre || '—' }));
+let items = (asignaturas || []);
 if (busqueda) { const t = busqueda.toLowerCase(); items = items.filter(a => a.nombre.toLowerCase().includes(t) || (a.clave||'').toLowerCase().includes(t)); }
-if (ofertaFiltro) items = items.filter(a => a.oferta_academica_id?.toString() === ofertaFiltro);
 ---
 
 <LayoutAdmin titulo="Asignaturas — Admin">
   <div class="animate-flotar-entrada">
-    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Gestión de Asignaturas</h1><span class="text-sm text-slate-400">{items.length} materias</span></div>
+    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Asignaturas</h1><span class="text-sm text-slate-400">{items.length} materias</span></div>
 
-    <!-- Filtros -->
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
-      <form method="GET" class="flex flex-wrap gap-3 items-center">
-        <input type="text" name="q" value={busqueda} placeholder="Buscar materia..." class="flex-1 min-w-[200px] rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
-        <select name="oferta" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
-          <option value="">Todas las carreras</option>
-          {ofertas.map(o => (<option value={o.id} selected={ofertaFiltro === o.id.toString()}>{o.nombre}</option>))}
-        </select>
-        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Filtrar</button>
-        {(busqueda || ofertaFiltro) && (<a href="/admin/asignaturas" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+      <form method="GET" class="flex gap-3 items-center">
+        <input type="text" name="q" value={busqueda} placeholder="Buscar por clave o nombre..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
+        {busqueda && (<a href="/admin/asignaturas" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
-    <!-- Formulario para agregar -->
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
-      <form id="form-nueva" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <input type="text" id="input-clave" placeholder="Clave" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
-        <input type="text" id="input-nombre" placeholder="Nombre *" required class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm sm:col-span-2" />
-        <div class="flex gap-2">
-          <select id="input-oferta" class="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Sin carrera</option>{ofertas.map(o => (<option value={o.id}>{o.nombre}</option>))}</select>
-          <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Agregar</button>
-        </div>
+      <form id="form-nueva" class="flex gap-3">
+        <input type="text" id="input-clave" placeholder="Clave" class="w-24 rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+        <input type="text" id="input-nombre" placeholder="Nombre *" required class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm" />
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Agregar</button>
       </form>
     </div>
 
-    <!-- Tabla -->
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      {items.length === 0 ? (<div class="p-12 text-center text-slate-400">No hay asignaturas. Agrega la primera.</div>) : (
+      {items.length === 0 ? (<div class="p-12 text-center text-slate-400">No hay asignaturas.</div>) : (
         <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Carrera</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Créditos</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Acción</th></tr></thead>
-          <tbody class="divide-y">{items.map(a => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-mono text-xs">{a.clave || '—'}</td><td class="px-4 py-3 font-medium">{a.nombre}</td><td class="px-4 py-3 text-slate-600">{a.oferta_nombre}</td><td class="px-4 py-3 text-center">{a.creditos || 5}</td><td class="px-4 py-3 text-center"><button class="btn-delete text-xs text-red-500 hover:underline" data-id={a.id}>Eliminar</button></td></tr>))}</tbody>
+          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 w-32">Acciones</th></tr></thead>
+          <tbody class="divide-y">{items.map(a => (
+            <tr class="hover:bg-slate-50" id={`row-${a.id}`}>
+              <td class="px-4 py-3 font-mono text-xs"><span class="texto-clave">{a.clave || '—'}</span><input type="text" class="edit-clave hidden rounded-lg border border-slate-200 px-2 py-1 text-xs w-20" value={a.clave || ''} /></td>
+              <td class="px-4 py-3"><span class="texto-nombre font-medium">{a.nombre}</span><input type="text" class="edit-nombre hidden rounded-lg border border-slate-200 px-2 py-1 text-sm w-full" value={a.nombre} /></td>
+              <td class="px-4 py-3 text-center">
+                <button class="btn-editar text-xs text-tup hover:underline mr-2" data-id={a.id}>Editar</button>
+                <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-2 hidden" data-id={a.id}>Guardar</button>
+                <button class="btn-cancelar text-xs text-slate-400 hover:underline mr-2 hidden" data-id={a.id}>Cancelar</button>
+                <button class="btn-eliminar text-xs text-red-500 hover:underline" data-id={a.id}>Eliminar</button>
+              </td>
+            </tr>
+          ))}</tbody>
         </table>
       )}
     </div>
@@ -63,17 +60,26 @@ if (ofertaFiltro) items = items.filter(a => a.oferta_academica_id?.toString() ==
     e.preventDefault();
     var nombre=document.getElementById('input-nombre').value.trim();
     if(!nombre)return;
-    var res=await fetch('/api/admin/asignaturas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',clave:document.getElementById('input-clave').value.trim()||null,nombre,oferta_academica_id:document.getElementById('input-oferta').value||null})});
-    if(res.ok){toast('Asignatura agregada',false);setTimeout(function(){location.reload()},500)}
+    var res=await fetch('/api/admin/asignaturas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',clave:document.getElementById('input-clave').value.trim()||null,nombre})});
+    if(res.ok){toast('Agregada',false);setTimeout(function(){location.reload()},500)}
     else{var d=await res.json();toast(d.error||'Error',true)}
   });
 
-  document.querySelectorAll('.btn-delete').forEach(function(b){
-    b.addEventListener('click',async function(){
-      if(!confirm('¿Eliminar esta asignatura?'))return;
-      var res=await fetch('/api/admin/asignaturas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',id:parseInt(this.dataset.id)})});
-      if(res.ok){toast('Eliminada',false);setTimeout(function(){location.reload()},500)}
-      else{var d=await res.json();toast(d.error||'Error',true)}
-    });
-  });
+  document.querySelectorAll('.btn-editar').forEach(function(b){b.addEventListener('click',function(){
+    var row=this.closest('tr');row.querySelectorAll('.texto-clave,.texto-nombre').forEach(function(e){e.classList.add('hidden')});row.querySelectorAll('.edit-clave,.edit-nombre').forEach(function(e){e.classList.remove('hidden')});this.classList.add('hidden');row.querySelector('.btn-guardar').classList.remove('hidden');row.querySelector('.btn-cancelar').classList.remove('hidden');
+  })});
+
+  document.querySelectorAll('.btn-cancelar').forEach(function(b){b.addEventListener('click',function(){location.reload()})});
+
+  document.querySelectorAll('.btn-guardar').forEach(function(b){b.addEventListener('click',async function(){
+    var row=this.closest('tr');var nombre=row.querySelector('.edit-nombre').value.trim();if(!nombre)return;
+    var res=await fetch('/api/admin/asignaturas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'update',id:parseInt(this.dataset.id),clave:row.querySelector('.edit-clave').value.trim()||null,nombre})});
+    if(res.ok){toast('Guardado',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
+  })});
+
+  document.querySelectorAll('.btn-eliminar').forEach(function(b){b.addEventListener('click',async function(){
+    if(!confirm('¿Eliminar esta asignatura?'))return;
+    var res=await fetch('/api/admin/asignaturas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',id:parseInt(this.dataset.id)})});
+    if(res.ok){toast('Eliminada',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
+  })});
 </script>
