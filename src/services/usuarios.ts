@@ -34,12 +34,6 @@ export async function obtenerUsuarios(rol?: RolUsuario): Promise<UsuarioConNombr
           nombre = `${doc.nombre} ${doc.apellidos}`;
           matricula = doc.num_empleado || '—';
         }
-      } else if (u.rol === 'estudiante') {
-        const { data: est } = await cliente().from('estudiantes').select('nombre,apellidos,matricula').eq('id', u.entidad_id).maybeSingle();
-        if (est) {
-          nombre = `${est.nombre} ${est.apellidos}`;
-          matricula = est.matricula || '—';
-        }
       }
     }
 

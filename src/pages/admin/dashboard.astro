@@ -4,33 +4,126 @@ import { obtenerCuatrimestres, obtenerCuatrimestreActivo } from '../../services/
 import { obtenerDocentes } from '../../services/docentes';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
+const busqueda = Astro.url.searchParams.get('q') || '';
 const cuatrimestre = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const idSeleccionado = Astro.url.searchParams.get('cuatrimestre') || cuatrimestre?.id?.toString() || '';
-const docentes = await obtenerDocentes();
 const cliente = obtenerClienteSuperbase();
 
-// Calcular progreso por docente desde tablas individuales
-const { data: obsData } = await cliente.from('observaciones').select('docente_id');
-const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('docente_id');
-const { data: planData } = await cliente.from('planeaciones').select('docente_id').eq('estado', 'Aprobado');
-const { data: diagData } = await cliente.from('autodiagnosticos').select('docente_id');
-const { data: eeData } = await cliente.from('encuesta_estudiantil').select('docente_id');
+const todos = await obtenerDocentes();
+const { data: docsConEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
+const docsEvaluados = new Set((docsConEval || []).map(e => e.docente_id));
+const docentes = todos.filter(d => docsEvaluados.has(d.id) && d.visible_dashboard !== false);
 
-const obsSet = new Set((obsData||[]).map(o=>o.docente_id));
-const coordSet = new Set((coordData||[]).map(c=>c.docente_id));
-const planSet = new Set((planData||[]).map(p=>p.docente_id));
-const diagSet = new Set((diagData||[]).map(d=>d.docente_id));
-const eeSet = new Set((eeData||[]).map(e=>e.docente_id));
+const ids = docentes.map(d => d.id);
 
-const filas: FilaDashboard[] = docentes.map(d => {
-  const inst = [eeSet.has(d.id)?1:0, coordSet.has(d.id)?1:0, planSet.has(d.id)?1:0, obsSet.has(d.id)?1:0, diagSet.has(d.id)?1:0];
-  const total = inst.reduce((a,b)=>a+b,0);
-  return { id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email, instrumentos: total, final360: null, cat360: '—' };
+const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] = await Promise.all([
+  cliente.from('encuesta_estudiantil').select('docente_id,asignatura_id,score_normalizado').in('docente_id', ids),
+  cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).order('id', { ascending: false }),
+  cliente.from('planeaciones').select('docente_id,asignatura_id,puntaje_promedio').in('docente_id', ids).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false }),
+  cliente.from('observaciones').select('docente_id,asignatura_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids),
+  cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).order('id', { ascending: false }),
+]);
+
+const eePorDocente = new Map<number, Map<number, number>>();
+for (const e of (eeData || [])) {
+  if (!eePorDocente.has(e.docente_id)) eePorDocente.set(e.docente_id, new Map());
+  eePorDocente.get(e.docente_id)!.set(e.asignatura_id, e.score_normalizado);
+}
+const coordMap = new Map<number, number>();
+for (const c of (coordData || [])) if (!coordMap.has(c.docente_id)) coordMap.set(c.docente_id, Math.round(c.score_normalizado));
+const planPorDocente = new Map<number, Map<number, number>>();
+for (const p of (planData || [])) {
+  if (!planPorDocente.has(p.docente_id)) planPorDocente.set(p.docente_id, new Map());
+  if (!planPorDocente.get(p.docente_id)!.has(p.asignatura_id)) planPorDocente.get(p.docente_id)!.set(p.asignatura_id, p.puntaje_promedio);
+}
+const obsPorDocente = new Map<number, Map<number, number>>();
+for (const o of (obsData || [])) {
+  const r = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);
+  if (r.length === 0) continue;
+  const prom = Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100);
+  if (!obsPorDocente.has(o.docente_id)) obsPorDocente.set(o.docente_id, new Map());
+  obsPorDocente.get(o.docente_id)!.set(o.asignatura_id, prom);
+}
+const diagMap = new Map<number, number>();
+for (const d of (diagData || [])) if (!diagMap.has(d.docente_id)) diagMap.set(d.docente_id, Math.round((d.puntaje_total/120)*100));
+
+const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id').in('docente_id', ids);
+const matPorDocente = new Map<number, Set<number>>();
+for (const g of (gruposData || [])) {
+  if (!matPorDocente.has(g.docente_id)) matPorDocente.set(g.docente_id, new Set());
+  matPorDocente.get(g.docente_id)!.add(g.asignatura_id);
+}
+
+interface FilaDashboard {
+  id: number; nombre: string; apellidos: string; email: string;
+  promEst: number; promObs: number; promCoord: number; promPlan: number; promAuto: number;
+  final360: number | null; cat360: string;
+  instrumentos: number; visible: boolean;
+}
+const filasTodas: FilaDashboard[] = docentes.map(d => {
+  const eeMap = eePorDocente.get(d.id);
+  const obsMap2 = obsPorDocente.get(d.id);
+  const planMap2 = planPorDocente.get(d.id);
+  const materias = matPorDocente.get(d.id);
+  let sumEst = 0, sumObs = 0, sumPlan = 0, count = 0;
+  if (materias) for (const asigId of materias) {
+    const est = eeMap?.get(asigId);
+    const obs = obsMap2?.get(asigId);
+    const plan = planMap2?.get(asigId);
+    if (est || obs || plan) count++;
+    if (est) sumEst += est;
+    if (obs) sumObs += obs;
+    if (plan) sumPlan += plan;
+  }
+  const promEst = count > 0 ? Math.round(sumEst / count) : 0;
+  const promObs = count > 0 ? Math.round(sumObs / count) : 0;
+  const promPlan = count > 0 ? Math.round(sumPlan / count) : 0;
+  const promCoord = coordMap.get(d.id) || 0;
+  const promAuto = diagMap.get(d.id) || 0;
+  const pesos = [0.35,0.20,0.15,0.25,0.05];
+  const disponibles = [promEst, promCoord, promPlan, promObs, promAuto];
+  let final360 = 0;
+  for (let i=0;i<5;i++) if (disponibles[i]) final360 += disponibles[i]*pesos[i];
+  const inst = [promEst>0?1:0, promCoord>0?1:0, promPlan>0?1:0, promObs>0?1:0, promAuto>0?1:0];
+  const cat = final360>=90?'Sobresaliente':final360>=80?'Distinguido':final360>=70?'Bueno':final360>=60?'Aprobado':final360>=50?'A mejorar':final360>0?'Insuficiente':'No completado';
+  return {
+    id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email,
+    promEst, promObs, promCoord, promPlan, promAuto,
+    final360: final360 || null,
+    cat360: cat,
+    instrumentos: inst.reduce((a,b)=>a+b,0),
+    visible: d.visible_dashboard !== false,
+  };
 });
 
-const totalDocentes = docentes.length;
+// Filtro por búsqueda (server-side GET)
+const filas = busqueda
+  ? filasTodas.filter(f => `${f.nombre} ${f.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || f.apellidos.toLowerCase().includes(busqueda.toLowerCase()) || f.email.toLowerCase().includes(busqueda.toLowerCase()))
+  : filasTodas;
+
 const totalEvaluados = filas.filter(f => f.instrumentos > 0).length;
+const conFinal = filasTodas.filter(f => f.final360 !== null && (f.final360||0) > 0);
+const promInstitucional = conFinal.length > 0 ? Math.round(conFinal.reduce((s,f) => s + (f.final360||0), 0) / conFinal.length) : null;
+const sobresalientes = conFinal.filter(f => (f.final360||0) >= 80).length;
+const pctSobresaliente = conFinal.length > 0 ? Math.round((sobresalientes / conFinal.length) * 100) : 0;
+
+function avgInstrumento(vals: number[]): number {
+  const f = vals.filter(v => v > 0);
+  return f.length > 0 ? Math.round(f.reduce((a,b)=>a+b,0) / f.length) : 0;
+}
+const avgEst = avgInstrumento(filasTodas.map(f => f.promEst));
+const avgCoord = avgInstrumento(filasTodas.map(f => f.promCoord));
+const avgPlan = avgInstrumento(filasTodas.map(f => f.promPlan));
+const avgObs = avgInstrumento(filasTodas.map(f => f.promObs));
+const avgAuto = avgInstrumento(filasTodas.map(f => f.promAuto));
+
+const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bueno':0,'Aprobado':0,'A mejorar':0,'Insuficiente':0,'No completado':0};
+filasTodas.forEach(f => { catCounts[f.cat360]++; });
+
+function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
+function colorN(n: number|null|undefined): string { if (!n) return 'text-slate-400'; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
+
 const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSeleccionado) || cuatrimestre;
 ---
 
@@ -43,19 +136,214 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
       </form>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes</p><p class="text-3xl font-bold text-tup mt-1">{totalDocentes}</p><p class="text-xs text-slate-400 mt-1">{totalEvaluados} evaluados</p></div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup mt-1">—</p></div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Sobresaliente</p><p class="text-3xl font-bold text-sobresaliente mt-1">—</p></div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Focos Rojos</p><p class="text-3xl font-bold text-foco-rojo mt-1">—</p></div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup mt-1">{totalEvaluados}</p><p class="text-xs text-slate-400 mt-1">de {docentes.length} visibles</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup mt-1">{fmt(promInstitucional)}</p><p class="text-xs text-slate-400 mt-1">escala 0-100</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Distinguidos</p><p class="text-3xl font-bold text-emerald-600 mt-1">{pctSobresaliente}%</p><p class="text-xs text-slate-400 mt-1">≥80 puntos</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">A Mejorar</p><p class="text-3xl font-bold text-red-500 mt-1">{catCounts['A mejorar'] + catCounts['Insuficiente']}</p><p class="text-xs text-slate-400 mt-1">&lt;60 puntos</p></div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
+        <h3 class="text-sm font-semibold text-slate-700 mb-4">Distribución por Categoría</h3>
+        <div class="flex justify-center" style="max-height:260px"><canvas id="chart-donut" style="max-height:260px"></canvas></div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
+        <h3 class="text-sm font-semibold text-slate-700 mb-4">Promedio por Instrumento</h3>
+        <div class="flex justify-center" style="max-height:260px"><canvas id="chart-barras" style="max-height:260px"></canvas></div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form method="GET" class="flex gap-3">
+        <input type="text" name="q" value={busqueda} placeholder="Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
+        {busqueda && (<a href="/admin/dashboard" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+      </form>
     </div>
 
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      <div class="px-6 py-4 border-b"><h2 class="font-semibold text-slate-700">Docentes</h2></div>
-      {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No hay docentes.</div>) : (
-        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-center px-4 py-3 text-xs uppercase">Docente</th><th class="text-center px-4 py-3 text-xs uppercase">Email</th><th class="text-center px-4 py-3 text-xs uppercase">Progreso</th></tr></thead>
-        <tbody class="divide-y">{filas.map(d => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{d.nombre} {d.apellidos}</td><td class="px-4 py-3 text-center text-slate-600">{d.email}</td><td class="px-4 py-3 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/5</span></td></tr>))}</tbody></table></div>
+      <div class="px-6 py-4 border-b flex items-center justify-between">
+        <h2 class="font-semibold text-slate-700">Docentes ({filas.length})</h2>
+        {busqueda && (<span class="text-xs text-slate-400">Filtrado: "{busqueda}"</span>)}
+      </div>
+      {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>) : (
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b">
+          <th class="text-center px-3 py-3 text-xs uppercase">Docente</th>
+          <th class="text-center px-3 py-3 text-xs uppercase">Email</th>
+          <th class="text-center px-2 py-3 text-xs uppercase">Prog.</th>
+          <th class="text-center px-2 py-3 text-xs uppercase">Est.</th>
+          <th class="text-center px-2 py-3 text-xs uppercase">Coord.</th>
+          <th class="text-center px-2 py-3 text-xs uppercase">Plan.</th>
+          <th class="text-center px-2 py-3 text-xs uppercase">Obs.</th>
+          <th class="text-center px-2 py-3 text-xs uppercase">Auto.</th>
+          <th class="text-center px-2 py-3 text-xs uppercase">Final</th>
+          <th class="text-center px-2 py-3 text-xs uppercase">Cat.</th>
+          <th class="text-center px-2 py-3 text-xs uppercase">Ver</th>
+        </tr></thead>
+        <tbody class="divide-y">{filas.map(d => (
+          <tr class="hover:bg-slate-50">
+            <td class="px-3 py-2 text-center font-medium">{d.nombre} {d.apellidos}</td>
+            <td class="px-3 py-2 text-center text-slate-600 text-xs">{d.email}</td>
+            <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/5</span></td>
+            <td class="px-2 py-2 text-center {colorN(d.promEst)}">{fmt(d.promEst)}</td>
+            <td class="px-2 py-2 text-center {colorN(d.promCoord)}">{fmt(d.promCoord)}</td>
+            <td class="px-2 py-2 text-center {colorN(d.promPlan)}">{fmt(d.promPlan)}</td>
+            <td class="px-2 py-2 text-center {colorN(d.promObs)}">{fmt(d.promObs)}</td>
+            <td class="px-2 py-2 text-center {colorN(d.promAuto)}">{fmt(d.promAuto)}</td>
+            <td class="px-2 py-2 text-center font-bold {colorN(d.final360)}">{fmt(d.final360)}</td>
+            <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{d.cat360}</span></td>
+            <td class="px-2 py-2 text-center">
+              <button class="btn-ver-docente px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20" data-docente={JSON.stringify({id:d.id, nombre:d.nombre, apellidos:d.apellidos, promEst:d.promEst, promCoord:d.promCoord, promPlan:d.promPlan, promObs:d.promObs, promAuto:d.promAuto, final360:d.final360, cat360:d.cat360, instrumentos:d.instrumentos, visible:d.visible})}>📊 Ver</button>
+            </td>
+          </tr>
+        ))}</tbody></table></div>
       )}
     </div>
   </div>
+
+  <!-- Modal individual -->
+  <div id="modal-docente" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm" onclick="if(event.target===this){var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')}">
+    <div class="bg-white rounded-3xl p-6 shadow-modal max-w-lg w-full mx-4 max-h-[90vh] overflow-auto animate-flotar-entrada">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modal-docente-titulo" class="text-lg font-bold text-tup"></h3>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 text-xs text-slate-500">
+            <span id="toggle-label">Visible</span>
+            <span class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="toggle-visible" class="sr-only peer" />
+              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-tup"></div>
+            </span>
+          </label>
+          <button onclick="var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+        </div>
+      </div>
+      <div id="modal-docente-body"></div>
+    </div>
+  </div>
 </LayoutAdmin>
+
+<script is:inline define:vars={{
+  catJson: JSON.stringify(catCounts),
+  avgJson: JSON.stringify([avgEst, avgCoord, avgPlan, avgObs, avgAuto]),
+}}>
+  // ── Modal individual ──
+  var currentDocenteId = null;
+  document.querySelectorAll('.btn-ver-docente').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var d = JSON.parse(this.dataset.docente);
+      currentDocenteId = d.id;
+      document.getElementById('modal-docente-titulo').textContent = d.nombre + ' ' + d.apellidos;
+      
+      // Toggle
+      var toggle = document.getElementById('toggle-visible');
+      toggle.checked = d.visible;
+      toggle.onchange = async function(){
+        var visible = toggle.checked;
+        toggle.disabled = true;
+        try {
+          await fetch('/api/admin/toggle-visibilidad-docente', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({docente_id: d.id, visible: visible})
+          });
+        } catch(e) { toggle.checked = !visible; }
+        toggle.disabled = false;
+      };
+
+      // Body
+      var html = '';
+      html += '<div class="mb-4"><span class="text-xs text-slate-400">Progreso: </span><span class="text-sm font-medium">'+d.instrumentos+'/5 instrumentos</span></div>';
+      
+      // Canvas para gráfica individual
+      html += '<div class="mb-4" style="height:180px"><canvas id="chart-individual" style="max-height:180px"></canvas></div>';
+      
+      // Scores en texto
+      html += '<div class="grid grid-cols-5 gap-2 text-center text-xs mb-4">';
+      html += '<div><span class="text-slate-400">Est.</span><br/><span class="font-bold '+(d.promEst>=80?'text-emerald-600':d.promEst>=60?'text-amber-600':d.promEst>0?'text-red-600':'text-slate-300')+'">'+(d.promEst||'—')+'</span></div>';
+      html += '<div><span class="text-slate-400">Coord.</span><br/><span class="font-bold '+(d.promCoord>=80?'text-emerald-600':d.promCoord>=60?'text-amber-600':d.promCoord>0?'text-red-600':'text-slate-300')+'">'+(d.promCoord||'—')+'</span></div>';
+      html += '<div><span class="text-slate-400">Plan.</span><br/><span class="font-bold '+(d.promPlan>=80?'text-emerald-600':d.promPlan>=60?'text-amber-600':d.promPlan>0?'text-red-600':'text-slate-300')+'">'+(d.promPlan||'—')+'</span></div>';
+      html += '<div><span class="text-slate-400">Obs.</span><br/><span class="font-bold '+(d.promObs>=80?'text-emerald-600':d.promObs>=60?'text-amber-600':d.promObs>0?'text-red-600':'text-slate-300')+'">'+(d.promObs||'—')+'</span></div>';
+      html += '<div><span class="text-slate-400">Auto.</span><br/><span class="font-bold '+(d.promAuto>=80?'text-emerald-600':d.promAuto>=60?'text-amber-600':d.promAuto>0?'text-red-600':'text-slate-300')+'">'+(d.promAuto||'—')+'</span></div>';
+      html += '</div>';
+      
+      var fin = d.final360 != null ? Math.round(d.final360) : null;
+      html += '<div class="flex items-center justify-between bg-slate-50 rounded-xl p-3"><span class="text-sm">Calificación final: <b>'+(fin||'—')+'</b></span><span class="px-2 py-0.5 rounded text-xs font-medium bg-slate-200">'+d.cat360+'</span></div>';
+
+      document.getElementById('modal-docente-body').innerHTML = html;
+      
+      var modal = document.getElementById('modal-docente');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      
+      // Dibujar gráfica individual después de que el modal se muestra
+      setTimeout(function(){
+        var ctx = document.getElementById('chart-individual');
+        if (!ctx || typeof Chart === 'undefined') return;
+        new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: ['Est.','Coord.','Plan.','Obs.','Auto.'],
+            datasets: [{
+              data: [d.promEst||0, d.promCoord||0, d.promPlan||0, d.promObs||0, d.promAuto||0],
+              backgroundColor: ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316'],
+              borderRadius: 4, borderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: true,
+            scales: { y: { beginAtZero: true, max: 100, ticks: { font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } },
+            plugins: { legend: { display: false } }
+          }
+        });
+      }, 100);
+    });
+  });
+
+  // ── Gráficos institucionales ──
+  function initCharts() {
+    if (typeof Chart === 'undefined') {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+      s.onload = drawCharts;
+      document.head.appendChild(s);
+    } else { drawCharts(); }
+  }
+
+  function drawCharts() {
+    var catData = JSON.parse(catJson);
+    var avgData = JSON.parse(avgJson);
+    var labels = Object.keys(catData);
+    var values = Object.values(catData);
+    var bgColors = ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316','#ef4444','#94a3b8'];
+
+    var ctxDonut = document.getElementById('chart-donut');
+    if (ctxDonut) {
+      new Chart(ctxDonut, {
+        type: 'doughnut',
+        data: { labels: labels, datasets: [{ data: values, backgroundColor: bgColors, borderWidth: 0 }] },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+        }
+      });
+    }
+
+    var ctxBarras = document.getElementById('chart-barras');
+    if (ctxBarras) {
+      new Chart(ctxBarras, {
+        type: 'bar',
+        data: {
+          labels: ['Estudiante','Coordinación','Planeación','Observación','Autodiagnóstico'],
+          datasets: [{ data: avgData, backgroundColor: ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316'], borderRadius: 6, borderWidth: 0 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          scales: { y: { beginAtZero: true, max: 100, ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 9 } } } },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+  }
+
+  initCharts();
+</script>
