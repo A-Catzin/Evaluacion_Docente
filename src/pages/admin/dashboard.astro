@@ -86,13 +86,15 @@ const filasTodas: FilaDashboard[] = docentes.map(d => {
   let final360 = 0;
   for (let i=0;i<5;i++) if (disponibles[i]) final360 += disponibles[i]*pesos[i];
   const inst = [promEst>0?1:0, promCoord>0?1:0, promPlan>0?1:0, promObs>0?1:0, promAuto>0?1:0];
+  const instTotal = inst.reduce((a,b)=>a+b,0);
   const cat = final360>=90?'Sobresaliente':final360>=80?'Distinguido':final360>=70?'Bueno':final360>=60?'Aprobado':final360>=50?'A mejorar':final360>0?'Insuficiente':'No completado';
+  const catFinal = instTotal >= 3 ? cat : final360 > 0 ? 'Parcial' : 'No completado';
   return {
     id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email,
     promEst, promObs, promCoord, promPlan, promAuto,
     final360: final360 || null,
-    cat360: cat,
-    instrumentos: inst.reduce((a,b)=>a+b,0),
+    cat360: catFinal,
+    instrumentos: instTotal,
     visible: d.visible_dashboard !== false,
   };
 });
@@ -118,7 +120,7 @@ const avgPlan = avgInstrumento(filasTodas.map(f => f.promPlan));
 const avgObs = avgInstrumento(filasTodas.map(f => f.promObs));
 const avgAuto = avgInstrumento(filasTodas.map(f => f.promAuto));
 
-const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bueno':0,'Aprobado':0,'A mejorar':0,'Insuficiente':0,'No completado':0};
+const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bueno':0,'Aprobado':0,'A mejorar':0,'Insuficiente':0,'Parcial':0,'No completado':0};
 filasTodas.forEach(f => { catCounts[f.cat360]++; });
 
 function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
@@ -314,7 +316,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
     var avgData = JSON.parse(avgJson);
     var labels = Object.keys(catData);
     var values = Object.values(catData);
-    var bgColors = ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316','#ef4444','#94a3b8'];
+    var bgColors = ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316','#ef4444','#fbbf24','#94a3b8'];
 
     var ctxDonut = document.getElementById('chart-donut');
     if (ctxDonut) {
