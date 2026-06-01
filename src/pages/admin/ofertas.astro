@@ -2,13 +2,25 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerOfertasAcademicas } from '../../services/catalogos';
 
+const busqueda = Astro.url.searchParams.get('q') || '';
 const ofertas = await obtenerOfertasAcademicas();
+const items = busqueda ? ofertas.filter(o => o.nombre.toLowerCase().includes(busqueda.toLowerCase())) : ofertas;
 ---
+
 <LayoutAdmin titulo="Ofertas Académicas — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Ofertas Académicas</h1>
       <button id="btn-limpiar" class="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-xs font-medium hover:bg-amber-100 border border-amber-200">🧹 Limpiar duplicados</button>
+    </div>
+
+    <!-- Buscador -->
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form method="GET" class="flex gap-3">
+        <input type="text" name="q" value={busqueda} placeholder="Buscar carrera..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
+        {busqueda && (<a href="/admin/ofertas" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+      </form>
     </div>
 
     <!-- Formulario para agregar -->
@@ -19,15 +31,15 @@ const ofertas = await obtenerOfertasAcademicas();
       </form>
     </div>
 
-    <!-- Lista -->
+    <!-- Tabla -->
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      {ofertas.length === 0 ? (
+      {items.length === 0 ? (
         <div class="p-12 text-center text-slate-400">No hay ofertas académicas.</div>
       ) : (
         <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Estado</th><th class="text-right px-4 py-3 text-xs uppercase text-slate-600">Acciones</th></tr></thead>
+          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Estado</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 w-36">Acciones</th></tr></thead>
           <tbody class="divide-y">
-            {ofertas.map(o => (
+            {items.map(o => (
               <tr class="hover:bg-slate-50" id={`row-${o.id}`}>
                 <td class="px-4 py-3">
                   <span class="oferta-nombre">{o.nombre}</span>
@@ -38,10 +50,11 @@ const ofertas = await obtenerOfertasAcademicas();
                     {o.activa ? 'Activa' : 'Inactiva'}
                   </button>
                 </td>
-                <td class="px-4 py-3 text-right">
-                  <button class="btn-editar text-xs text-tup hover:underline mr-3" data-id={o.id}>Editar</button>
-                  <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-3 hidden" data-id={o.id}>Guardar</button>
-                  <button class="btn-cancelar text-xs text-slate-400 hover:underline mr-3 hidden" data-id={o.id}>Cancelar</button>
+                <td class="px-4 py-3 text-center">
+                  <button class="btn-editar text-xs text-tup hover:underline mr-2" data-id={o.id}>Editar</button>
+                  <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-2 hidden" data-id={o.id}>Guardar</button>
+                  <button class="btn-cancelar text-xs text-slate-400 hover:underline mr-2 hidden" data-id={o.id}>Cancelar</button>
+                  <button class="btn-eliminar text-xs text-red-500 hover:underline" data-id={o.id}>Eliminar</button>
                 </td>
               </tr>
             ))}
@@ -62,18 +75,16 @@ const ofertas = await obtenerOfertasAcademicas();
     setTimeout(function () { t.classList.add('hidden'); }, 3000);
   }
 
-  // Agregar nueva
   document.getElementById('form-nueva').addEventListener('submit', async function (e) {
     e.preventDefault();
     var input = document.getElementById('input-nombre');
     var nombre = input.value.trim();
     if (!nombre) return;
     var res = await fetch('/api/admin/ofertas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', nombre: nombre }) });
-    if (res.ok) { toast('Oferta agregada', false); setTimeout(function () { location.reload(); }, 500); }
+    if (res.ok) { toast('Agregada', false); setTimeout(function () { location.reload(); }, 500); }
     else { var d = await res.json(); toast(d.error || 'Error', true); }
   });
 
-  // Toggle activa/inactiva
   document.querySelectorAll('.toggle-btn').forEach(function (btn) {
     btn.addEventListener('click', async function () {
       var id = this.dataset.id;
@@ -83,7 +94,6 @@ const ofertas = await obtenerOfertasAcademicas();
     });
   });
 
-  // Editar
   document.querySelectorAll('.btn-editar').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var row = this.closest('tr');
@@ -95,7 +105,6 @@ const ofertas = await obtenerOfertasAcademicas();
     });
   });
 
-  // Guardar
   document.querySelectorAll('.btn-guardar').forEach(function (btn) {
     btn.addEventListener('click', async function () {
       var row = this.closest('tr');
@@ -103,22 +112,31 @@ const ofertas = await obtenerOfertasAcademicas();
       var nombre = row.querySelector('.oferta-edit').value.trim();
       if (!nombre) return;
       var res = await fetch('/api/admin/ofertas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', id: id, nombre: nombre, activa: true }) });
-      if (res.ok) { toast('Actualizado', false); setTimeout(function () { location.reload(); }, 500); }
+      if (res.ok) { toast('Guardado', false); setTimeout(function () { location.reload(); }, 500); }
       else { var d = await res.json(); toast(d.error || 'Error', true); }
     });
   });
 
-  // Cancelar
   document.querySelectorAll('.btn-cancelar').forEach(function (btn) {
     btn.addEventListener('click', function () { location.reload(); });
   });
+
+  document.querySelectorAll('.btn-eliminar').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      if (!confirm('¿Eliminar esta oferta?')) return;
+      var res = await fetch('/api/admin/ofertas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: parseInt(this.dataset.id) }) });
+      if (res.ok) { toast('Eliminada', false); setTimeout(function () { location.reload(); }, 500); }
+      else { var d = await res.json(); toast(d.error || 'Error', true); }
+    });
+  });
+
   document.getElementById('btn-limpiar').addEventListener('click', async function() {
     if (!confirm('¿Limpiar ofertas duplicadas? Se eliminarán las versiones en MAYÚSCULAS conservando las de formato correcto.')) return;
     this.disabled = true; this.textContent = 'Limpiando...';
     try {
       var res = await fetch('/api/admin/limpiar-ofertas', { method: 'POST' });
       var d = await res.json();
-      if (d.success) { toast('Se eliminaron ' + d.cleaned + ' duplicados', false); setTimeout(function() { location.reload() }, 800); }
+      if (d.success) { toast('Eliminados ' + d.cleaned + ' duplicados', false); setTimeout(function() { location.reload() }, 800); }
       else { toast(d.error || 'Error', true); this.disabled = false; this.textContent = '🧹 Limpiar duplicados'; }
     } catch(e) { toast('Error de conexión', true); this.disabled = false; this.textContent = '🧹 Limpiar duplicados'; }
   });

@@ -28,6 +28,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       if (error) return new Response(JSON.stringify({ error: 'Error al eliminar' }), { status: 400 });
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
+    if (action === 'update') {
+      const { id, clave, nombre } = body;
+      if (!id || !nombre?.trim()) return new Response(JSON.stringify({ error: 'Datos requeridos' }), { status: 400 });
+      const { error } = await cl.from('asignaturas').update({ clave, nombre: nombre.trim() }).eq('id', id);
+      if (error) return new Response(JSON.stringify({ error: 'Error al actualizar' }), { status: 400 });
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }
     return new Response(JSON.stringify({ error: 'Acción no válida' }), { status: 400 });
   } catch { return new Response(JSON.stringify({ error: 'Error interno' }), { status: 500 }); }
 };
