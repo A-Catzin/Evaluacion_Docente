@@ -18,7 +18,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     const { user_id, rol } = await request.json();
-    if (!user_id || !['superadmin', 'coordinador', 'docente', 'estudiante'].includes(rol)) {
+    if (!user_id || !['superadmin', 'coordinador', 'docente', 'observador'].includes(rol)) {
       return new Response(JSON.stringify({ error: 'Datos inválidos' }), { status: 400 });
     }
 

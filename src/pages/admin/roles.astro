@@ -17,9 +17,9 @@ try {
   }
 } catch (e) { errorMsg = e instanceof Error ? e.message : 'Error'; }
 
-const ROLES: RolUsuario[] = ['superadmin','coordinador','docente','estudiante'];
-const ETIQUETAS: Record<string,string> = {superadmin:'Administrador',coordinador:'Coordinador',docente:'Docente',estudiante:'Estudiante'};
-const COLOR: Record<string,string> = {superadmin:'bg-purple-50 text-purple-700',coordinador:'bg-blue-50 text-blue-700',docente:'bg-emerald-50 text-emerald-700',estudiante:'bg-slate-50 text-slate-700'};
+const ROLES: RolUsuario[] = ['superadmin','coordinador','docente','observador'];
+const ETIQUETAS: Record<string,string> = {superadmin:'Administrador',coordinador:'Coordinador',docente:'Docente',observador:'Observador'};
+const COLOR: Record<string,string> = {superadmin:'bg-purple-50 text-purple-700',coordinador:'bg-blue-50 text-blue-700',docente:'bg-emerald-50 text-emerald-700',observador:'bg-amber-50 text-amber-700'};
 ---
 
 <LayoutAdmin titulo="Roles — Admin">

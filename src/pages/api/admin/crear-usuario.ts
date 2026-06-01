@@ -15,7 +15,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const body = await request.json();
     const { nombre_completo, email, rol, docente_ids } = body;
     if (!email || !email.endsWith('@tecplayacar.edu.mx')) return new Response(JSON.stringify({ error: 'Email debe ser @tecplayacar.edu.mx' }), { status: 400 });
-    if (!['superadmin','coordinador','docente'].includes(rol)) return new Response(JSON.stringify({ error: 'Rol no válido' }), { status: 400 });
+    if (!['superadmin','coordinador','docente','observador'].includes(rol)) return new Response(JSON.stringify({ error: 'Rol no válido' }), { status: 400 });
 
     // 1. Crear usuario en auth.users
     const { data: authUser, error: authErr } = await cl.auth.admin.createUser({ email, password: 'TecPlayacar2026!', email_confirm: true });

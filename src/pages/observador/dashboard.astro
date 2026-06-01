@@ -1,0 +1,48 @@
+---
+import LayoutObservador from '../../layouts/LayoutObservador.astro';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+
+const cliente = obtenerClienteSuperbase();
+
+// Docentes con evaluaciones (para observación)
+const { data: docs } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
+const docsEvaluados = new Set((docs || []).map(e => e.docente_id));
+
+const { data: docentes } = await cliente.from('docentes').select('id,nombre,apellidos,email,campus,modalidad,visible_dashboard').eq('activo', true).order('apellidos');
+const lista = (docentes || []).filter(d => docsEvaluados.has(d.id) && d.visible_dashboard !== false);
+
+const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id,modalidad,clave').in('docente_id', lista.map(d => d.id));
+const matPorDocente = new Map<number, number>();
+const grupoPorDocente = new Map<number, string>();
+for (const g of (gruposData || [])) {
+  if (!matPorDocente.has(g.docente_id)) { matPorDocente.set(g.docente_id, 0); grupoPorDocente.set(g.docente_id, g.clave); }
+  matPorDocente.set(g.docente_id, (matPorDocente.get(g.docente_id)||0) + 1);
+}
+---
+
+<LayoutObservador titulo="Dashboard — Observador">
+  <div class="max-w-5xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <div><h1 class="text-3xl font-bold text-tup">Panel de Observación</h1><p class="text-slate-500">{lista.length} docentes disponibles para observar</p></div>
+    </div>
+
+    {lista.length === 0 ? (
+      <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No hay docentes disponibles para observación.</div>
+    ) : (
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {lista.map(d => (
+          <div class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover transition-shadow">
+            <h3 class="font-semibold text-tup mb-1">{d.nombre} {d.apellidos}</h3>
+            <p class="text-xs text-slate-400 mb-3">{d.email}</p>
+            <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
+              <span>{d.campus || '—'}</span><span>·</span><span>{d.modalidad || '—'}</span><span>·</span><span>{matPorDocente.get(d.id) || 0} grupos</span>
+            </div>
+            <a href={`/coordinador/captura/observacion?docente_id=${d.id}`} class="block text-center w-full px-4 py-2 rounded-xl bg-tup text-white text-sm font-medium hover:bg-tup/90 transition-colors">
+              Iniciar Observación
+            </a>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+</LayoutObservador>

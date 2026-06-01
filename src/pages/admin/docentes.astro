@@ -10,7 +10,7 @@ const { data: docsConEval } = await cliente.from('encuesta_estudiantil').select(
 const docsEvaluados = new Set((docsConEval || []).map(e => e.docente_id));
 const docentes = todos.filter(d => docsEvaluados.has(d.id));
 const docentesFiltrados = busqueda
-  ? docentes.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()))
+  ? docentes.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.apellidos.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()))
   : docentes;
 
 const ids = docentesFiltrados.map(d => d.id);

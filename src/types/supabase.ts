@@ -6,7 +6,7 @@
 
 // ─── Roles ──────────────────────────────────────────────────────
 
-export type RolUsuario = 'superadmin' | 'coordinador' | 'docente' | 'estudiante';
+export type RolUsuario = 'superadmin' | 'coordinador' | 'docente' | 'observador';
 
 // ─── Planeaciones ──────────────────────────────────────────────
 
@@ -56,6 +56,7 @@ export interface Docente {
   turno?: string | null;
   modalidad?: string | null;
   oferta_academica?: string | null;
+  visible_dashboard?: boolean | null;
   activo: boolean;
 }
 
