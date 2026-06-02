@@ -18,7 +18,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     // Obtener nombre del cuatrimestre
     const { data: cuatri } = await cl.from('cuatrimestres').select('clave,nombre').eq('id', cuatrimestreId).maybeSingle();
 
-    // Docentes con evaluaciones en este cuatrimestre
+    // Docentes con evaluaciones (todos los cuatrimestres — ciclo de Saeko no referencia cuatrimestre_id)
     const { data: docsEval } = await cl.from('encuesta_estudiantil').select('docente_id').limit(10000);
     const evalsSet = new Set((docsEval || []).map(e => e.docente_id));
     const { data: docentes } = await cl.from('docentes').select('id,nombre,apellidos,email').eq('activo', true).order('apellidos');
