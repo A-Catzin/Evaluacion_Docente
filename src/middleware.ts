@@ -4,7 +4,7 @@ import { obtenerClienteSuperbase } from './lib/supabaseClient';
 const DOMINIO_PERMITIDO = '@tecplayacar.edu.mx';
 
 const RUTAS_PUBLICAS = [
-  '/api/auth/guardar-sesion', '/api/auth/signout', '/api/auth/rol',
+  '/api/auth/guardar-sesion', '/api/auth/signout', '/api/auth/rol', '/api/auth/callback',
   '/api/docente/autodiagnostico', '/api/coordinador/observacion',
   '/api/docente/planeacion', '/api/coordinador/planeacion', '/api/coordinador/evaluacion-coordinacion',
   '/auth', '/', '/favicon.ico', '/favicon.svg',

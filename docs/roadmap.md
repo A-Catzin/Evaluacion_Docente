@@ -5,7 +5,7 @@
 ## Fase 1: Setup e Infraestructura ✅
 - [x] Astro SSR + Tailwind + TypeScript
 - [x] Supabase (PostgreSQL, Auth Google, Storage)
-- [x] Esquema SQL v2 (9 migraciones: 4 consolidadas + 5 fixes)
+- [x] Esquema SQL v2 (13 migraciones: 4 consolidadas + 6 fixes + 3 extras)
 - [x] Middleware 3 roles + dominio
 - [x] 5 layouts por rol
 - [x] Servicios CRUD
@@ -61,7 +61,7 @@
 - [x] Modal "Ver materias" con scores por materia: EE, Obs, Plan, Coord, Auto
 - [x] Columna "Grupos" en el modal con la clave del grupo (ej: `26-2 PED 11 02A`)
 - [x] Desduplicación de grupos por `(docente_id, asignatura_id, clave_grupo)`
-- [x] Migraciones consolidadas: 28+ → 9 (4 base + 5 fixes)
+- [x] Migraciones consolidadas: 28+ → 13 (4 base + 9 fixes/extras)
 
 ## Fase 9: Importación de Datos ✅
 - [x] API `importar-saeko.ts`: agrupa evaluaciones por docente+asignatura+ciclo
@@ -72,7 +72,7 @@
 - [x] 79-80 docentes importados, 138 asignaturas, 259 grupos, ~4500 evaluaciones
 
 ## Fase 10: Reestructuración y Ajustes ✅
-- [x] 28+ migraciones consolidadas en 9 (001-004 base + 005-009 fixes)
+- [x] 28+ migraciones consolidadas en 13 (001-004 base + 005-010 extras)
 - [x] Eliminados 6 archivos de estudiante
 - [x] 341 docentes maestros cargados vía CSV maestro
 - [x] `/admin/docentes` filtrado solo a docentes con evaluaciones

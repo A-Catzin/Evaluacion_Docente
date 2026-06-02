@@ -17,24 +17,24 @@
 ├── public/                     # Assets estáticos
 ├── src/
 │   ├── components/             # UI (futuro)
-│   ├── layouts/               # 4 layouts (Admin, Coordinador, Docente, Base)
+│   ├── layouts/               # 6 layouts (Base, Layout, Admin, Coordinador, Docente, Observador)
 │   ├── lib/                   # supabaseClient, auth, sesion
 │   ├── pages/                 # Páginas Astro
 │   │   ├── admin/             # dashboard, docentes, coordinadores, usuarios, importar, catálogos
 │   │   ├── coordinador/       # dashboard, captura, planeaciones
 │   │   ├── docente/           # dashboard, autodiagnostico, planeaciones
-│   │   ├── api/               # Endpoints (importar-saeko, crear-usuario, docentes-evaluados, etc.)
+│   │   ├── observador/        # dashboard
+│   │   ├── api/               # Endpoints (13 admin APIs + auth/coordinador/docente)
 │   │   ├── auth/              # login, callback
 │   │   └── index.astro
-│   ├── services/              # 10 servicios
+│   ├── services/              # 9 servicios
 │   └── types/                 # supabase.ts (25+ interfaces)
 ├── supabase/
-│   └── migrations/            # 9 archivos SQL (001-004 consolidados + 005-009 fixes)
+│   └── migrations/            # 13 archivos SQL (001-004 consolidados + 005-010 fixes/extras)
 ├── tailwind.config.mjs
 ├── astro.config.mjs
 ├── tsconfig.json
 └── package.json
 ```
 
-> ⚠️ Eliminado: `estudiante/` (páginas), `LayoutEstudiante.astro`, `sync/sql_generado/` (reemplazado por API de importación).
-> Las migraciones pasaron de 28+ a 9 archivos consolidados.
+> Las migraciones: 001-004 (base), 005 (coordinador_docentes), 006 (docentes maestros, 4 chunks), 007 (RLS), 008 (ciclo), 009 (limpieza), 010 (visibilidad dashboard).

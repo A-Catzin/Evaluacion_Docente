@@ -38,18 +38,19 @@ Nota Final = EE(35%) + CA(20%) + PD(15%) + OC(25%) + AE(5%)
 | `/coordinador/dashboard`, `/coordinador/captura/*`, `/coordinador/planeaciones` | Coord/Admin |
 | `/docente/dashboard`, `/docente/autodiagnostico`, `/docente/planeaciones` | Docente |
 
-## BD (25+ tablas, 9 migraciones)
+## BD (25+ tablas, 13 migraciones)
 
-Migraciones consolidadas de 28+ a 9:
+Migraciones consolidadas de 28+ a 13:
 - `001_esquema_base.sql` — Catálogos principales
 - `002_instrumentos.sql` — 5 instrumentos, calificación final
 - `003_configuracion.sql` — Config, triggers
 - `004_encuesta_simplificada.sql` — Encuesta con 10 promedios y GENERATED column
 - `005_coordinador_docentes.sql` — Vinculación coordinador↔docentes
-- `006_docentes_maestros.sql` — 341 docentes desde CSV maestro
+- `006_docentes_aa/ad.sql` — 341 docentes desde CSV maestro (4 chunks)
 - `007_fix_encuesta_rls.sql` — RLS desactivado, nuevo UNIQUE
 - `008_fix_ciclo_size.sql` — VARCHAR(30) para ciclo
 - `009_limpiar_encuestas.sql` — Limpieza de datos previos
+- `010_visibilidad_dashboard.sql` — Toggle de visibilidad en dashboard
 
 ## Datos Reales
 - **341** docentes maestros cargados (vía migración 006)
@@ -86,7 +87,7 @@ UI con barra de progreso para subir CSV Saeko. La API `importar-saeko.ts`:
 | Docente inactivo al cambiar rol | Trigger automático |
 | Preguntas hardcodeadas | `instrumento_preguntas` + editor |
 | Grupos duplicados | Dedup por `(docente+asignatura+clave)` |
-| Migraciones dispersas (28+) | Consolidadas en 9 archivos |
+| Migraciones dispersas (28+) | Consolidadas en 13 archivos |
 | Rol estudiante innecesario | Eliminado, reemplazado por CSV Saeko |
 | DECIMAL overflow 100 | `DECIMAL(5,2)` |
 | Encuesta 51 reactivos compleja | Simplificada a 10 promedios |

@@ -5,13 +5,14 @@
 ## 1. Visión General
 Plataforma integral que mide el desempeño docente desde **5 instrumentos** evaluados por diferentes actores, generando una calificación final ponderada. Las encuestas estudiantiles se importan automáticamente desde CSV Saeko (sin rol estudiante en el sistema).
 
-## 2. Actores y Roles (3 roles)
+## 2. Actores y Roles (4 roles)
 
 | Rol | Acceso | Dashboard |
 |-----|--------|-----------|
 | **Superadmin** | Total. KPIs, ranking, catálogos, usuarios, importación CSV | `/admin/dashboard` |
 | **Coordinador** | Evalúa docentes de su área. Captura CA, OC, PD | `/coordinador/dashboard` |
 | **Docente** | Ve resultados al cierre. Autodiagnóstico, sube planeaciones | `/docente/dashboard` |
+| **Observador** | Realiza observaciones de clase a docentes | `/observador/dashboard` |
 
 > ⚠️ El rol **estudiante** fue eliminado. Las encuestas provienen directamente del CSV de Saeko, importado por el superadmin desde `/admin/importar`.
 
