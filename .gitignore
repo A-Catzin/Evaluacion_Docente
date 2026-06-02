@@ -26,4 +26,4 @@ pnpm-debug.log*
 
 .vscode/
 
-.obsidian/
+.obsidian/.vercel/
