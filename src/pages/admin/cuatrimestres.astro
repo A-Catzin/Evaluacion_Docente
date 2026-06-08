@@ -10,7 +10,7 @@ const cuatrimestres = await obtenerCuatrimestres();
     <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Cuatrimestres</h1></div>
 
     <!-- Formulario para agregar -->
-    <div class="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-tarjeta mb-6">
       <form id="form-nueva" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <input type="text" id="input-clave" placeholder="Clave (ej: 26-1)*" required class="rounded-xl border border-slate-200 dark:border-gray-700 px-3 py-2.5 text-sm" />
         <input type="text" id="input-nombre" placeholder="Nombre*" required class="rounded-xl border border-slate-200 dark:border-gray-700 px-3 py-2.5 text-sm" />
@@ -21,12 +21,12 @@ const cuatrimestres = await obtenerCuatrimestres();
     </div>
 
     <!-- Tabla -->
-    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-tarjeta overflow-hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-tarjeta overflow-hidden">
       <table class="w-full text-sm">
-        <thead><tr class="bg-slate-50 dark:bg-gray-800 border-b"><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Inicio</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Fin</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Estado</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Acciones</th></tr></thead>
+        <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Inicio</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Fin</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Estado</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Acciones</th></tr></thead>
         <tbody class="divide-y">
           {cuatrimestres.map(c => (
-            <tr class="hover:bg-slate-50 dark:hover:bg-gray-800/50 dark:bg-gray-800">
+            <tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50">
               <td class="px-3 py-3 text-center font-mono text-xs">{c.clave}</td>
               <td class="px-3 py-3 text-center">
                 <span class="texto-nombre">{c.nombre}</span>
@@ -44,8 +44,8 @@ const cuatrimestres = await obtenerCuatrimestres();
                 <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${c.cerrado ? 'bg-slate-100 text-slate-400' : c.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`} data-id={c.id} data-activa={c.activo} data-cerrado={c.cerrado}>{c.cerrado ? 'Cerrado' : c.activo ? 'Activo' : 'Inactivo'}</button>
               </td>
               <td class="px-3 py-3 text-center">
-                <button class="btn-editar text-xs text-tup dark:text-blue-300 hover:underline mr-2" data-id={c.id}>Editar</button>
-                <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-2 hidden" data-id={c.id}>Guardar</button>
+                <button class="btn-editar text-xs text-tup dark:text-blue-200 hover:underline mr-2" data-id={c.id}>Editar</button>
+                <button class="btn-guardar text-xs text-emerald-500 hover:underline mr-2 hidden" data-id={c.id}>Guardar</button>
                 <a href={`/api/admin/reporte-cuatrimestre?cuatrimestre_id=${c.id}`} class="text-xs text-blue-600 hover:underline mr-2" title="Descargar reporte CSV">📊 Reporte</a>
                 <button class="btn-eliminar text-xs text-red-500 hover:underline" data-id={c.id}>Eliminar</button>
               </td>

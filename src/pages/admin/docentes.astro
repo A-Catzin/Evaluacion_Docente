@@ -66,7 +66,7 @@ for (const p of (planData || [])) {
 }
 
 function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
-function colorScore(n: number|null|undefined): string { if (!n) return 'text-slate-400'; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
+function colorScore(n: number|null|undefined): string { if (!n) return 'text-slate-400'; if (n >= 80) return 'text-emerald-500'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
 function cat360(p: number|null|undefined): string { if (!p) return '—'; if (p>=90) return 'Sobresaliente'; if (p>=80) return 'Distinguido'; if (p>=70) return 'Bueno'; if (p>=60) return 'Aprobado'; if (p>=50) return 'A mejorar'; return 'Insuficiente'; }
 
 // Fila principal — promedio general de todas las materias
@@ -104,17 +104,17 @@ const filas = docentesFiltrados.map(d => {
 <LayoutAdmin titulo="Docentes — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm text-slate-400">{filas.length} docentes</span></div>
-    <div class="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
         {busqueda && (<a href="/admin/docentes" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-gray-700 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
-    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-tarjeta overflow-hidden overflow-x-auto">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-tarjeta overflow-hidden overflow-x-auto">
       {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>) : (
         <table class="w-full text-[11px] whitespace-nowrap">
-          <thead><tr class="bg-slate-50 dark:bg-gray-800 border-b">
+          <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b">
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Email</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Campus</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Modalidad</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Materias</th>
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Cat. 360</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Final</th>
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Est.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Obs.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Coord.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Plan.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Auto.</th>
@@ -123,14 +123,14 @@ const filas = docentesFiltrados.map(d => {
             const grupos = grupoMap.get(f.id) || [];
             const tieneMaterias = grupos.length > 0;
             return (
-              <tr class="hover:bg-slate-50 dark:hover:bg-gray-800/50 dark:bg-gray-800">
+              <tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50">
                 <td class="px-2 py-2 text-center font-medium">{f.nombre} {f.apellidos}</td>
-                <td class="px-2 py-2 text-center text-slate-600 dark:text-gray-300 text-[10px]">{f.email}</td>
+                <td class="px-2 py-2 text-center text-slate-600 dark:text-gray-200 text-[10px]">{f.email}</td>
                 <td class="px-2 py-2 text-center">{f.campus || '—'}</td>
                 <td class="px-2 py-2 text-center">{f.modalidad || '—'}</td>
                 <td class="px-2 py-2 text-center">
                   {tieneMaterias ? (
-                    <button class="btn-ver-materias px-2 py-0.5 rounded-lg bg-tup/10 dark:bg-blue-900/30 text-tup dark:text-blue-300 text-[10px] font-medium hover:bg-tup/20" data-docente-id={f.id} data-nombre={`${f.nombre} ${f.apellidos}`}>📊 Ver</button>
+                    <button class="btn-ver-materias px-2 py-0.5 rounded-lg bg-tup/10 dark:bg-blue-900/40 text-tup dark:text-blue-200 text-[10px] font-medium hover:bg-tup/20" data-docente-id={f.id} data-nombre={`${f.nombre} ${f.apellidos}`}>📊 Ver</button>
                   ) : (
                     <span class="text-[10px] text-slate-300">Sin materias</span>
                   )}
@@ -151,8 +151,8 @@ const filas = docentesFiltrados.map(d => {
   </div>
 
   <div id="modal-materias" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm" onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-modal max-w-4xl w-full mx-4 max-h-[80vh] overflow-auto animate-flotar-entrada">
-      <div class="flex items-center justify-between mb-4"><h3 id="modal-titulo" class="text-lg font-bold text-tup"></h3><button onclick="document.getElementById('modal-materias').classList.add('hidden')" class="text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:text-gray-300 text-xl">&times;</button></div>
+    <div class="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-modal max-w-4xl w-full mx-4 max-h-[80vh] overflow-auto animate-flotar-entrada">
+      <div class="flex items-center justify-between mb-4"><h3 id="modal-titulo" class="text-lg font-bold text-tup"></h3><button onclick="document.getElementById('modal-materias').classList.add('hidden')" class="text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:text-gray-200 text-xl">&times;</button></div>
       <div id="modal-contenido"></div>
     </div>
   </div>
