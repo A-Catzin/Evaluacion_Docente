@@ -134,43 +134,43 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
     <div class="flex items-center justify-between mb-6">
       <div><h1 class="text-3xl font-bold text-tup">Dashboard Administrativo</h1><p class="text-slate-500">{cuatrimestreSel?.nombre || 'Sin cuatrimestre activo'}</p></div>
       <form method="GET" class="flex items-center gap-2">
-        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id.toString()===idSeleccionado}>{c.nombre}</option>))}</select>
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 dark:border-gray-700 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id.toString()===idSeleccionado}>{c.nombre}</option>))}</select>
       </form>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup mt-1">{totalEvaluados}</p><p class="text-xs text-slate-400 mt-1">de {docentes.length} visibles</p></div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup mt-1">{fmt(promInstitucional)}</p><p class="text-xs text-slate-400 mt-1">escala 0-100</p></div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Distinguidos</p><p class="text-3xl font-bold text-emerald-600 mt-1">{pctSobresaliente}%</p><p class="text-xs text-slate-400 mt-1">≥80 puntos</p></div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">A Mejorar</p><p class="text-3xl font-bold text-red-500 mt-1">{catCounts['A mejorar'] + catCounts['Insuficiente']}</p><p class="text-xs text-slate-400 mt-1">&lt;60 puntos</p></div>
+      <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 dark:text-gray-500 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup dark:text-blue-300 mt-1">{totalEvaluados}</p><p class="text-xs text-slate-400 dark:text-gray-500 mt-1">de {docentes.length} visibles</p></div>
+      <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 dark:text-gray-500 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup dark:text-blue-300 mt-1">{fmt(promInstitucional)}</p><p class="text-xs text-slate-400 dark:text-gray-500 mt-1">escala 0-100</p></div>
+      <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 dark:text-gray-500 uppercase">Distinguidos</p><p class="text-3xl font-bold text-emerald-600 mt-1">{pctSobresaliente}%</p><p class="text-xs text-slate-400 dark:text-gray-500 mt-1">≥80 puntos</p></div>
+      <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 dark:text-gray-500 uppercase">A Mejorar</p><p class="text-3xl font-bold text-red-500 mt-1">{catCounts['A mejorar'] + catCounts['Insuficiente']}</p><p class="text-xs text-slate-400 dark:text-gray-500 mt-1">&lt;60 puntos</p></div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
-        <h3 class="text-sm font-semibold text-slate-700 mb-4">Distribución por Categoría</h3>
+      <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-tarjeta">
+        <h3 class="text-sm font-semibold text-slate-700 dark:text-gray-200 mb-4">Distribución por Categoría</h3>
         <div class="flex justify-center" style="max-height:260px"><canvas id="chart-donut" style="max-height:260px"></canvas></div>
       </div>
-      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
-        <h3 class="text-sm font-semibold text-slate-700 mb-4">Promedio por Instrumento</h3>
+      <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-tarjeta">
+        <h3 class="text-sm font-semibold text-slate-700 dark:text-gray-200 mb-4">Promedio por Instrumento</h3>
         <div class="flex justify-center" style="max-height:260px"><canvas id="chart-barras" style="max-height:260px"></canvas></div>
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
-        <input type="text" name="q" value={busqueda} placeholder="Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <input type="text" name="q" value={busqueda} placeholder="Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href="/admin/dashboard" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+        {busqueda && (<a href="/admin/dashboard" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-gray-700 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-tarjeta overflow-hidden">
       <div class="px-6 py-4 border-b flex items-center justify-between">
         <h2 class="font-semibold text-slate-700">Docentes ({filas.length})</h2>
         {busqueda && (<span class="text-xs text-slate-400">Filtrado: "{busqueda}"</span>)}
       </div>
       {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>) : (
-        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b">
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50 dark:bg-gray-800 border-b">
           <th class="text-center px-3 py-3 text-xs uppercase">Docente</th>
           <th class="text-center px-3 py-3 text-xs uppercase">Email</th>
           <th class="text-center px-2 py-3 text-xs uppercase">Prog.</th>
@@ -184,9 +184,9 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
           <th class="text-center px-2 py-3 text-xs uppercase">Ver</th>
         </tr></thead>
         <tbody class="divide-y">{filas.map(d => (
-          <tr class="hover:bg-slate-50">
+          <tr class="hover:bg-slate-50 dark:hover:bg-gray-800/50 dark:bg-gray-800">
             <td class="px-3 py-2 text-center font-medium">{d.nombre} {d.apellidos}</td>
-            <td class="px-3 py-2 text-center text-slate-600 text-xs">{d.email}</td>
+            <td class="px-3 py-2 text-center text-slate-600 dark:text-gray-300 text-xs">{d.email}</td>
             <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/5</span></td>
             <td class="px-2 py-2 text-center {colorN(d.promEst)}">{fmt(d.promEst)}</td>
             <td class="px-2 py-2 text-center {colorN(d.promCoord)}">{fmt(d.promCoord)}</td>
@@ -196,7 +196,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
             <td class="px-2 py-2 text-center font-bold {colorN(d.final360)}">{fmt(d.final360)}</td>
             <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{d.cat360}</span></td>
             <td class="px-2 py-2 text-center">
-              <button class="btn-ver-docente px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20" data-docente={JSON.stringify({id:d.id, nombre:d.nombre, apellidos:d.apellidos, promEst:d.promEst, promCoord:d.promCoord, promPlan:d.promPlan, promObs:d.promObs, promAuto:d.promAuto, final360:d.final360, cat360:d.cat360, instrumentos:d.instrumentos, visible:d.visible})}>📊 Ver</button>
+              <button class="btn-ver-docente px-2 py-0.5 rounded-lg bg-tup/10 dark:bg-blue-900/30 text-tup dark:text-blue-300 text-[10px] font-medium hover:bg-tup/20" data-docente={JSON.stringify({id:d.id, nombre:d.nombre, apellidos:d.apellidos, promEst:d.promEst, promCoord:d.promCoord, promPlan:d.promPlan, promObs:d.promObs, promAuto:d.promAuto, final360:d.final360, cat360:d.cat360, instrumentos:d.instrumentos, visible:d.visible})}>📊 Ver</button>
             </td>
           </tr>
         ))}</tbody></table></div>
@@ -206,7 +206,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
 
   <!-- Modal individual -->
   <div id="modal-docente" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm" onclick="if(event.target===this){var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')}">
-    <div class="bg-white rounded-3xl p-6 shadow-modal max-w-lg w-full mx-4 max-h-[90vh] overflow-auto animate-flotar-entrada">
+    <div class="bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-modal max-w-lg w-full mx-4 max-h-[90vh] overflow-auto animate-flotar-entrada">
       <div class="flex items-center justify-between mb-4">
         <h3 id="modal-docente-titulo" class="text-lg font-bold text-tup"></h3>
         <div class="flex items-center gap-3">
@@ -214,10 +214,10 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
             <span id="toggle-label">Visible</span>
             <span class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" id="toggle-visible" class="sr-only peer" />
-              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-tup"></div>
+              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white dark:bg-gray-900 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-tup"></div>
             </span>
           </label>
-          <button onclick="var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+          <button onclick="var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')" class="text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:text-gray-300 text-xl">&times;</button>
         </div>
       </div>
       <div id="modal-docente-body"></div>
@@ -269,7 +269,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
       html += '</div>';
       
       var fin = d.final360 != null ? Math.round(d.final360) : null;
-      html += '<div class="flex items-center justify-between bg-slate-50 rounded-xl p-3"><span class="text-sm">Calificación final: <b>'+(fin||'—')+'</b></span><span class="px-2 py-0.5 rounded text-xs font-medium bg-slate-200">'+d.cat360+'</span></div>';
+      html += '<div class="flex items-center justify-between bg-slate-50 dark:bg-gray-800 rounded-xl p-3"><span class="text-sm">Calificación final: <b>'+(fin||'—')+'</b></span><span class="px-2 py-0.5 rounded text-xs font-medium bg-slate-200">'+d.cat360+'</span></div>';
 
       document.getElementById('modal-docente-body').innerHTML = html;
       
