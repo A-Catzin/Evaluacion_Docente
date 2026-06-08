@@ -115,9 +115,9 @@ const filas = docentesFiltrados.map(d => {
       {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>) : (
         <table class="w-full text-[11px] whitespace-nowrap">
           <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b">
-            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Email</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Campus</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Modalidad</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Materias</th>
-            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Cat. 360</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Final</th>
-            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Est.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Obs.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Coord.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Plan.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Auto.</th>
+            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Nombre</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Email</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Campus</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Modalidad</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Materias</th>
+            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Cat. 360</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Final</th>
+            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Est.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Obs.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Coord.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Plan.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600 dark:text-gray-200">Auto.</th>
           </tr></thead>
           <tbody class="divide-y">{filas.map(f => {
             const grupos = grupoMap.get(f.id) || [];
@@ -201,7 +201,7 @@ const filas = docentesFiltrados.map(d => {
       var eeScore = eeDoc ? eeDoc.get(g.asignatura_id) : null;
       var obsScore = obsDoc ? obsDoc.get(g.asignatura_id) : null;
       var planScore = planDoc ? planDoc.get(g.asignatura_id) : null;
-      html += '<tr><td class="text-center px-1 py-1">'+a.clave+'</td><td class="text-center px-1 py-1 font-medium">'+a.nombre+'</td><td class="text-center px-1 py-1">'+(g.modalidad||'—')+'</td><td class="text-center px-1 py-1 text-[10px] text-slate-600">'+g.clave_grupo+'</td><td class="text-center px-1 py-1">'+fmt(eeScore!=null?Math.round(eeScore):null)+'</td><td class="text-center px-1 py-1">'+fmt(obsScore)+'</td><td class="text-center px-1 py-1">'+fmt(planScore)+'</td><td class="text-center px-1 py-1">'+fmt(promCoord||null)+'</td><td class="text-center px-1 py-1">'+fmt(promAuto||null)+'</td></tr>';
+      html += '<tr><td class="text-center px-1 py-1">'+a.clave+'</td><td class="text-center px-1 py-1 font-medium">'+a.nombre+'</td><td class="text-center px-1 py-1">'+(g.modalidad||'—')+'</td><td class="text-center px-1 py-1 text-[10px] text-slate-600 dark:text-gray-200">'+g.clave_grupo+'</td><td class="text-center px-1 py-1">'+fmt(eeScore!=null?Math.round(eeScore):null)+'</td><td class="text-center px-1 py-1">'+fmt(obsScore)+'</td><td class="text-center px-1 py-1">'+fmt(planScore)+'</td><td class="text-center px-1 py-1">'+fmt(promCoord||null)+'</td><td class="text-center px-1 py-1">'+fmt(promAuto||null)+'</td></tr>';
     });
     html += '</tbody></table>';
     document.getElementById('modal-contenido').innerHTML = html;

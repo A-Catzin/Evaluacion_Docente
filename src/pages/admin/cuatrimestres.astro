@@ -23,7 +23,7 @@ const cuatrimestres = await obtenerCuatrimestres();
     <!-- Tabla -->
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-tarjeta overflow-hidden">
       <table class="w-full text-sm">
-        <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Inicio</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Fin</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Estado</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Acciones</th></tr></thead>
+        <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="text-center px-3 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Clave</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Nombre</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Inicio</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Fin</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Estado</th><th class="text-center px-3 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Acciones</th></tr></thead>
         <tbody class="divide-y">
           {cuatrimestres.map(c => (
             <tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50">

@@ -171,14 +171,14 @@ function formatear(n: number | undefined): string {
           {rolFiltro === 'docente' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b">
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Nombre</th>
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Ap. Paterno</th>
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Ap. Materno</th>
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Correo</th>
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Campus</th>
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Turno</th>
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Modalidad</th>
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Materias</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Nombre</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Ap. Paterno</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Ap. Materno</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Correo</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Campus</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Turno</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Modalidad</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Materias</th>
               </tr></thead>
               <tbody class="divide-y">{filas.map(f => {
                 const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
@@ -190,9 +190,9 @@ function formatear(n: number | undefined): string {
           {rolFiltro === 'coordinador' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b">
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Nombre</th>
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Email</th>
-                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Rol</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Nombre</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Email</th>
+                <th class="px-3 py-2 text-center text-xs uppercase text-slate-600 dark:text-gray-200">Rol</th>
               </tr></thead>
               <tbody class="divide-y">{filas.map(f => (
                 <tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50"><td class="px-3 py-2 text-center font-medium">{f.nombre}</td><td class="px-3 py-2 text-center text-xs">{f.email}</td><td class="px-3 py-2 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>
@@ -202,15 +202,15 @@ function formatear(n: number | undefined): string {
 
           {rolFiltro === 'superadmin' && (
             <table class="w-full text-sm">
-              <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th></tr></thead>
-              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td></tr>))}</tbody>
+              <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Email</th></tr></thead>
+              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600 dark:text-gray-200">{f.email}</td></tr>))}</tbody>
             </table>
           )}
 
           {rolFiltro === 'observador' && (
             <table class="w-full text-sm">
-              <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200 text-center">Rol</th></tr></thead>
-              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
+              <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200 text-center">Rol</th></tr></thead>
+              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600 dark:text-gray-200">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
             </table>
           )}
         </div>
