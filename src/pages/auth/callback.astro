@@ -33,7 +33,7 @@ import Layout from '../../layouts/Layout.astro';
     function setEstado(texto, error) {
       if (estadoEl) {
         estadoEl.textContent = texto;
-        estadoEl.className = 'text-sm ' + (error ? 'text-red-600 font-medium' : 'text-slate-500');
+        estadoEl.className = 'text-sm ' + (error ? 'text-red-600 dark:text-red-400 font-medium' : 'text-slate-500');
       }
       if (error && spinnerEl) spinnerEl.classList.add('hidden');
     }

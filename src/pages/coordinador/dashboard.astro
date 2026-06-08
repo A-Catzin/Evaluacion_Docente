@@ -100,19 +100,19 @@ const completados = estados.filter(e => e.completo);
                 {e.coordinacion === 'pendiente' ? (
                   <a href={`/coordinador/captura/coordinacion?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-purple-600 text-white text-[10px] font-medium hover:bg-purple-700">CA</a>
                 ) : (
-                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ CA</span>
+                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">✅ CA</span>
                 )}
                 {e.observacion === 'pendiente' ? (
                   <a href={`/coordinador/captura/observacion${e.docente.modalidad.includes('Virtual') ? '-virtual' : e.docente.modalidad.includes('Ejecutivo') ? '-ejecutivo' : ''}?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
                 ) : (
-                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Obs.</span>
+                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">✅ Obs.</span>
                 )}
                 {e.planeacion === 'pendiente' ? (
                   <a href="/coordinador/planeaciones" class="flex-1 text-center px-2 py-1.5 rounded-lg bg-dorado text-white text-[10px] font-medium hover:bg-dorado/90">Plan.</a>
                 ) : e.planeacion === 'no_aplica' ? (
-                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-[10px] font-medium">—</span>
+                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-gray-700 dark:bg-gray-700 text-slate-400 dark:text-gray-300 text-[10px] font-medium">—</span>
                 ) : (
-                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Plan.</span>
+                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">✅ Plan.</span>
                 )}
               </div>
             </div>

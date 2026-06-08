@@ -55,14 +55,14 @@ const observacionesGrupo = [
           <div class="p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-bold text-slate-800">{inst.nombre}</h3>
-              <span class="px-3 py-1 rounded-xl bg-slate-100 text-xs font-bold">{inst.peso}</span>
+              <span class="px-3 py-1 rounded-xl bg-slate-100 dark:bg-gray-700 text-xs font-bold">{inst.peso}</span>
             </div>
             <div class="grid grid-cols-3 gap-4 mb-4">
               <div class="text-center"><p class="text-2xl font-bold text-tup">{inst.total}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Evaluaciones</p></div>
               <div class="text-center"><p class="text-2xl font-bold text-slate-600">{inst.reactivos}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Reactivos</p></div>
               <div class="text-center"><p class="text-2xl font-bold text-slate-600">{inst.escala}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Escala</p></div>
             </div>
-            <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mb-1">
+            <div class="w-full h-1.5 bg-slate-100 dark:bg-gray-700 rounded-full overflow-hidden mb-1">
               <div class="h-full rounded-full bg-tup" style={`width:${totalDocentes ? Math.min(100, ((inst.total || 0) / (totalDocentes || 1)) * 100) : 0}%`}></div>
             </div>
             <p class="text-[10px] text-slate-400">{totalDocentes ? Math.round(((inst.total || 0) / (totalDocentes || 1)) * 100) : 0}% de docentes</p>
