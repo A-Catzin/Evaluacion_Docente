@@ -64,7 +64,7 @@ const REACTIVOS = [
     {yaRespondido ? (
       <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 text-center">
         <p class="text-emerald-800 font-semibold text-lg">✅ Ya completaste tu autodiagnóstico</p>
-        <p class="text-emerald-500 text-sm mt-2">No es posible enviarlo nuevamente para este cuatrimestre.</p>
+        <p class="text-emerald-600 text-sm mt-2">No es posible enviarlo nuevamente para este cuatrimestre.</p>
         <a href="/docente/dashboard" class="inline-block mt-4 px-6 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Volver al Dashboard</a>
       </div>
     ) : (
@@ -74,7 +74,7 @@ const REACTIVOS = [
           <div class="flex justify-between text-xs text-slate-400 mb-2">
             <span id="paso-label">Paso 1 de 4</span><span id="porcentaje-label">25%</span>
           </div>
-          <div class="w-full h-2 bg-slate-100 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
             <div id="barra-progreso" class="h-full bg-tup rounded-full transition-all duration-300" style="width:25%"></div>
           </div>
         </div>
@@ -287,9 +287,9 @@ const REACTIVOS = [
 
   function mostrarModal(data) {
     var modal = document.getElementById('modal-resultado');
-    var niveles = { 'Excelente': ['✅','#10B981','¡Felicitaciones! Tu desempeño es sobresaliente.','bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'],
-      'Satisfactorio': ['👍','#3b82f6','Buen trabajo. Continúa con la mejora continua.','bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 dark:text-blue-300'],
-      'En Desarrollo': ['📚','#f59e0b','Te sugerimos capacitación pedagógica para fortalecer tu práctica.','bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'],
+    var niveles = { 'Excelente': ['✅','#22c55e','¡Felicitaciones! Tu desempeño es sobresaliente.','bg-emerald-50 text-emerald-700'],
+      'Satisfactorio': ['👍','#3b82f6','Buen trabajo. Continúa con la mejora continua.','bg-blue-50 text-blue-700'],
+      'En Desarrollo': ['📚','#f59e0b','Te sugerimos capacitación pedagógica para fortalecer tu práctica.','bg-amber-50 text-amber-700'],
       'Necesita Mejora': ['⚠️','#ef4444','Se requiere intervención académica. Contacta a tu coordinador.','bg-red-50 text-red-700'] };
     var n = niveles[data.nivel_desempeno] || niveles['En Desarrollo'];
     document.getElementById('modal-icono').innerHTML = '<span style="font-size:2rem">' + n[0] + '</span>';

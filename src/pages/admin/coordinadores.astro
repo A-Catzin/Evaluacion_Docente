@@ -26,17 +26,17 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
 <LayoutAdmin titulo="Coordinadores — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Coordinadores</h1><span class="text-sm text-slate-400">{items.length} coordinadores</span></div>
-    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
-        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href="/admin/coordinadores" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-gray-700 text-sm text-slate-500">Limpiar</a>)}
+        {busqueda && (<a href="/admin/coordinadores" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
     <div class="space-y-4">
       {items.map(f => (
-        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-tarjeta overflow-hidden">
+        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
           <div class="flex items-center justify-between px-6 py-4">
             <div class="flex items-center gap-4">
               <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{f.nombre.charAt(0)}</div>
@@ -52,15 +52,15 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
                 <span class="w-2 h-2 rounded-full bg-amber-500" title="Proceso"></span>
                 <span class="w-2 h-2 rounded-full bg-emerald-500" title="Eficaz"></span>
               </div>
-              <button class="btn-ver px-3 py-1.5 rounded-lg bg-tup/10 dark:bg-blue-900/40 text-tup dark:text-blue-200 text-xs font-medium hover:bg-tup/20" data-id={f.id}>Ver docentes ▾</button>
+              <button class="btn-ver px-3 py-1.5 rounded-lg bg-tup/10 text-tup text-xs font-medium hover:bg-tup/20" data-id={f.id}>Ver docentes ▾</button>
             </div>
           </div>
-          <div id={`docs-${f.id}`} class="hidden border-t border-slate-100 dark:border-gray-700 bg-slate-50 dark:bg-gray-700/50 p-4">
-            <p class="text-xs text-slate-400 dark:text-gray-500 mb-3">Cargando docentes evaluados...</p>
+          <div id={`docs-${f.id}`} class="hidden border-t border-slate-100 bg-slate-50/50 p-4">
+            <p class="text-xs text-slate-400 mb-3">Cargando docentes evaluados...</p>
           </div>
         </div>
       ))}
-      {items.length === 0 && <div class="text-center text-slate-400 dark:text-gray-500 py-12">No se encontraron coordinadores.</div>}
+      {items.length === 0 && <div class="text-center text-slate-400 py-12">No se encontraron coordinadores.</div>}
     </div>
     <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
@@ -79,9 +79,9 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
     try {
       var res = await fetch('/api/admin/docentes-evaluados?coordinador=' + coordId);
       var docentes = await res.json();
-      if (!docentes || docentes.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 dark:text-gray-500 text-center py-4">No ha evaluado docentes todavía.</p>'; return; }
-      container.innerHTML = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-left px-3 py-2 font-medium text-slate-600 dark:text-gray-200">Docente</th><th class="text-left px-3 py-2 font-medium text-slate-600 dark:text-gray-200">Email</th><th class="text-center px-3 py-2 font-medium text-slate-600 dark:text-gray-200">Acciones</th></tr></thead><tbody class="divide-y">' +
-        docentes.map(function(d){ return '<tr><td class="px-3 py-2 font-medium">'+d.nombre+' '+d.apellidos+'</td><td class="px-3 py-2 text-slate-500">'+d.email+'</td><td class="px-3 py-2 text-center"><a href="/admin/docentes?q='+encodeURIComponent(d.nombre+' '+d.apellidos)+'" class="px-2 py-1 rounded-lg bg-tup/10 dark:bg-blue-900/40 text-tup dark:text-blue-200 text-[10px] hover:bg-tup/20 mr-1">Ver desempeño</a></td></tr>' }).join('') +
+      if (!docentes || docentes.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No ha evaluado docentes todavía.</p>'; return; }
+      container.innerHTML = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-left px-3 py-2 font-medium text-slate-600">Docente</th><th class="text-left px-3 py-2 font-medium text-slate-600">Email</th><th class="text-center px-3 py-2 font-medium text-slate-600">Acciones</th></tr></thead><tbody class="divide-y">' +
+        docentes.map(function(d){ return '<tr><td class="px-3 py-2 font-medium">'+d.nombre+' '+d.apellidos+'</td><td class="px-3 py-2 text-slate-500">'+d.email+'</td><td class="px-3 py-2 text-center"><a href="/admin/docentes?q='+encodeURIComponent(d.nombre+' '+d.apellidos)+'" class="px-2 py-1 rounded-lg bg-tup/10 text-tup text-[10px] hover:bg-tup/20 mr-1">Ver desempeño</a></td></tr>' }).join('') +
         '</tbody></table>';
     } catch(err) { container.innerHTML = '<p class="text-xs text-red-500 text-center py-4">Error al cargar docentes</p>'; }
   }

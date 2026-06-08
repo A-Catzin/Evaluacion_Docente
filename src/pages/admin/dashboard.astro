@@ -124,7 +124,7 @@ const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bue
 filasTodas.forEach(f => { catCounts[f.cat360]++; });
 
 function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
-function colorN(n: number|null|undefined): string { if (!n) return 'text-slate-400'; if (n>=80) return 'text-emerald-500'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
+function colorN(n: number|null|undefined): string { if (!n) return 'text-slate-400'; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
 
 const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSeleccionado) || cuatrimestre;
 ---
@@ -134,43 +134,43 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
     <div class="flex items-center justify-between mb-6">
       <div><h1 class="text-3xl font-bold text-tup">Dashboard Administrativo</h1><p class="text-slate-500">{cuatrimestreSel?.nombre || 'Sin cuatrimestre activo'}</p></div>
       <form method="GET" class="flex items-center gap-2">
-        <select name="cuatrimestre" class="rounded-xl border border-slate-200 dark:border-gray-700 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id.toString()===idSeleccionado}>{c.nombre}</option>))}</select>
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id.toString()===idSeleccionado}>{c.nombre}</option>))}</select>
       </form>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 dark:text-gray-500 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup dark:text-blue-200 mt-1">{totalEvaluados}</p><p class="text-xs text-slate-400 dark:text-gray-500 mt-1">de {docentes.length} visibles</p></div>
-      <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 dark:text-gray-500 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup dark:text-blue-200 mt-1">{fmt(promInstitucional)}</p><p class="text-xs text-slate-400 dark:text-gray-500 mt-1">escala 0-100</p></div>
-      <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 dark:text-gray-500 uppercase">Distinguidos</p><p class="text-3xl font-bold text-emerald-500 mt-1">{pctSobresaliente}%</p><p class="text-xs text-slate-400 dark:text-gray-500 mt-1">≥80 puntos</p></div>
-      <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 dark:text-gray-500 uppercase">A Mejorar</p><p class="text-3xl font-bold text-red-500 mt-1">{catCounts['A mejorar'] + catCounts['Insuficiente']}</p><p class="text-xs text-slate-400 dark:text-gray-500 mt-1">&lt;60 puntos</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup mt-1">{totalEvaluados}</p><p class="text-xs text-slate-400 mt-1">de {docentes.length} visibles</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup mt-1">{fmt(promInstitucional)}</p><p class="text-xs text-slate-400 mt-1">escala 0-100</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Distinguidos</p><p class="text-3xl font-bold text-emerald-600 mt-1">{pctSobresaliente}%</p><p class="text-xs text-slate-400 mt-1">≥80 puntos</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">A Mejorar</p><p class="text-3xl font-bold text-red-500 mt-1">{catCounts['A mejorar'] + catCounts['Insuficiente']}</p><p class="text-xs text-slate-400 mt-1">&lt;60 puntos</p></div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-tarjeta">
-        <h3 class="text-sm font-semibold text-slate-700 dark:text-gray-200 mb-4">Distribución por Categoría</h3>
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
+        <h3 class="text-sm font-semibold text-slate-700 mb-4">Distribución por Categoría</h3>
         <div class="flex justify-center" style="max-height:280px"><canvas id="chart-cat" style="max-height:280px"></canvas></div>
       </div>
-      <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-tarjeta">
-        <h3 class="text-sm font-semibold text-slate-700 dark:text-gray-200 mb-4">Promedio por Instrumento</h3>
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
+        <h3 class="text-sm font-semibold text-slate-700 mb-4">Promedio por Instrumento</h3>
         <div class="flex justify-center" style="max-height:280px"><canvas id="chart-barras" style="max-height:280px"></canvas></div>
       </div>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
-        <input type="text" name="q" value={busqueda} placeholder="Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <input type="text" name="q" value={busqueda} placeholder="Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href="/admin/dashboard" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-gray-700 text-sm text-slate-500">Limpiar</a>)}
+        {busqueda && (<a href="/admin/dashboard" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-tarjeta overflow-hidden">
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       <div class="px-6 py-4 border-b flex items-center justify-between">
         <h2 class="font-semibold text-slate-700">Docentes ({filas.length})</h2>
         {busqueda && (<span class="text-xs text-slate-400">Filtrado: "{busqueda}"</span>)}
       </div>
       {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>) : (
-        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50 dark:bg-gray-700 border-b">
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b">
           <th class="text-center px-3 py-3 text-xs uppercase">Docente</th>
           <th class="text-center px-3 py-3 text-xs uppercase">Email</th>
           <th class="text-center px-2 py-3 text-xs uppercase">Prog.</th>
@@ -184,19 +184,19 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
           <th class="text-center px-2 py-3 text-xs uppercase">Ver</th>
         </tr></thead>
         <tbody class="divide-y">{filas.map(d => (
-          <tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50">
+          <tr class="hover:bg-slate-50">
             <td class="px-3 py-2 text-center font-medium">{d.nombre} {d.apellidos}</td>
-            <td class="px-3 py-2 text-center text-slate-600 dark:text-gray-200 text-xs">{d.email}</td>
-            <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600 dark:text-gray-200">{d.instrumentos}/5</span></td>
+            <td class="px-3 py-2 text-center text-slate-600 text-xs">{d.email}</td>
+            <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/5</span></td>
             <td class="px-2 py-2 text-center {colorN(d.promEst)}">{fmt(d.promEst)}</td>
             <td class="px-2 py-2 text-center {colorN(d.promCoord)}">{fmt(d.promCoord)}</td>
             <td class="px-2 py-2 text-center {colorN(d.promPlan)}">{fmt(d.promPlan)}</td>
             <td class="px-2 py-2 text-center {colorN(d.promObs)}">{fmt(d.promObs)}</td>
             <td class="px-2 py-2 text-center {colorN(d.promAuto)}">{fmt(d.promAuto)}</td>
             <td class="px-2 py-2 text-center font-bold {colorN(d.final360)}">{fmt(d.final360)}</td>
-            <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-gray-700 dark:text-gray-200">{d.cat360}</span></td>
+            <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{d.cat360}</span></td>
             <td class="px-2 py-2 text-center">
-              <button class="btn-ver-docente px-2 py-0.5 rounded-lg bg-tup/10 dark:bg-blue-900/40 text-tup dark:text-blue-200 text-[10px] font-medium hover:bg-tup/20" data-docente={JSON.stringify({id:d.id, nombre:d.nombre, apellidos:d.apellidos, promEst:d.promEst, promCoord:d.promCoord, promPlan:d.promPlan, promObs:d.promObs, promAuto:d.promAuto, final360:d.final360, cat360:d.cat360, instrumentos:d.instrumentos, visible:d.visible})}>📊 Ver</button>
+              <button class="btn-ver-docente px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20" data-docente={JSON.stringify({id:d.id, nombre:d.nombre, apellidos:d.apellidos, promEst:d.promEst, promCoord:d.promCoord, promPlan:d.promPlan, promObs:d.promObs, promAuto:d.promAuto, final360:d.final360, cat360:d.cat360, instrumentos:d.instrumentos, visible:d.visible})}>📊 Ver</button>
             </td>
           </tr>
         ))}</tbody></table></div>
@@ -206,7 +206,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
 
   <!-- Modal individual -->
   <div id="modal-docente" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm" onclick="if(event.target===this){var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')}">
-    <div class="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-modal max-w-lg w-full mx-4 max-h-[90vh] overflow-auto animate-flotar-entrada">
+    <div class="bg-white rounded-3xl p-6 shadow-modal max-w-lg w-full mx-4 max-h-[90vh] overflow-auto animate-flotar-entrada">
       <div class="flex items-center justify-between mb-4">
         <h3 id="modal-docente-titulo" class="text-lg font-bold text-tup"></h3>
         <div class="flex items-center gap-3">
@@ -214,10 +214,10 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
             <span id="toggle-label">Visible</span>
             <span class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" id="toggle-visible" class="sr-only peer" />
-              <div class="w-9 h-5 bg-slate-200 dark:bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white dark:bg-gray-800 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-tup"></div>
+              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-tup"></div>
             </span>
           </label>
-          <button onclick="var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')" class="text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:text-gray-200 text-xl">&times;</button>
+          <button onclick="var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
         </div>
       </div>
       <div id="modal-docente-body"></div>
@@ -261,15 +261,15 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
       
       // Scores en texto
       html += '<div class="grid grid-cols-5 gap-2 text-center text-xs mb-4">';
-      html += '<div><span class="text-slate-400">Est.</span><br/><span class="font-bold '+(d.promEst>=80?'text-emerald-500':d.promEst>=60?'text-amber-600':d.promEst>0?'text-red-600':'text-slate-300')+'">'+(d.promEst||'—')+'</span></div>';
-      html += '<div><span class="text-slate-400">Coord.</span><br/><span class="font-bold '+(d.promCoord>=80?'text-emerald-500':d.promCoord>=60?'text-amber-600':d.promCoord>0?'text-red-600':'text-slate-300')+'">'+(d.promCoord||'—')+'</span></div>';
-      html += '<div><span class="text-slate-400">Plan.</span><br/><span class="font-bold '+(d.promPlan>=80?'text-emerald-500':d.promPlan>=60?'text-amber-600':d.promPlan>0?'text-red-600':'text-slate-300')+'">'+(d.promPlan||'—')+'</span></div>';
-      html += '<div><span class="text-slate-400">Obs.</span><br/><span class="font-bold '+(d.promObs>=80?'text-emerald-500':d.promObs>=60?'text-amber-600':d.promObs>0?'text-red-600':'text-slate-300')+'">'+(d.promObs||'—')+'</span></div>';
-      html += '<div><span class="text-slate-400">Auto.</span><br/><span class="font-bold '+(d.promAuto>=80?'text-emerald-500':d.promAuto>=60?'text-amber-600':d.promAuto>0?'text-red-600':'text-slate-300')+'">'+(d.promAuto||'—')+'</span></div>';
+      html += '<div><span class="text-slate-400">Est.</span><br/><span class="font-bold '+(d.promEst>=80?'text-emerald-600':d.promEst>=60?'text-amber-600':d.promEst>0?'text-red-600':'text-slate-300')+'">'+(d.promEst||'—')+'</span></div>';
+      html += '<div><span class="text-slate-400">Coord.</span><br/><span class="font-bold '+(d.promCoord>=80?'text-emerald-600':d.promCoord>=60?'text-amber-600':d.promCoord>0?'text-red-600':'text-slate-300')+'">'+(d.promCoord||'—')+'</span></div>';
+      html += '<div><span class="text-slate-400">Plan.</span><br/><span class="font-bold '+(d.promPlan>=80?'text-emerald-600':d.promPlan>=60?'text-amber-600':d.promPlan>0?'text-red-600':'text-slate-300')+'">'+(d.promPlan||'—')+'</span></div>';
+      html += '<div><span class="text-slate-400">Obs.</span><br/><span class="font-bold '+(d.promObs>=80?'text-emerald-600':d.promObs>=60?'text-amber-600':d.promObs>0?'text-red-600':'text-slate-300')+'">'+(d.promObs||'—')+'</span></div>';
+      html += '<div><span class="text-slate-400">Auto.</span><br/><span class="font-bold '+(d.promAuto>=80?'text-emerald-600':d.promAuto>=60?'text-amber-600':d.promAuto>0?'text-red-600':'text-slate-300')+'">'+(d.promAuto||'—')+'</span></div>';
       html += '</div>';
       
       var fin = d.final360 != null ? Math.round(d.final360) : null;
-      html += '<div class="flex items-center justify-between bg-slate-50 dark:bg-gray-700 rounded-xl p-3"><span class="text-sm">Calificación final: <b>'+(fin||'—')+'</b></span><span class="px-2 py-0.5 rounded text-xs font-medium bg-slate-200 dark:bg-gray-600">'+d.cat360+'</span></div>';
+      html += '<div class="flex items-center justify-between bg-slate-50 rounded-xl p-3"><span class="text-sm">Calificación final: <b>'+(fin||'—')+'</b></span><span class="px-2 py-0.5 rounded text-xs font-medium bg-slate-200">'+d.cat360+'</span></div>';
 
       document.getElementById('modal-docente-body').innerHTML = html;
       
@@ -287,13 +287,13 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
             labels: ['Est.','Coord.','Plan.','Obs.','Auto.'],
             datasets: [{
               data: [d.promEst||0, d.promCoord||0, d.promPlan||0, d.promObs||0, d.promAuto||0],
-              backgroundColor: ['#10B981','#3b82f6','#a855f7','#f59e0b','#f97316'],
-              borderRadius: 6, borderWidth: 0
+              backgroundColor: ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316'],
+              borderRadius: 4, borderWidth: 0
             }]
           },
           options: {
             responsive: true, maintainAspectRatio: true,
-            scales: { y: { beginAtZero: true, max: 100, grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } },
+            scales: { y: { beginAtZero: true, max: 100, ticks: { font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } },
             plugins: { legend: { display: false } }
           }
         });
@@ -316,7 +316,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
     var avgData = JSON.parse(avgJson);
     var labels = Object.keys(catData);
     var values = Object.values(catData);
-    var bgColors = ['#10B981','#3b82f6','#a855f7','#f59e0b','#f97316','#ef4444','#fbbf24','#94a3b8'];
+    var bgColors = ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316','#ef4444','#fbbf24','#94a3b8'];
 
     // Barras horizontales — distribución por categoría
     var ctxCat = document.getElementById('chart-cat');
@@ -333,14 +333,13 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
       });
     }
 
-    // Barras verticales — promedio por instrumento
     var ctxBarras = document.getElementById('chart-barras');
     if (ctxBarras) {
       new Chart(ctxBarras, {
         type: 'bar',
         data: {
           labels: ['Estudiante','Coordinación','Planeación','Observación','Autodiagnóstico'],
-          datasets: [{ data: avgData, backgroundColor: ['#10B981','#3b82f6','#a855f7','#f59e0b','#f97316'], borderRadius: 6, borderWidth: 0 }]
+          datasets: [{ data: avgData, backgroundColor: ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316'], borderRadius: 6, borderWidth: 0 }]
         },
         options: {
           responsive: true, maintainAspectRatio: true,

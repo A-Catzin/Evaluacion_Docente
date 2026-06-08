@@ -4,35 +4,58 @@ export interface Props { titulo?: string; }
 const { titulo = 'Admin — SED-360' } = Astro.props;
 
 const grupos = [
-  { nombre: 'Académico', icono: '🎓', items: ['ofertas','asignaturas','cuatrimestres','campus','turnos'], labels: ['Ofertas Académicas','Asignaturas','Cuatrimestres','Campus','Turnos'], icons: ['🎓','📚','📅','🏫','🕐'] },
-  { nombre: 'Personal', icono: '👥', items: ['docentes','coordinadores','usuarios'], labels: ['Docentes','Coordinadores','Usuarios'], icons: ['👨‍🏫','📊','👥'] },
-  { nombre: 'Configuración', icono: '⚙️', items: ['instrumentos','roles'], labels: ['Instrumentos','Roles'], icons: ['📋','🔑'] }
+  {
+    nombre: 'Académico', icono: '🎓',
+    items: ['ofertas','asignaturas','cuatrimestres','campus','turnos'],
+    labels: ['Ofertas Académicas','Asignaturas','Cuatrimestres','Campus','Turnos'],
+    icons: ['🎓','📚','📅','🏫','🕐']
+  },
+  {
+    nombre: 'Personal', icono: '👥',
+    items: ['docentes','coordinadores','usuarios'],
+    labels: ['Docentes','Coordinadores','Usuarios'],
+    icons: ['👨‍🏫','📊','👥']
+  },
+  {
+    nombre: 'Configuración', icono: '⚙️',
+    items: ['instrumentos','roles'],
+    labels: ['Instrumentos','Roles'],
+    icons: ['📋','🔑']
+  }
 ];
 ---
 
 <BaseLayout titulo={titulo}>
   <div class="flex min-h-screen">
-    <aside class="w-64 bg-white dark:bg-gray-800 border-r border-slate-200 dark:border-gray-700 flex-shrink-0 hidden lg:flex flex-col">
-      <div class="p-6 border-b border-slate-100 dark:border-gray-700">
+    <aside class="w-64 bg-white border-r border-slate-200 flex-shrink-0 hidden lg:flex flex-col">
+      <div class="p-6 border-b border-slate-100">
         <a href="/admin/dashboard" class="flex items-center gap-3">
-          <img src="/logo-tup.png" alt="TUP" class="w-44 h-44 object-contain " />
-          <span class="font-semibold text-tup dark:text-blue-200 text-lg">SED-360</span>
+          <img src="/logo-tup.png" alt="TUP" class="w-44 h-44 object-contain" />
+          <span class="font-semibold text-tup text-lg">SED-360</span>
         </a>
       </div>
 
       <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
-        <a href="/admin/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 dark:text-gray-200 hover:bg-tup/5 dark:hover:bg-gray-700 transition-colors">📊 Dashboard</a>
-        <a href="/admin/importar" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 dark:text-gray-200 hover:bg-tup/5 dark:hover:bg-gray-700 transition-colors">📤 Importar CSV</a>
+        <!-- Dashboard (siempre visible) -->
+        <a href="/admin/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
+          📊 Dashboard
+        </a>
 
+        <!-- Importar (siempre visible) -->
+        <a href="/admin/importar" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
+          📤 Importar CSV
+        </a>
+
+        <!-- Grupos colapsables -->
         {grupos.map(g => (
           <div>
-            <button type="button" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 dark:text-gray-500 uppercase tracking-wider hover:text-slate-600 dark:hover:text-gray-300 transition-colors" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')">
+            <button type="button" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')">
               <span>{g.icono} {g.nombre}</span>
               <svg class="w-3.5 h-3.5 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
             <div class="space-y-0.5 ml-3 mt-1">
               {g.items.map((item, i) => (
-                <a href={`/admin/${item}`} class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 dark:text-gray-400 hover:bg-tup/5 dark:hover:bg-gray-700 hover:text-tup dark:hover:text-blue-300 transition-colors">
+                <a href={`/admin/${item}`} class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-tup/5 hover:text-tup transition-colors">
                   <span class="text-xs">{g.icons[i]}</span> {g.labels[i]}
                 </a>
               ))}
@@ -41,8 +64,10 @@ const grupos = [
         ))}
       </nav>
 
-      <div class="p-4 border-t border-slate-100 dark:border-gray-700">
-        <a href="/api/auth/signout" class="flex items-center gap-2 text-xs text-slate-400 dark:text-gray-500 hover:text-red-500 transition-colors">🚪 Cerrar Sesión</a>
+      <div class="p-4 border-t border-slate-100">
+        <a href="/api/auth/signout" class="flex items-center gap-2 text-xs text-slate-400 hover:text-red-500 transition-colors">
+          🚪 Cerrar Sesión
+        </a>
       </div>
     </aside>
 
