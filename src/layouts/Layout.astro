@@ -39,18 +39,9 @@ const { titulo = 'SED-360', descripcion = 'Plataforma de Evaluacion Docente 360 
       )}
     </div>
 
-    <button id="toggle-dark" class="fixed bottom-4 right-4 z-50 w-10 h-10 rounded-full bg-white dark:bg-gray-700 shadow-tarjeta flex items-center justify-center text-lg hover:shadow-tarjeta-hover transition-all" aria-label="Cambiar tema">
-      <span id="icon-dark" class="hidden dark:inline">☀️</span>
-      <span id="icon-light" class="inline dark:hidden">🌙</span>
-    </button>
   </body>
 </html>
 <script is:inline>
-  var h=document.documentElement,tg=document.getElementById('toggle-dark'),il=document.getElementById('icon-light'),id=document.getElementById('icon-dark');
-  function ap(t){if(t==='dark'){h.classList.add('dark');il.classList.add('hidden');il.classList.remove('inline');id.classList.remove('hidden');id.classList.add('inline')}else{h.classList.remove('dark');id.classList.add('hidden');id.classList.remove('inline');il.classList.remove('hidden');il.classList.add('inline')}}
-  var g=localStorage.getItem('tema');if(g)ap(g);else if(window.matchMedia('(prefers-color-scheme:dark)').matches)ap('dark');
-  tg.addEventListener('click',function(){var n=h.classList.contains('dark')?'light':'dark';ap(n);localStorage.setItem('tema',n)});
-</script>
 <style is:global>
   html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}body{min-height:100dvh}@media(max-width:640px){html{font-size:15px}}button,a[role='button']{min-height:44px;min-width:44px}::selection{background-color:rgba(27,57,106,.2);color:#1B396A}
 </style>

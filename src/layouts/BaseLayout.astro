@@ -27,39 +27,5 @@ const { titulo = 'SED-360', descripcion = 'Plataforma de Evaluacion Docente 360 
     <slot />
 
     <!-- Toggle Dark Mode -->
-    <button id="toggle-dark" class="fixed bottom-4 right-4 z-50 w-10 h-10 rounded-full bg-white dark:bg-gray-700 shadow-tarjeta flex items-center justify-center text-lg hover:shadow-tarjeta-hover transition-all" title="Cambiar tema" aria-label="Cambiar tema claro/oscuro">
-      <span id="icon-dark" class="hidden dark:inline">☀️</span>
-      <span id="icon-light" class="inline dark:hidden">🌙</span>
-    </button>
   </body>
 </html>
-<script is:inline>
-  var html = document.documentElement;
-  var toggle = document.getElementById('toggle-dark');
-  var iconL = document.getElementById('icon-light');
-  var iconD = document.getElementById('icon-dark');
-
-  function aplicar(tema) {
-    if (tema === 'dark') { html.classList.add('dark'); iconL.classList.add('hidden'); iconL.classList.remove('inline'); iconD.classList.remove('hidden'); iconD.classList.add('inline'); }
-    else { html.classList.remove('dark'); iconD.classList.add('hidden'); iconD.classList.remove('inline'); iconL.classList.remove('hidden'); iconL.classList.add('inline'); }
-  }
-
-  // Inicializar
-  var guardado = localStorage.getItem('tema');
-  if (guardado) { aplicar(guardado); }
-  else if (window.matchMedia('(prefers-color-scheme: dark)').matches) { aplicar('dark'); }
-
-  toggle.addEventListener('click', function() {
-    var nuevo = html.classList.contains('dark') ? 'light' : 'dark';
-    aplicar(nuevo);
-    localStorage.setItem('tema', nuevo);
-  });
-</script>
-
-<style is:global>
-  html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
-  body { min-height: 100dvh; }
-  @media (max-width: 640px) { html { font-size: 15px; } }
-  button, a[role='button'] { min-height: 44px; min-width: 44px; }
-  ::selection { background-color: rgba(30, 58, 95, 0.2); color: #1e3a5f; }
-</style>
