@@ -59,8 +59,8 @@ const observacionesGrupo = [
             </div>
             <div class="grid grid-cols-3 gap-4 mb-4">
               <div class="text-center"><p class="text-2xl font-bold text-tup">{inst.total}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Evaluaciones</p></div>
-              <div class="text-center"><p class="text-2xl font-bold text-slate-600">{inst.reactivos}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Reactivos</p></div>
-              <div class="text-center"><p class="text-2xl font-bold text-slate-600">{inst.escala}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Escala</p></div>
+              <div class="text-center"><p class="text-2xl font-bold text-slate-600 dark:text-gray-200">{inst.reactivos}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Reactivos</p></div>
+              <div class="text-center"><p class="text-2xl font-bold text-slate-600 dark:text-gray-200">{inst.escala}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Escala</p></div>
             </div>
             <div class="w-full h-1.5 bg-slate-100 dark:bg-gray-700 rounded-full overflow-hidden mb-1">
               <div class="h-full rounded-full bg-tup" style={`width:${totalDocentes ? Math.min(100, ((inst.total || 0) / (totalDocentes || 1)) * 100) : 0}%`}></div>
@@ -92,7 +92,7 @@ const observacionesGrupo = [
               <h4 class="font-semibold text-slate-700 dark:text-gray-200 mb-3">{obs.nombre}</h4>
               <div class="grid grid-cols-2 gap-2 mb-3 text-center">
                 <div><p class="text-lg font-bold text-tup">{obs.total}</p><p class="text-[9px] text-slate-400">Eval.</p></div>
-                <div><p class="text-lg font-bold text-slate-600">{obs.reactivos}</p><p class="text-[9px] text-slate-400">Reactivos</p></div>
+                <div><p class="text-lg font-bold text-slate-600 dark:text-gray-200">{obs.reactivos}</p><p class="text-[9px] text-slate-400">Reactivos</p></div>
               </div>
               <div class="flex gap-2">
                 <a href={obs.ruta} class="flex-1 text-center text-[11px] text-tup dark:text-blue-200 hover:underline">Ir →</a>

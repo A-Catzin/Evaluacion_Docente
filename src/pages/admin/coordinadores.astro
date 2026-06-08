@@ -80,7 +80,7 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
       var res = await fetch('/api/admin/docentes-evaluados?coordinador=' + coordId);
       var docentes = await res.json();
       if (!docentes || docentes.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 dark:text-gray-500 text-center py-4">No ha evaluado docentes todavía.</p>'; return; }
-      container.innerHTML = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-left px-3 py-2 font-medium text-slate-600">Docente</th><th class="text-left px-3 py-2 font-medium text-slate-600">Email</th><th class="text-center px-3 py-2 font-medium text-slate-600">Acciones</th></tr></thead><tbody class="divide-y">' +
+      container.innerHTML = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-left px-3 py-2 font-medium text-slate-600 dark:text-gray-200">Docente</th><th class="text-left px-3 py-2 font-medium text-slate-600 dark:text-gray-200">Email</th><th class="text-center px-3 py-2 font-medium text-slate-600 dark:text-gray-200">Acciones</th></tr></thead><tbody class="divide-y">' +
         docentes.map(function(d){ return '<tr><td class="px-3 py-2 font-medium">'+d.nombre+' '+d.apellidos+'</td><td class="px-3 py-2 text-slate-500">'+d.email+'</td><td class="px-3 py-2 text-center"><a href="/admin/docentes?q='+encodeURIComponent(d.nombre+' '+d.apellidos)+'" class="px-2 py-1 rounded-lg bg-tup/10 dark:bg-blue-900/40 text-tup dark:text-blue-200 text-[10px] hover:bg-tup/20 mr-1">Ver desempeño</a></td></tr>' }).join('') +
         '</tbody></table>';
     } catch(err) { container.innerHTML = '<p class="text-xs text-red-500 text-center py-4">Error al cargar docentes</p>'; }

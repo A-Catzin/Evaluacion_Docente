@@ -37,7 +37,7 @@ const items = busqueda ? ofertas.filter(o => o.nombre.toLowerCase().includes(bus
         <div class="p-12 text-center text-slate-400">No hay ofertas académicas.</div>
       ) : (
         <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Estado</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200 w-36">Acciones</th></tr></thead>
+          <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Estado</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200 w-36">Acciones</th></tr></thead>
           <tbody class="divide-y">
             {items.map(o => (
               <tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50" id={`row-${o.id}`}>

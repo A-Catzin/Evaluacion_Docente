@@ -37,7 +37,7 @@ const nombres: Record<string,string> = { autodiagnostico:'Autoevaluación Docent
             <div id="lista-opciones" class="space-y-1 mb-2"></div>
             <div class="flex gap-2">
               <input type="text" id="input-opcion" placeholder="Agregar opción..." class="flex-1 rounded-lg border border-slate-200 dark:border-gray-700 px-3 py-1.5 text-xs" />
-              <button type="button" id="btn-agregar-opcion" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-gray-700 text-xs font-medium hover:bg-slate-200">+</button>
+              <button type="button" id="btn-agregar-opcion" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-gray-700 text-xs font-medium hover:bg-slate-200 dark:bg-gray-600">+</button>
             </div>
           </div>
         </div>
@@ -60,7 +60,7 @@ const nombres: Record<string,string> = { autodiagnostico:'Autoevaluación Docent
               </div>
             </div>
             <div class="flex gap-1 flex-shrink-0">
-              <button class="btn-editar text-[10px] px-2 py-1 rounded-lg bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-gray-200 hover:bg-slate-200" data-id={p.id}>✏️</button>
+              <button class="btn-editar text-[10px] px-2 py-1 rounded-lg bg-slate-100 dark:bg-gray-700 text-slate-600 dark:text-gray-200 hover:bg-slate-200 dark:bg-gray-600" data-id={p.id}>✏️</button>
               <button class="btn-guardar text-[10px] px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 hidden" data-id={p.id}>💾</button>
               <button class={`toggle-btn text-[10px] px-2 py-1 rounded-lg ${p.activa?'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300':'bg-slate-100 dark:bg-gray-700 dark:bg-gray-700 text-slate-400 dark:text-gray-300'}`} data-id={p.id} data-activa={p.activa}>{p.activa?'ON':'OFF'}</button>
               <button class="btn-eliminar text-[10px] px-2 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100" data-id={p.id}>🗑️</button>
