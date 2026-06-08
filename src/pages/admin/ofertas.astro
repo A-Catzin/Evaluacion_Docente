@@ -11,49 +11,49 @@ const items = busqueda ? ofertas.filter(o => o.nombre.toLowerCase().includes(bus
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Ofertas Académicas</h1>
-      <button id="btn-limpiar" class="px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-medium hover:bg-amber-100 border border-amber-200">🧹 Limpiar duplicados</button>
+      <button id="btn-limpiar" class="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-xs font-medium hover:bg-amber-100 border border-amber-200">🧹 Limpiar duplicados</button>
     </div>
 
     <!-- Buscador -->
-    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
-        <input type="text" name="q" value={busqueda} placeholder="Buscar carrera..." class="flex-1 rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <input type="text" name="q" value={busqueda} placeholder="Buscar carrera..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href="/admin/ofertas" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-gray-700 text-sm text-slate-500">Limpiar</a>)}
+        {busqueda && (<a href="/admin/ofertas" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
     <!-- Formulario para agregar -->
-    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form id="form-nueva" class="flex gap-3">
-        <input type="text" id="input-nombre" placeholder="Nombre de la carrera..." class="flex-1 rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <input type="text" id="input-nombre" placeholder="Nombre de la carrera..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium hover:bg-tup/90">Agregar</button>
       </form>
     </div>
 
     <!-- Tabla -->
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-tarjeta overflow-hidden">
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       {items.length === 0 ? (
         <div class="p-12 text-center text-slate-400">No hay ofertas académicas.</div>
       ) : (
         <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Estado</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200 w-36">Acciones</th></tr></thead>
+          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Estado</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 w-36">Acciones</th></tr></thead>
           <tbody class="divide-y">
             {items.map(o => (
-              <tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50" id={`row-${o.id}`}>
+              <tr class="hover:bg-slate-50" id={`row-${o.id}`}>
                 <td class="px-4 py-3">
                   <span class="oferta-nombre">{o.nombre}</span>
-                  <input type="text" class="oferta-edit hidden rounded-lg border border-slate-200 dark:border-gray-700 px-2 py-1 text-sm w-full" value={o.nombre} />
+                  <input type="text" class="oferta-edit hidden rounded-lg border border-slate-200 px-2 py-1 text-sm w-full" value={o.nombre} />
                 </td>
                 <td class="px-4 py-3 text-center">
-                  <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${o.activa ? 'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-gray-700 dark:bg-gray-700 text-slate-400 dark:text-gray-300'}`} data-id={o.id} data-activa={o.activa}>
+                  <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${o.activa ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`} data-id={o.id} data-activa={o.activa}>
                     {o.activa ? 'Activa' : 'Inactiva'}
                   </button>
                 </td>
                 <td class="px-4 py-3 text-center">
-                  <button class="btn-editar text-xs text-tup dark:text-blue-200 hover:underline mr-2" data-id={o.id}>Editar</button>
-                  <button class="btn-guardar text-xs text-emerald-500 hover:underline mr-2 hidden" data-id={o.id}>Guardar</button>
-                  <button class="btn-cancelar text-xs text-slate-400 dark:text-gray-500 hover:underline mr-2 hidden" data-id={o.id}>Cancelar</button>
+                  <button class="btn-editar text-xs text-tup hover:underline mr-2" data-id={o.id}>Editar</button>
+                  <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-2 hidden" data-id={o.id}>Guardar</button>
+                  <button class="btn-cancelar text-xs text-slate-400 hover:underline mr-2 hidden" data-id={o.id}>Cancelar</button>
                   <button class="btn-eliminar text-xs text-red-500 hover:underline" data-id={o.id}>Eliminar</button>
                 </td>
               </tr>

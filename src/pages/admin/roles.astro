@@ -19,7 +19,7 @@ try {
 
 const ROLES: RolUsuario[] = ['superadmin','coordinador','docente','observador'];
 const ETIQUETAS: Record<string,string> = {superadmin:'Administrador',coordinador:'Coordinador',docente:'Docente',observador:'Observador'};
-const COLOR: Record<string,string> = {superadmin:'bg-purple-50 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300',coordinador:'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 dark:text-blue-300',docente:'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',observador:'bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'};
+const COLOR: Record<string,string> = {superadmin:'bg-purple-50 text-purple-700',coordinador:'bg-blue-50 text-blue-700',docente:'bg-emerald-50 text-emerald-700',observador:'bg-amber-50 text-amber-700'};
 ---
 
 <LayoutAdmin titulo="Roles — Admin">
@@ -29,27 +29,27 @@ const COLOR: Record<string,string> = {superadmin:'bg-purple-50 dark:bg-purple-90
       <span class="text-sm text-slate-400">{usuarios.length} usuarios</span>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex flex-wrap gap-3 items-center">
-        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 min-w-[200px] rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
-        <select name="rol" class="rounded-xl border border-slate-200 dark:border-gray-700 px-3 py-2.5 text-sm" onchange="this.form.submit()">
+        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 min-w-[200px] rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <select name="rol" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
           <option value="">Todos</option>
           {ROLES.map(r => (<option value={r} selected={rolFiltro === r}>{ETIQUETAS[r]}</option>))}
         </select>
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Filtrar</button>
-        {(busqueda || rolFiltro) && (<a href="/admin/roles" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-gray-700 text-sm text-slate-500">Limpiar</a>)}
+        {(busqueda || rolFiltro) && (<a href="/admin/roles" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
-    {errorMsg && (<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-700 dark:text-red-300 text-sm mb-6">{errorMsg}</div>)}
+    {errorMsg && (<div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm mb-6">{errorMsg}</div>)}
 
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-tarjeta overflow-hidden">
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       {usuarios.length === 0 ? (
         <div class="p-12 text-center text-slate-400">No se encontraron usuarios.</div>
       ) : (
         <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Usuario</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Email</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Rol Actual</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200">Cambiar a</th></tr></thead>
-          <tbody class="divide-y">{usuarios.map(u => (<tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50"><td class="px-4 py-3 font-medium">{u.nombre_completo}</td><td class="px-4 py-3 text-slate-600 dark:text-gray-200 text-xs">{u.email}</td><td class="px-4 py-3 text-center"><span class={`px-2.5 py-1 rounded-lg text-xs font-medium ${COLOR[u.rol]}`}>{ETIQUETAS[u.rol]}</span></td><td class="px-4 py-3"><div class="flex justify-center gap-1">{ROLES.filter(r => r !== u.rol).map(r => (<button class={`px-2.5 py-1 rounded-lg text-xs font-medium border hover:opacity-80 transition-opacity ${COLOR[r]}`} onclick={`cambiarRol('${u.id}','${r}',this)`}>{ETIQUETAS[r]}</button>))}</div></td></tr>))}</tbody>
+          <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Usuario</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Rol Actual</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Cambiar a</th></tr></thead>
+          <tbody class="divide-y">{usuarios.map(u => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium">{u.nombre_completo}</td><td class="px-4 py-3 text-slate-600 text-xs">{u.email}</td><td class="px-4 py-3 text-center"><span class={`px-2.5 py-1 rounded-lg text-xs font-medium ${COLOR[u.rol]}`}>{ETIQUETAS[u.rol]}</span></td><td class="px-4 py-3"><div class="flex justify-center gap-1">{ROLES.filter(r => r !== u.rol).map(r => (<button class={`px-2.5 py-1 rounded-lg text-xs font-medium border hover:opacity-80 transition-opacity ${COLOR[r]}`} onclick={`cambiarRol('${u.id}','${r}',this)`}>{ETIQUETAS[r]}</button>))}</div></td></tr>))}</tbody>
         </table>
       )}
     </div>

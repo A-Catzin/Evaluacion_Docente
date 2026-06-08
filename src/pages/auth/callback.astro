@@ -25,7 +25,7 @@ import Layout from '../../layouts/Layout.astro';
 
     function log(texto, error) {
       var div = document.createElement('div');
-      div.className = 'py-1 px-2 rounded mb-1 ' + (error ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600 dark:text-gray-200');
+      div.className = 'py-1 px-2 rounded mb-1 ' + (error ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600');
       div.textContent = texto;
       if (debugEl) debugEl.appendChild(div);
     }
@@ -33,7 +33,7 @@ import Layout from '../../layouts/Layout.astro';
     function setEstado(texto, error) {
       if (estadoEl) {
         estadoEl.textContent = texto;
-        estadoEl.className = 'text-sm ' + (error ? 'text-red-600 dark:text-red-400 font-medium' : 'text-slate-500');
+        estadoEl.className = 'text-sm ' + (error ? 'text-red-600 font-medium' : 'text-slate-500');
       }
       if (error && spinnerEl) spinnerEl.classList.add('hidden');
     }
