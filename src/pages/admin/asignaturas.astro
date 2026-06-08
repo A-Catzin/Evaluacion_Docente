@@ -14,7 +14,7 @@ if (busqueda) { const t = busqueda.toLowerCase(); items = items.filter(a => a.no
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Asignaturas</h1><span class="text-sm text-slate-400">{items.length} materias</span></div>
 
-    <div class="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3 items-center">
         <input type="text" name="q" value={busqueda} placeholder="Buscar por clave o nombre..." class="flex-1 rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
@@ -22,7 +22,7 @@ if (busqueda) { const t = busqueda.toLowerCase(); items = items.filter(a => a.no
       </form>
     </div>
 
-    <div class="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-tarjeta mb-6">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-tarjeta mb-6">
       <form id="form-nueva" class="flex gap-3">
         <input type="text" id="input-clave" placeholder="Clave" class="w-24 rounded-xl border border-slate-200 dark:border-gray-700 px-3 py-2.5 text-sm" />
         <input type="text" id="input-nombre" placeholder="Nombre *" required class="flex-1 rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-2.5 text-sm" />
@@ -30,17 +30,17 @@ if (busqueda) { const t = busqueda.toLowerCase(); items = items.filter(a => a.no
       </form>
     </div>
 
-    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-tarjeta overflow-hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-tarjeta overflow-hidden">
       {items.length === 0 ? (<div class="p-12 text-center text-slate-400">No hay asignaturas.</div>) : (
         <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 dark:bg-gray-800 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-300 w-32">Acciones</th></tr></thead>
+          <thead><tr class="bg-slate-50 dark:bg-gray-700 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 dark:text-gray-200 w-32">Acciones</th></tr></thead>
           <tbody class="divide-y">{items.map(a => (
-            <tr class="hover:bg-slate-50 dark:hover:bg-gray-800/50 dark:bg-gray-800" id={`row-${a.id}`}>
+            <tr class="hover:bg-slate-50 dark:hover:bg-gray-700/50" id={`row-${a.id}`}>
               <td class="px-4 py-3 font-mono text-xs"><span class="texto-clave">{a.clave || '—'}</span><input type="text" class="edit-clave hidden rounded-lg border border-slate-200 dark:border-gray-700 px-2 py-1 text-xs w-20" value={a.clave || ''} /></td>
               <td class="px-4 py-3"><span class="texto-nombre font-medium">{a.nombre}</span><input type="text" class="edit-nombre hidden rounded-lg border border-slate-200 dark:border-gray-700 px-2 py-1 text-sm w-full" value={a.nombre} /></td>
               <td class="px-4 py-3 text-center">
-                <button class="btn-editar text-xs text-tup dark:text-blue-300 hover:underline mr-2" data-id={a.id}>Editar</button>
-                <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-2 hidden" data-id={a.id}>Guardar</button>
+                <button class="btn-editar text-xs text-tup dark:text-blue-200 hover:underline mr-2" data-id={a.id}>Editar</button>
+                <button class="btn-guardar text-xs text-emerald-500 hover:underline mr-2 hidden" data-id={a.id}>Guardar</button>
                 <button class="btn-cancelar text-xs text-slate-400 dark:text-gray-500 hover:underline mr-2 hidden" data-id={a.id}>Cancelar</button>
                 <button class="btn-eliminar text-xs text-red-500 hover:underline" data-id={a.id}>Eliminar</button>
               </td>
