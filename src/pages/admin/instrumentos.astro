@@ -29,21 +29,21 @@ const observacionesGrupo = [
 
 <LayoutAdmin titulo="Instrumentos — Admin">
   <div class="animate-flotar-entrada">
-    <h1 class="text-3xl font-bold text-tup mb-2">Estado de Instrumentos</h1>
-    <p class="text-slate-500 mb-6">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'} · {totalDocentes || 0} docentes</p>
+    <h1 class="text-3xl font-bold text-tup dark:text-blue-300 mb-2">Estado de Instrumentos</h1>
+    <p class="text-slate-500 dark:text-gray-400 mb-6">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'} · {totalDocentes || 0} docentes</p>
 
     <!-- Ponderación -->
-    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8">
-      <h2 class="text-lg font-bold text-tup mb-4">Fórmula de Ponderación 360°</h2>
+    <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-tarjeta mb-8">
+      <h2 class="text-lg font-bold text-tup dark:text-blue-300 mb-4">Fórmula de Ponderación 360°</h2>
       <div class="flex flex-wrap gap-2">
         <span class="px-4 py-2 rounded-xl bg-tup text-white font-bold text-lg">EE 35%</span>
-        <span class="text-slate-400 text-2xl self-center">+</span>
+        <span class="text-slate-400 dark:text-gray-500 text-2xl self-center">+</span>
         <span class="px-4 py-2 rounded-xl bg-purple-600 text-white font-bold text-lg">CA 20%</span>
-        <span class="text-slate-400 text-2xl self-center">+</span>
+        <span class="text-slate-400 dark:text-gray-500 text-2xl self-center">+</span>
         <span class="px-4 py-2 rounded-xl bg-amber-500 text-white font-bold text-lg">PD 15%</span>
-        <span class="text-slate-400 text-2xl self-center">+</span>
+        <span class="text-slate-400 dark:text-gray-500 text-2xl self-center">+</span>
         <span class="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-lg">OC 25%</span>
-        <span class="text-slate-400 text-2xl self-center">+</span>
+        <span class="text-slate-400 dark:text-gray-500 text-2xl self-center">+</span>
         <span class="px-4 py-2 rounded-xl bg-purple-400 text-white font-bold text-lg">AE 5%</span>
       </div>
     </div>
@@ -51,23 +51,23 @@ const observacionesGrupo = [
     <!-- 4 instrumentos principales -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       {instrumentos.map(inst => (
-        <div class={`bg-white rounded-2xl shadow-tarjeta border-l-4 ${inst.color} overflow-hidden`}>
+        <div class={`bg-white dark:bg-gray-900 rounded-2xl shadow-tarjeta border-l-4 ${inst.color} overflow-hidden`}>
           <div class="p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-bold text-slate-800">{inst.nombre}</h3>
               <span class="px-3 py-1 rounded-xl bg-slate-100 text-xs font-bold">{inst.peso}</span>
             </div>
             <div class="grid grid-cols-3 gap-4 mb-4">
-              <div class="text-center"><p class="text-2xl font-bold text-tup">{inst.total}</p><p class="text-[10px] text-slate-400 uppercase">Evaluaciones</p></div>
-              <div class="text-center"><p class="text-2xl font-bold text-slate-600">{inst.reactivos}</p><p class="text-[10px] text-slate-400 uppercase">Reactivos</p></div>
-              <div class="text-center"><p class="text-2xl font-bold text-slate-600">{inst.escala}</p><p class="text-[10px] text-slate-400 uppercase">Escala</p></div>
+              <div class="text-center"><p class="text-2xl font-bold text-tup">{inst.total}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Evaluaciones</p></div>
+              <div class="text-center"><p class="text-2xl font-bold text-slate-600">{inst.reactivos}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Reactivos</p></div>
+              <div class="text-center"><p class="text-2xl font-bold text-slate-600">{inst.escala}</p><p class="text-[10px] text-slate-400 dark:text-gray-500 uppercase">Escala</p></div>
             </div>
             <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mb-1">
               <div class="h-full rounded-full bg-tup" style={`width:${totalDocentes ? Math.min(100, ((inst.total || 0) / (totalDocentes || 1)) * 100) : 0}%`}></div>
             </div>
             <p class="text-[10px] text-slate-400">{totalDocentes ? Math.round(((inst.total || 0) / (totalDocentes || 1)) * 100) : 0}% de docentes</p>
             <div class="flex gap-2 mt-4">
-              {inst.ruta && <a href={inst.ruta} class="text-xs text-tup hover:underline">Ir al formulario →</a>}
+              {inst.ruta && <a href={inst.ruta} class="text-xs text-tup dark:text-blue-300 hover:underline">Ir al formulario →</a>}
               {inst.editar && <a href={inst.editar} class="text-xs text-purple-600 hover:underline">✏️ Editar</a>}
               {!inst.ruta && <span class="text-xs text-slate-400">Próximamente</span>}
             </div>
@@ -77,25 +77,25 @@ const observacionesGrupo = [
     </div>
 
     <!-- Observación de Clase (agrupada) -->
-    <div class="bg-white rounded-2xl shadow-tarjeta border-l-4 border-l-blue-500 overflow-hidden">
-      <button type="button" class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50" onclick="this.parentElement.querySelector('.obs-content').classList.toggle('hidden')">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-tarjeta border-l-4 border-l-blue-500 overflow-hidden">
+      <button type="button" class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-gray-800/50 dark:bg-gray-800" onclick="this.parentElement.querySelector('.obs-content').classList.toggle('hidden')">
         <div>
           <h2 class="text-lg font-bold text-slate-800">Observación de Clase <span class="text-sm font-normal text-slate-400">(3 modalidades)</span></h2>
           <p class="text-xs text-slate-400">Peso: 25% · Escala: 1-5 + N/A</p>
         </div>
-        <svg class="w-5 h-5 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        <svg class="w-5 h-5 text-slate-400 dark:text-gray-500 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div class="obs-content px-6 pb-6">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {observacionesGrupo.map(obs => (
-            <div class="bg-slate-50 rounded-xl p-4">
-              <h4 class="font-semibold text-slate-700 mb-3">{obs.nombre}</h4>
+            <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-4">
+              <h4 class="font-semibold text-slate-700 dark:text-gray-200 mb-3">{obs.nombre}</h4>
               <div class="grid grid-cols-2 gap-2 mb-3 text-center">
                 <div><p class="text-lg font-bold text-tup">{obs.total}</p><p class="text-[9px] text-slate-400">Eval.</p></div>
                 <div><p class="text-lg font-bold text-slate-600">{obs.reactivos}</p><p class="text-[9px] text-slate-400">Reactivos</p></div>
               </div>
               <div class="flex gap-2">
-                <a href={obs.ruta} class="flex-1 text-center text-[11px] text-tup hover:underline">Ir →</a>
+                <a href={obs.ruta} class="flex-1 text-center text-[11px] text-tup dark:text-blue-300 hover:underline">Ir →</a>
                 <a href={obs.editar} class="flex-1 text-center text-[11px] text-purple-600 hover:underline">✏️ Editar</a>
               </div>
             </div>

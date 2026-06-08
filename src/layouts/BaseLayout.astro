@@ -1,30 +1,16 @@
 ---
-/**
- * BaseLayout.astro — Shell HTML base del SED-360 v2
- *
- * Adaptado del Layout v1. Provee el HTML shell, meta tags,
- * fondo con gradientes y formas orgánicas.
- * Las variantes por rol (Admin, Coordinador, Docente, Estudiante)
- * extienden este layout.
- */
 export interface Props {
   titulo?: string;
   descripcion?: string;
 }
-
-const {
-  titulo = 'SED-360 — Sistema de Evaluación Docente',
-  descripcion = 'Plataforma integral de evaluación docente 360° — TUP',
-} = Astro.props;
+const { titulo = 'SED-360', descripcion = 'Plataforma de Evaluacion Docente 360 — TUP' } = Astro.props;
 ---
-
 <!doctype html>
-<html lang="es-MX">
+<html lang="es-MX" class="">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" href="/logo-tup.png" />
     <meta name="generator" content={Astro.generator} />
     <title>{titulo}</title>
     <meta name="description" content={descripcion} />
@@ -32,14 +18,42 @@ const {
     <meta property="og:title" content={titulo} />
     <meta property="og:description" content={descripcion} />
   </head>
-  <body class="min-h-screen bg-fondo-dashboard font-sans antialiased text-slate-800">
+  <body class="min-h-screen bg-fondo-dashboard dark:bg-gray-950 font-sans antialiased text-slate-800 dark:text-gray-100">
     <div class="fixed inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
-      <div class="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-tup opacity-[0.03] blur-3xl"></div>
-      <div class="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full bg-dorado opacity-[0.04] blur-3xl"></div>
+      <div class="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-tup opacity-[0.03] dark:opacity-[0.06] blur-3xl"></div>
+      <div class="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full bg-dorado opacity-[0.04] dark:opacity-[0.06] blur-3xl"></div>
     </div>
     <slot />
+
+    <!-- Toggle Dark Mode -->
+    <button id="toggle-dark" class="fixed bottom-4 right-4 z-50 w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-tarjeta flex items-center justify-center text-lg hover:shadow-tarjeta-hover transition-all" title="Cambiar tema" aria-label="Cambiar tema claro/oscuro">
+      <span id="icon-dark" class="hidden dark:inline">☀️</span>
+      <span id="icon-light" class="inline dark:hidden">🌙</span>
+    </button>
   </body>
 </html>
+<script is:inline>
+  var html = document.documentElement;
+  var toggle = document.getElementById('toggle-dark');
+  var iconL = document.getElementById('icon-light');
+  var iconD = document.getElementById('icon-dark');
+
+  function aplicar(tema) {
+    if (tema === 'dark') { html.classList.add('dark'); iconL.classList.add('hidden'); iconL.classList.remove('inline'); iconD.classList.remove('hidden'); iconD.classList.add('inline'); }
+    else { html.classList.remove('dark'); iconD.classList.add('hidden'); iconD.classList.remove('inline'); iconL.classList.remove('hidden'); iconL.classList.add('inline'); }
+  }
+
+  // Inicializar
+  var guardado = localStorage.getItem('tema');
+  if (guardado) { aplicar(guardado); }
+  else if (window.matchMedia('(prefers-color-scheme: dark)').matches) { aplicar('dark'); }
+
+  toggle.addEventListener('click', function() {
+    var nuevo = html.classList.contains('dark') ? 'light' : 'dark';
+    aplicar(nuevo);
+    localStorage.setItem('tema', nuevo);
+  });
+</script>
 
 <style is:global>
   html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }

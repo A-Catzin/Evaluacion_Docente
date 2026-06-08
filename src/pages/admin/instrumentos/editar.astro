@@ -13,30 +13,30 @@ const nombres: Record<string,string> = { autodiagnostico:'Autoevaluación Docent
   <div class="animate-flotar-entrada max-w-4xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Editar: {nombres[instrumento]}</h1>
-      <a href="/admin/instrumentos" class="text-sm text-tup hover:underline">← Instrumentos</a>
+      <a href="/admin/instrumentos" class="text-sm text-tup dark:text-blue-300 hover:underline">← Instrumentos</a>
     </div>
 
     <!-- Formulario para agregar -->
-    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8">
-      <h2 class="text-lg font-bold text-tup mb-4">Agregar Pregunta #{ (preguntas?.length || 0) + 1 }</h2>
+    <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-tarjeta mb-8">
+      <h2 class="text-lg font-bold text-tup dark:text-blue-300 mb-4">Agregar Pregunta #{ (preguntas?.length || 0) + 1 }</h2>
       <form id="form-nueva" class="space-y-4">
         <div>
-          <textarea id="input-texto" placeholder="Escribe la pregunta..." rows={2} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-tup focus:outline-none" required></textarea>
+          <textarea id="input-texto" placeholder="Escribe la pregunta..." rows={2} class="w-full rounded-xl border border-slate-200 dark:border-gray-700 px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-tup focus:outline-none" required></textarea>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1">Tipo de respuesta</label>
-            <select id="input-tipo" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="toggleOpciones()">
+            <label class="block text-xs font-medium text-slate-600 dark:text-gray-300 mb-1">Tipo de respuesta</label>
+            <select id="input-tipo" class="w-full rounded-xl border border-slate-200 dark:border-gray-700 px-3 py-2.5 text-sm" onchange="toggleOpciones()">
               <option value="cerrada">Cerrada (escala numérica)</option>
               <option value="opcion_multiple">Opción múltiple</option>
               <option value="abierta">Abierta (texto libre)</option>
             </select>
           </div>
           <div id="div-opciones">
-            <label class="block text-xs font-medium text-slate-600 mb-1">Opciones de respuesta</label>
+            <label class="block text-xs font-medium text-slate-600 dark:text-gray-300 mb-1">Opciones de respuesta</label>
             <div id="lista-opciones" class="space-y-1 mb-2"></div>
             <div class="flex gap-2">
-              <input type="text" id="input-opcion" placeholder="Agregar opción..." class="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs" />
+              <input type="text" id="input-opcion" placeholder="Agregar opción..." class="flex-1 rounded-lg border border-slate-200 dark:border-gray-700 px-3 py-1.5 text-xs" />
               <button type="button" id="btn-agregar-opcion" class="px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-medium hover:bg-slate-200">+</button>
             </div>
           </div>
@@ -48,19 +48,19 @@ const nombres: Record<string,string> = { autodiagnostico:'Autoevaluación Docent
     <!-- Lista de preguntas -->
     <div class="space-y-3">
       {(preguntas || []).map((p, i) => (
-        <div class="bg-white rounded-xl p-4 shadow-tarjeta border-l-4 border-tup">
+        <div class="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-tarjeta border-l-4 border-tup">
           <div class="flex items-start gap-3">
-            <span class="text-sm font-bold text-tup mt-0.5 min-w-[28px]">{i + 1}.</span>
+            <span class="text-sm font-bold text-tup dark:text-blue-300 mt-0.5 min-w-[28px]">{i + 1}.</span>
             <div class="flex-1">
               <p class="texto-pregunta text-sm text-slate-700">{p.texto}</p>
-              <textarea class="edit-input hidden rounded-lg border border-slate-200 px-2 py-1 text-sm w-full resize-none" rows={2}>{p.texto}</textarea>
+              <textarea class="edit-input hidden rounded-lg border border-slate-200 dark:border-gray-700 px-2 py-1 text-sm w-full resize-none" rows={2}>{p.texto}</textarea>
               <div class="flex items-center gap-3 mt-2">
                 <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{p.tipo_respuesta === 'abierta' ? '📝 Abierta' : p.tipo_respuesta === 'opcion_multiple' ? '☑️ Opción múltiple' : '🔢 Cerrada'}</span>
                 {(p.opciones as unknown[] || []).length > 0 && <span class="text-[10px] text-slate-400">{(p.opciones as string[]).join(', ')}</span>}
               </div>
             </div>
             <div class="flex gap-1 flex-shrink-0">
-              <button class="btn-editar text-[10px] px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" data-id={p.id}>✏️</button>
+              <button class="btn-editar text-[10px] px-2 py-1 rounded-lg bg-slate-100 text-slate-600 dark:text-gray-300 hover:bg-slate-200" data-id={p.id}>✏️</button>
               <button class="btn-guardar text-[10px] px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 hidden" data-id={p.id}>💾</button>
               <button class={`toggle-btn text-[10px] px-2 py-1 rounded-lg ${p.activa?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-400'}`} data-id={p.id} data-activa={p.activa}>{p.activa?'ON':'OFF'}</button>
               <button class="btn-eliminar text-[10px] px-2 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100" data-id={p.id}>🗑️</button>
@@ -68,7 +68,7 @@ const nombres: Record<string,string> = { autodiagnostico:'Autoevaluación Docent
           </div>
         </div>
       ))}
-      {(preguntas || []).length === 0 && <div class="text-center text-slate-400 py-12">No hay preguntas todavía.</div>}
+      {(preguntas || []).length === 0 && <div class="text-center text-slate-400 dark:text-gray-500 py-12">No hay preguntas todavía.</div>}
     </div>
     <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
