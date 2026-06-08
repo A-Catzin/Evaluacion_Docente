@@ -41,7 +41,7 @@ const cuatrimestres = await obtenerCuatrimestres();
                 <input type="date" class="edit-fin hidden rounded-lg border border-slate-200 dark:border-gray-700 px-2 py-1 text-xs" value={c.fecha_fin || ''} />
               </td>
               <td class="px-3 py-3 text-center">
-                <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${c.cerrado ? 'bg-slate-100 text-slate-400' : c.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`} data-id={c.id} data-activa={c.activo} data-cerrado={c.cerrado}>{c.cerrado ? 'Cerrado' : c.activo ? 'Activo' : 'Inactivo'}</button>
+                <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${c.cerrado ? 'bg-slate-100 dark:bg-gray-700 dark:bg-gray-700 text-slate-400 dark:text-gray-300' : c.activo ? 'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'}`} data-id={c.id} data-activa={c.activo} data-cerrado={c.cerrado}>{c.cerrado ? 'Cerrado' : c.activo ? 'Activo' : 'Inactivo'}</button>
               </td>
               <td class="px-3 py-3 text-center">
                 <button class="btn-editar text-xs text-tup dark:text-blue-200 hover:underline mr-2" data-id={c.id}>Editar</button>

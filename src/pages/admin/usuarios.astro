@@ -112,8 +112,8 @@ const ETIQUETAS_ROL: Record<string, string> = {
   superadmin: 'Administrador', coordinador: 'Coordinador', docente: 'Docente', observador: 'Observador'
 };
 const COLOR_ROL: Record<string, string> = {
-  superadmin: 'bg-purple-50 text-purple-700', coordinador: 'bg-blue-50 text-blue-700',
-  docente: 'bg-emerald-50 text-emerald-700', observador: 'bg-amber-50 text-amber-700'
+  superadmin: 'bg-purple-50 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300', coordinador: 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 dark:text-blue-300',
+  docente: 'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', observador: 'bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
 };
 
 // Conteos
@@ -161,7 +161,7 @@ function formatear(n: number | undefined): string {
       </form>
     </div>
 
-    {errorMsg && (<div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm mb-6">{errorMsg}</div>)}
+    {errorMsg && (<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-red-700 dark:text-red-300 text-sm mb-6">{errorMsg}</div>)}
 
     {filas.length === 0 ? (
       <div class="bg-white dark:bg-gray-800 rounded-2xl p-12 text-center text-slate-400 dark:text-gray-500 shadow-tarjeta">No se encontraron usuarios.</div>

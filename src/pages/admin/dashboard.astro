@@ -194,7 +194,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
             <td class="px-2 py-2 text-center {colorN(d.promObs)}">{fmt(d.promObs)}</td>
             <td class="px-2 py-2 text-center {colorN(d.promAuto)}">{fmt(d.promAuto)}</td>
             <td class="px-2 py-2 text-center font-bold {colorN(d.final360)}">{fmt(d.final360)}</td>
-            <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{d.cat360}</span></td>
+            <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-gray-700 dark:text-gray-200">{d.cat360}</span></td>
             <td class="px-2 py-2 text-center">
               <button class="btn-ver-docente px-2 py-0.5 rounded-lg bg-tup/10 dark:bg-blue-900/40 text-tup dark:text-blue-200 text-[10px] font-medium hover:bg-tup/20" data-docente={JSON.stringify({id:d.id, nombre:d.nombre, apellidos:d.apellidos, promEst:d.promEst, promCoord:d.promCoord, promPlan:d.promPlan, promObs:d.promObs, promAuto:d.promAuto, final360:d.final360, cat360:d.cat360, instrumentos:d.instrumentos, visible:d.visible})}>📊 Ver</button>
             </td>

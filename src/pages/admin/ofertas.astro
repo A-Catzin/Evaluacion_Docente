@@ -11,7 +11,7 @@ const items = busqueda ? ofertas.filter(o => o.nombre.toLowerCase().includes(bus
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Ofertas Académicas</h1>
-      <button id="btn-limpiar" class="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-xs font-medium hover:bg-amber-100 border border-amber-200">🧹 Limpiar duplicados</button>
+      <button id="btn-limpiar" class="px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-medium hover:bg-amber-100 border border-amber-200">🧹 Limpiar duplicados</button>
     </div>
 
     <!-- Buscador -->
@@ -46,7 +46,7 @@ const items = busqueda ? ofertas.filter(o => o.nombre.toLowerCase().includes(bus
                   <input type="text" class="oferta-edit hidden rounded-lg border border-slate-200 dark:border-gray-700 px-2 py-1 text-sm w-full" value={o.nombre} />
                 </td>
                 <td class="px-4 py-3 text-center">
-                  <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${o.activa ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`} data-id={o.id} data-activa={o.activa}>
+                  <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${o.activa ? 'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-gray-700 dark:bg-gray-700 text-slate-400 dark:text-gray-300'}`} data-id={o.id} data-activa={o.activa}>
                     {o.activa ? 'Activa' : 'Inactiva'}
                   </button>
                 </td>
