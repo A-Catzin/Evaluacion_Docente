@@ -91,9 +91,23 @@ import Layout from '../../layouts/Layout.astro';
         log('Guardar sesión: ' + res.status);
         if (res.ok) {
           setEstado('¡Sesión establecida! Redirigiendo...');
-          setTimeout(function () {
-            window.location.href = '/evaluador';
-          }, 500);
+          // Verificar rol antes de redirigir
+          fetch('/api/auth/rol').then(function(r) { return r.json(); }).then(function(d) {
+            var rol = d.rol;
+            if (rol === 'pendiente' || !rol) {
+              window.location.href = '/pendiente';
+            } else if (rol === 'superadmin' || rol === 'coordinador') {
+              window.location.href = '/admin/dashboard';
+            } else if (rol === 'docente') {
+              window.location.href = '/docente/dashboard';
+            } else if (rol === 'observador') {
+              window.location.href = '/observador/dashboard';
+            } else {
+              window.location.href = '/pendiente';
+            }
+          }).catch(function() {
+            setTimeout(function() { window.location.href = '/pendiente'; }, 500);
+          });
         } else {
           setEstado('Error al guardar sesión (status ' + res.status + ')', true);
         }

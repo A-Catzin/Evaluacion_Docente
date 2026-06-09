@@ -32,12 +32,12 @@ export const GET: APIRoute = async ({ cookies }) => {
       .eq('id', sesion.user.id)
       .maybeSingle();
 
-    return new Response(JSON.stringify({ rol: usuario?.rol ?? 'estudiante' }), {
+    return new Response(JSON.stringify({ rol: usuario?.rol ?? 'pendiente' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch {
-    return new Response(JSON.stringify({ rol: 'estudiante' }), {
+    return new Response(JSON.stringify({ rol: 'pendiente' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

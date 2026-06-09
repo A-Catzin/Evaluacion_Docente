@@ -7,7 +7,7 @@ const RUTAS_PUBLICAS = [
   '/api/auth/guardar-sesion', '/api/auth/signout', '/api/auth/rol', '/api/auth/callback',
   '/api/docente/autodiagnostico', '/api/coordinador/observacion',
   '/api/docente/planeacion', '/api/coordinador/planeacion', '/api/coordinador/evaluacion-coordinacion',
-  '/auth', '/', '/favicon.ico', '/favicon.svg',
+  '/pendiente', '/auth', '/', '/favicon.ico', '/favicon.svg',
 ];
 
 const ROLES_POR_RUTA: Record<string, string[]> = {

@@ -10,6 +10,9 @@ const cuatrimestres = await obtenerCuatrimestres();
 const idSeleccionado = Astro.url.searchParams.get('cuatrimestre') || cuatrimestre?.id?.toString() || '';
 const cliente = obtenerClienteSuperbase();
 
+// Usuarios pendientes de aprobacion
+const { count: pendientes } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
+
 const todos = await obtenerDocentes();
 const { data: docsConEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const docsEvaluados = new Set((docsConEval || []).map(e => e.docente_id));
@@ -138,11 +141,12 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
       </form>
     </div>
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup mt-1">{totalEvaluados}</p><p class="text-xs text-slate-400 mt-1">de {docentes.length} visibles</p></div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup mt-1">{fmt(promInstitucional)}</p><p class="text-xs text-slate-400 mt-1">escala 0-100</p></div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Distinguidos</p><p class="text-3xl font-bold text-emerald-600 mt-1">{pctSobresaliente}%</p><p class="text-xs text-slate-400 mt-1">≥80 puntos</p></div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">A Mejorar</p><p class="text-3xl font-bold text-red-500 mt-1">{catCounts['A mejorar'] + catCounts['Insuficiente']}</p><p class="text-xs text-slate-400 mt-1">&lt;60 puntos</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Pendientes</p><a href="/admin/usuarios?rol=pendiente" class="block"><p class="text-3xl font-bold text-amber-500 mt-1">{pendientes || 0}</p><p class="text-xs text-slate-400 mt-1">por aprobar</p></a></div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">

@@ -1,0 +1,26 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout titulo="SED-360 — Cuenta en revisión" modoEnfoque={true}>
+  <div class="flex flex-col items-center justify-center min-h-[80vh] gap-6 text-center px-4">
+    <div class="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center shadow-tarjeta">
+      <span class="text-4xl">⏳</span>
+    </div>
+    <h1 class="text-2xl font-bold text-tup">Cuenta en revisión</h1>
+    <p class="text-slate-500 max-w-md">
+      Tu cuenta <strong class="text-slate-700" id="email-usuario"></strong> está pendiente de validación.
+      Un administrador revisará tu solicitud y te asignará un rol pronto.
+    </p>
+    <p class="text-xs text-slate-400">Si crees que esto es un error, contacta a soporte.</p>
+    <a href="/api/auth/signout" class="mt-4 px-6 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500 hover:bg-slate-50 transition-colors">Cerrar sesión</a>
+  </div>
+</Layout>
+
+<script is:inline>
+  // Mostrar el email del usuario desde el token (si esta disponible)
+  fetch('/api/auth/rol').then(r => r.json()).then(d => {
+    if (d.rol && d.rol !== 'pendiente') {
+      window.location.href = '/admin/dashboard';
+    }
+  }).catch(() => {});
+</script>

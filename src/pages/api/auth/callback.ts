@@ -46,7 +46,7 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
       maxAge: 60 * 60 * 24 * 7, // 1 semana
     });
 
-    return redirect('/evaluador');
+    return redirect('/pendiente');
   } catch (err) {
     console.error('[SED-360 Callback] Error inesperado:', err);
     return redirect('/auth?error=oauth');
