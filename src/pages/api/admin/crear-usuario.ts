@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { obtenerClienteSuperbase, obtenerClienteAdmin } from '../../../lib/supabaseClient';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const t = cookies.get('sb-access-token')?.value;
@@ -17,8 +17,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (!email || !email.endsWith('@tecplayacar.edu.mx')) return new Response(JSON.stringify({ error: 'Email debe ser @tecplayacar.edu.mx' }), { status: 400 });
     if (!['superadmin','coordinador','docente','observador', 'pendiente'].includes(rol)) return new Response(JSON.stringify({ error: 'Rol no válido' }), { status: 400 });
 
-    // 1. Crear usuario en auth.users
-    const { data: authUser, error: authErr } = await cl.auth.admin.createUser({ email, password: 'TecPlayacar2026!', email_confirm: true });
+    // 1. Crear usuario en auth.users (requiere service_role key)
+    const adminCl = obtenerClienteAdmin();
+    const { data: authUser, error: authErr } = await adminCl.auth.admin.createUser({ email, password: 'TecPlayacar2026!', email_confirm: true });
     if (authErr) return new Response(JSON.stringify({ error: authErr.message }), { status: 400 });
     if (!authUser.user) return new Response(JSON.stringify({ error: 'No se pudo crear' }), { status: 400 });
 

@@ -7,6 +7,7 @@ if (typeof globalThis.WebSocket === 'undefined') {
 }
 
 let _cliente: SupabaseClient | null = null;
+let _clienteAdmin: SupabaseClient | null = null;
 
 function obtenerVariablesEntorno() {
   const url = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
@@ -23,6 +24,18 @@ export function obtenerClienteSuperbase(): SupabaseClient {
     });
   }
   return _cliente;
+}
+
+export function obtenerClienteAdmin(): SupabaseClient {
+  if (!_clienteAdmin) {
+    const url = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
+    const clave = import.meta.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined;
+    if (!url || !clave) throw new Error('Faltan PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY');
+    _clienteAdmin = createClient(url, clave, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return _clienteAdmin;
 }
 
 export function crearClienteConSesion(tokenAcceso: string): SupabaseClient {
