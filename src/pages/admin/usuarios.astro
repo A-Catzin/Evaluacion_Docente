@@ -107,7 +107,7 @@ try {
   errorMsg = e instanceof Error ? e.message : 'Error al cargar usuarios';
 }
 
-const ROLES: RolUsuario[] = ['superadmin', 'coordinador', 'docente', 'observador'];
+const ROLES: RolUsuario[] = ['superadmin', 'coordinador', 'docente', 'observador', 'pendiente'];
 const ETIQUETAS_ROL: Record<string, string> = {
   superadmin: 'Administrador', coordinador: 'Coordinador', docente: 'Docente', observador: 'Observador', pendiente: 'Pendiente'
 };
