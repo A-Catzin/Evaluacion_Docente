@@ -121,7 +121,8 @@ const { count: totalDocs } = await cliente.from('docentes').select('*', { count:
 const { count: totalCoord } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'coordinador');
 const { count: totalAdmin } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'superadmin');
 const { count: totalObs } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'observador');
-const conteos: Record<string, number> = { superadmin: totalAdmin || 0, coordinador: totalCoord || 0, docente: totalDocs || 0, observador: totalObs || 0 };
+const { count: totalPend } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
+const conteos: Record<string, number> = { superadmin: totalAdmin || 0, coordinador: totalCoord || 0, docente: totalDocs || 0, observador: totalObs || 0, pendiente: totalPend || 0 };
 
 function formatear(n: number | undefined): string {
   return n !== undefined && n !== null ? Math.round(n).toString() : '—';
@@ -137,10 +138,10 @@ function formatear(n: number | undefined): string {
     </div>
 
     {!rolFiltro && !busqueda && (
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         {ROLES.map(r => (
           <a href={`?rol=${r}`} class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center block">
-            <p class="text-2xl mb-1">{r==='superadmin'?'🔑':r==='coordinador'?'📋':r==='docente'?'👨‍🏫':'🔍'}</p>
+            <p class="text-2xl mb-1">{r==='superadmin'?'🔑':r==='coordinador'?'📋':r==='docente'?'👨‍🏫':r==='observador'?'🔍':'⏳'}</p>
             <p class="text-lg font-bold text-tup">{ETIQUETAS_ROL[r]}</p>
             <p class="text-3xl font-bold text-slate-600 mt-2">{conteos[r]}</p>
             <p class="text-xs text-slate-400 mt-1">usuarios</p>
@@ -226,7 +227,7 @@ function formatear(n: number | undefined): string {
         <div><label class="block text-sm font-medium mb-1">Nombre completo</label><input type="text" id="ag-nombre" class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm" placeholder="Ej: Juan Pérez" /></div>
         <div><label class="block text-sm font-medium mb-1">Email *</label><input type="email" id="ag-email" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm" placeholder="@tecplayacar.edu.mx" /></div>
         <div><label class="block text-sm font-medium mb-1">Rol *</label><select id="ag-rol" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="toggleCoord()"><option value="">Seleccionar...</option><option value="superadmin">Superadmin</option><option value="coordinador">Coordinador</option><option value="docente">Docente</option><option value="observador">Observador</option></select></div>
-        <div id="coord-section" class="hidden"><label class="block text-sm font-medium mb-1">Docentes a supervisar</label><div id="lista-docs" class="max-h-40 overflow-auto border border-slate-200 rounded-xl p-3 space-y-1 text-sm"></div></div>
+        <div id="coord-section" class="hidden"><label class="block text-sm font-medium mb-1">Docentes a supervisar</label><input type="text" id="filtro-docs" placeholder="Buscar docente..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs mb-2" oninput="filtrarDocs()" /><div id="lista-docs" class="max-h-40 overflow-auto border border-slate-200 rounded-xl p-3 space-y-1 text-sm"></div></div>
         <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-3 rounded-xl hover:bg-emerald-700">Crear Usuario</button>
       </form>
     </div>
@@ -242,9 +243,17 @@ function formatear(n: number | undefined): string {
     if(!s.classList.contains('hidden') && docentesList.length===0) cargarDocentes();
   }
   async function cargarDocentes(){
-    try{var r=await fetch('/api/admin/docentes-evaluados?all=1');docentesList=await r.json();
-    document.getElementById('lista-docs').innerHTML=docentesList.map(function(d,i){return'<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="docente_id" value="'+d.id+'" class="accent-tup" /><span>'+d.nombre+' '+d.apellidos+'</span></label>'}).join('')}catch(e){}
+    try{var r=await fetch('/api/admin/docentes-evaluados?all=1');docentesList=await r.json();renderDocs()}
+    catch(e){}
   }
+  function renderDocs(q){
+    var filtro = (q || '').toLowerCase();
+    var filtered = docentesList.filter(function(d){
+      return !filtro || (d.nombre+' '+d.apellidos).toLowerCase().includes(filtro);
+    });
+    document.getElementById('lista-docs').innerHTML=filtered.map(function(d){return'<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="docente_id" value="'+d.id+'" class="accent-tup" /><span>'+d.nombre+' '+d.apellidos+'</span></label>'}).join('')||'<span class="text-slate-400 text-xs">Sin resultados</span>';
+  }
+  function filtrarDocs(){ renderDocs(document.getElementById('filtro-docs').value); }
   document.getElementById('btn-agregar').addEventListener('click',function(){document.getElementById('modal-agregar').classList.remove('hidden');document.getElementById('modal-agregar').classList.add('flex')});
   document.getElementById('form-agregar').addEventListener('submit',async function(e){
     e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Creando...';
