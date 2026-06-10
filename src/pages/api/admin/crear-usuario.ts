@@ -17,14 +17,26 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (!email || !email.endsWith('@tecplayacar.edu.mx')) return new Response(JSON.stringify({ error: 'Email debe ser @tecplayacar.edu.mx' }), { status: 400 });
     if (!['superadmin','coordinador','docente','observador', 'pendiente'].includes(rol)) return new Response(JSON.stringify({ error: 'Rol no válido' }), { status: 400 });
 
-    // 1. Crear usuario en auth.users (requiere service_role key)
+    // 1. Buscar si el usuario ya existe en auth.users (ej: ya inició sesión con Google)
     const adminCl = obtenerClienteAdmin();
-    const { data: authUser, error: authErr } = await adminCl.auth.admin.createUser({ email, password: 'TecPlayacar2026!', email_confirm: true });
-    if (authErr) return new Response(JSON.stringify({ error: authErr.message }), { status: 400 });
-    if (!authUser.user) return new Response(JSON.stringify({ error: 'No se pudo crear' }), { status: 400 });
+    let userId: string | null = null;
+
+    // Intentar buscar por email
+    const { data: existingUsers } = await adminCl.auth.admin.listUsers();
+    const existing = (existingUsers?.users || []).find(u => u.email === email);
+    
+    if (existing) {
+      userId = existing.id;
+    } else {
+      // Crear nuevo usuario en auth.users
+      const { data: authUser, error: authErr } = await adminCl.auth.admin.createUser({ email, password: 'TecPlayacar2026!', email_confirm: true });
+      if (authErr) return new Response(JSON.stringify({ error: authErr.message }), { status: 400 });
+      if (!authUser.user) return new Response(JSON.stringify({ error: 'No se pudo crear' }), { status: 400 });
+      userId = authUser.user.id;
+    }
 
     // 2. Actualizar rol en usuarios
-    await cl.from('usuarios').upsert({ id: authUser.user.id, email, rol }, { onConflict: 'id' });
+    await cl.from('usuarios').upsert({ id: userId, email, rol }, { onConflict: 'id' });
 
     // 3. Si es docente, crear en docentes
     if (rol === 'docente') {
@@ -32,17 +44,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const ap = partes.length >= 2 ? partes.slice(0, 2).join(' ') : '';
       const nom = partes.length >= 3 ? partes.slice(2).join(' ') : partes[0] || '';
       const { data: doc } = await cl.from('docentes').insert({ nombre: nom, apellidos: ap, email, activo: true }).select('id').single();
-      if (doc) await cl.from('usuarios').update({ entidad_id: doc.id }).eq('id', authUser.user.id);
+      if (doc) await cl.from('usuarios').update({ entidad_id: doc.id }).eq('id', userId);
     }
 
     // 4. Si es coordinador, vincular docentes
     if (rol === 'coordinador' && docente_ids?.length > 0) {
       for (const did of docente_ids) {
-        await cl.from('coordinador_docentes').upsert({ coordinador_id: authUser.user.id, docente_id: did }, { onConflict: 'coordinador_id,docente_id' });
+        await cl.from('coordinador_docentes').upsert({ coordinador_id: userId, docente_id: did }, { onConflict: 'coordinador_id,docente_id' });
       }
     }
 
-    return new Response(JSON.stringify({ success: true, id: authUser.user.id }), { status: 201 });
+    return new Response(JSON.stringify({ success: true, id: userId }), { status: 201 });
   } catch (err) {
     return new Response(JSON.stringify({ error: 'Error interno' }), { status: 500 });
   }
