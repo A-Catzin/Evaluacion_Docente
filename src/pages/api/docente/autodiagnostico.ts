@@ -38,7 +38,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const { data: existenteDoc } = await cliente.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
       if (existenteDoc) {
         docenteId = existenteDoc.id;
-        await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
+        await adminCl.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
         await adminCl.from('docentes').update({
           nombre, apellido_paterno, apellido_materno, apellidos,
           campus, turno, oferta_academica, modalidad,
@@ -50,12 +50,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         }).select('id').single();
         if (errIns) throw new Error('Error al crear docente: ' + errIns.message);
         docenteId = nuevo.id;
-        await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
+        await adminCl.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
       }
     }
 
-    // 2. Verificar si ya respondió
-    const { data: existente } = await cliente.from('autodiagnosticos').select('id').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestre_id).maybeSingle();
+    // 2. Verificar si ya respondió (usa admin client para evitar RLS)
+    const { data: existente } = await adminCl.from('autodiagnosticos').select('id').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestre_id).maybeSingle();
     if (existente) {
       return new Response(JSON.stringify({ error: 'Ya completaste tu autodiagnóstico para este cuatrimestre' }), { status: 409 });
     }
