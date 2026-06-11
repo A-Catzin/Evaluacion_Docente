@@ -12,9 +12,14 @@ const cliente = obtenerClienteSuperbase();
 const { data: sesion } = await cliente.auth.setSession({ access_token: tokenAcceso, refresh_token: tokenRefresco });
 if (!sesion.user) return Astro.redirect('/auth');
 
-const { data: usuario } = await cliente.from('usuarios').select('entidad_id,rol').eq('id', sesion.user.id).maybeSingle();
+const { data: usuario } = await cliente.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
 if (!usuario || usuario.rol !== 'docente') return Astro.redirect('/docente/dashboard');
-const docenteId = usuario.entidad_id;
+let docenteId = usuario.entidad_id;
+// Si no tiene entidad_id, buscar por email
+if (!docenteId && usuario.email) {
+  const { data: doc } = await cliente.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
+  if (doc) docenteId = doc.id;
+}
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
 if (!cuatrimestre) return Astro.redirect('/docente/dashboard');
@@ -273,7 +278,14 @@ const REACTIVOS = [
       var data = await res.json();
       if (res.ok) {
         mostrarModal(data);
+        // Redirigir al dashboard despues de 2s
+        setTimeout(function() { window.location.href = '/docente/dashboard'; }, 2000);
       } else {
+        if (res.status === 409) {
+          alert(data.error);
+          window.location.href = '/docente/dashboard';
+          return;
+        }
         alert(data.error || 'Error al enviar');
         btn.disabled = false;
         btn.textContent = 'Enviar Autodiagnóstico';
