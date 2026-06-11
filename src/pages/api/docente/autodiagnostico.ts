@@ -60,7 +60,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ error: 'Ya completaste tu autodiagnóstico para este cuatrimestre' }), { status: 409 });
     }
 
-    // 3. Insertar autodiagnóstico
+    // 3. Insertar autodiagnóstico (usa admin client para saltar RLS)
     const insert: Record<string, unknown> = { docente_id: docenteId, cuatrimestre_id };
     for (let i = 0; i < 24; i++) insert[`r${i + 1}`] = reactivos[i];
 
@@ -73,7 +73,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     insert.nivel_desempeno = nivel;
     if (comentarios) insert.comentarios = comentarios;
 
-    const { data: resultado, error: errDiag } = await cliente.from('autodiagnosticos').insert(insert).select('puntaje_total,nivel_desempeno').single();
+    const { data: resultado, error: errDiag } = await adminCl.from('autodiagnosticos').insert(insert).select('puntaje_total,nivel_desempeno').single();
     if (errDiag) {
       console.error('[API Autodiagnóstico] Error insert:', errDiag);
       throw new Error('Error al guardar autodiagnóstico: ' + errDiag.message);
