@@ -9,13 +9,21 @@ if (!token || !refresh) return Astro.redirect('/auth');
 const cl = obtenerClienteSuperbase();
 const { data: sesion } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
 if (!sesion.user) return Astro.redirect('/auth');
-const { data: usuario } = await cl.from('usuarios').select('entidad_id,rol').eq('id', sesion.user.id).maybeSingle();
-if (!usuario || usuario.rol !== 'docente' || !usuario.entidad_id) return Astro.redirect('/docente/dashboard');
+const { data: usuario } = await cl.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
+if (!usuario || usuario.rol !== 'docente') return Astro.redirect('/docente/dashboard');
+
+// Si no tiene entidad_id, buscar por email
+let entidadId = usuario.entidad_id;
+if (!entidadId && usuario.email) {
+  const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
+  if (doc) entidadId = doc.id;
+}
+if (!entidadId) return Astro.redirect('/docente/dashboard');
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
 const asignaturas = await obtenerAsignaturas();
-const { data: docente } = await cl.from('docentes').select('campus,turno').eq('id', usuario.entidad_id).maybeSingle();
-const { data: planeacionesRaw } = await cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', usuario.entidad_id).order('fecha_subida', { ascending: false });
+const { data: docente } = await cl.from('docentes').select('campus,turno').eq('id', entidadId).maybeSingle();
+const { data: planeacionesRaw } = await cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', entidadId).order('fecha_subida', { ascending: false });
 
 interface PlaneacionItem { id: number; asignatura: string; grupo: string; estado: string; puntaje: number | null; url: string; }
 const planeaciones: PlaneacionItem[] = [];

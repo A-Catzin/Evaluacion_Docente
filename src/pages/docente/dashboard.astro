@@ -1,35 +1,168 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (!token || !refresh) return Astro.redirect('/auth');
+
+const cl = obtenerClienteSuperbase();
+const { data: sesion } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
+if (!sesion.user) return Astro.redirect('/auth');
+
+const { data: usuario } = await cl.from('usuarios').select('entidad_id,email').eq('id', sesion.user.id).maybeSingle();
+let docenteId = usuario?.entidad_id;
+if (!docenteId && usuario?.email) {
+  const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
+  if (doc) docenteId = doc.id;
+}
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
-const cerrado = cuatrimestre?.cerrado ?? false;
+
+let scores = { promEst: 0, promCoord: 0, promPlan: 0, promObs: 0, promAuto: 0, final360: null as number|null, cat360: 'No iniciado', instrumentos: 0 };
+let nombreDocente = '';
+
+if (docenteId) {
+  const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteId).maybeSingle();
+  if (doc) nombreDocente = `${doc.nombre} ${doc.apellidos}`;
+
+  const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
+    cl.from('encuesta_estudiantil').select('score_normalizado').eq('docente_id', docenteId),
+    cl.from('evaluacion_coordinacion').select('score_normalizado').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
+    cl.from('planeaciones').select('puntaje_promedio').eq('docente_id', docenteId).eq('estado', 'Aprobado'),
+    cl.from('observaciones').select('cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').eq('docente_id', docenteId),
+    cl.from('autodiagnosticos').select('puntaje_total').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
+    cl.from('grupos').select('asignatura_id').eq('docente_id', docenteId),
+  ]);
+
+  // EE promedio
+  const eeScores = (eeData||[]).map(e=>e.score_normalizado).filter(v=>v);
+  scores.promEst = eeScores.length ? Math.round(eeScores.reduce((a,b)=>a+b,0)/eeScores.length) : 0;
+
+  // Coord
+  scores.promCoord = coordData?.[0]?.score_normalizado ? Math.round(coordData[0].score_normalizado) : 0;
+
+  // Plan promedio
+  const planScores = (planData||[]).map(p=>p.puntaje_promedio).filter(v=>v);
+  scores.promPlan = planScores.length ? Math.round(planScores.reduce((a,b)=>a+b,0)/planScores.length) : 0;
+
+  // Obs promedio
+  const obsScores: number[] = [];
+  for (const o of (obsData||[])) {
+    const r = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);
+    if (r.length) obsScores.push(Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100));
+  }
+  scores.promObs = obsScores.length ? Math.round(obsScores.reduce((a,b)=>a+b,0)/obsScores.length) : 0;
+
+  // Auto
+  scores.promAuto = diagData?.[0]?.puntaje_total ? Math.round((diagData[0].puntaje_total/120)*100) : 0;
+
+  // Final 360
+  const disp = [scores.promEst, scores.promCoord, scores.promPlan, scores.promObs, scores.promAuto];
+  const pesos = [0.35,0.20,0.15,0.25,0.05];
+  let fin = 0; for (let i=0;i<5;i++) if (disp[i]) fin += disp[i]*pesos[i];
+  scores.final360 = fin || null;
+  scores.instrumentos = disp.filter(v=>v>0).length;
+  scores.cat360 = scores.instrumentos===5 ? (fin>=90?'Sobresaliente':fin>=80?'Distinguido':fin>=70?'Bueno':fin>=60?'Aprobado':fin>=50?'A mejorar':'Insuficiente') : fin>0 ? 'Parcial' : 'No iniciado';
+}
+
+function fmt(n:number|null|undefined):string{return n!=null ? Math.round(n).toString() : '—';}
+function colorN(n:number|null|undefined):string{return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60?'text-amber-600':'text-red-600';}
 ---
+
 <LayoutDocente titulo="Mi Evaluación — Docente">
   <div class="animate-flotar-entrada">
-    <h1 class="text-3xl font-bold text-tup mb-2">Mi Evaluación</h1>
-    <p class="text-slate-500 mb-8">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'}</p>
+    <div class="flex items-center justify-between mb-6">
+      <div><h1 class="text-3xl font-bold text-tup">Mi Evaluación 360°</h1><p class="text-slate-500">{nombreDocente}</p></div>
+      <span class="text-xs text-slate-400">{cuatrimestre?.nombre || ''}</span>
+    </div>
 
-    {!cerrado ? (
-      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center mb-6">
-        <p class="text-amber-800 font-medium">Cuatrimestre en curso</p>
-        <p class="text-amber-600 text-sm mt-1">Los resultados se publicarán al cierre del cuatrimestre.</p>
-      </div>
+    {!docenteId ? (
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center text-slate-400">Completa tu autodiagnóstico para ver tus resultados.</div>
     ) : (
-      <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center text-slate-400">
-        <p class="text-lg">Tus resultados aparecerán aquí</p>
-      </div>
+      <>
+        <!-- KPIs -->
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+            <p class="text-xs text-slate-400 uppercase">Estudiantil</p>
+            <p class={`text-2xl font-bold mt-1 ${colorN(scores.promEst)}`}>{fmt(scores.promEst)}</p>
+          </div>
+          <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+            <p class="text-xs text-slate-400 uppercase">Coordinación</p>
+            <p class={`text-2xl font-bold mt-1 ${colorN(scores.promCoord)}`}>{fmt(scores.promCoord)}</p>
+          </div>
+          <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+            <p class="text-xs text-slate-400 uppercase">Planeación</p>
+            <p class={`text-2xl font-bold mt-1 ${colorN(scores.promPlan)}`}>{fmt(scores.promPlan)}</p>
+          </div>
+          <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+            <p class="text-xs text-slate-400 uppercase">Observación</p>
+            <p class={`text-2xl font-bold mt-1 ${colorN(scores.promObs)}`}>{fmt(scores.promObs)}</p>
+          </div>
+          <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+            <p class="text-xs text-slate-400 uppercase">Autodiagnóstico</p>
+            <p class={`text-2xl font-bold mt-1 ${colorN(scores.promAuto)}`}>{fmt(scores.promAuto)}</p>
+          </div>
+        </div>
+
+        <!-- Gráfico + Final -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div class="lg:col-span-2 bg-white rounded-2xl p-6 shadow-tarjeta">
+            <h3 class="text-sm font-semibold text-slate-700 mb-4">Mis Scores por Instrumento</h3>
+            <div style="max-height:220px"><canvas id="chart-docente" style="max-height:220px"></canvas></div>
+          </div>
+          <div class="bg-white rounded-2xl p-6 shadow-tarjeta flex flex-col items-center justify-center text-center">
+            <p class="text-xs text-slate-400 uppercase mb-2">Calificación Final</p>
+            <p class="text-5xl font-bold text-tup">{fmt(scores.final360)}</p>
+            <span class="px-2 py-1 rounded text-xs font-medium bg-slate-100 mt-2">{scores.cat360}</span>
+            <p class="text-xs text-slate-400 mt-3">{scores.instrumentos}/5 instrumentos</p>
+          </div>
+        </div>
+      </>
     )}
 
-    <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <a href="/docente/autoevaluacion" class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
-        <p class="text-lg font-semibold text-tup">Auto-evaluación</p>
-        <p class="text-sm text-slate-500 mt-1">Responde los 10 ítems de reflexión</p>
+    <!-- Accesos rápidos -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <a href="/docente/autodiagnostico" class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
+        <p class="text-lg font-semibold text-tup">🧪 Autodiagnóstico</p>
+        <p class="text-sm text-slate-500 mt-1">24 reactivos de auto-evaluación</p>
       </a>
-      <a href="/docente/mis-grupos" class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
-        <p class="text-lg font-semibold text-tup">Mis Grupos</p>
-        <p class="text-sm text-slate-500 mt-1">Consulta tus asignaturas y encuestas</p>
+      <a href="/docente/planeaciones" class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
+        <p class="text-lg font-semibold text-tup">📄 Planeaciones</p>
+        <p class="text-sm text-slate-500 mt-1">Sube tus planeaciones didácticas</p>
       </a>
     </div>
   </div>
 </LayoutDocente>
+
+<script is:inline define:vars={{
+  chartJson: JSON.stringify([scores.promEst, scores.promCoord, scores.promPlan, scores.promObs, scores.promAuto]),
+}}>
+  function initChart() {
+    if (typeof Chart === 'undefined') {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+      s.onload = drawChart;
+      document.head.appendChild(s);
+    } else { drawChart(); }
+  }
+  function drawChart() {
+    var data = JSON.parse(chartJson);
+    var ctx = document.getElementById('chart-docente');
+    if (!ctx) return;
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Est.','Coord.','Plan.','Obs.','Auto.'],
+        datasets: [{ data: data, backgroundColor: ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316'], borderRadius: 6, borderWidth: 0 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        scales: { y: { beginAtZero: true, max: 100, grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 9 } } } },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+  initChart();
+</script>

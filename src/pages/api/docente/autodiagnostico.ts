@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { obtenerClienteSuperbase, obtenerClienteAdmin } from '../../../lib/supabaseClient';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const tokenAcceso = cookies.get('sb-access-token')?.value;
@@ -23,12 +23,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ error: 'Todos los campos son obligatorios excepto comentarios' }), { status: 400 });
     }
 
-    // 1. Crear o actualizar docente
+    // 1. Crear o actualizar docente (usa admin client para saltar RLS)
     let docenteId = usuario.entidad_id;
     const apellidos = `${apellido_paterno} ${apellido_materno}`.trim();
+    const adminCl = obtenerClienteAdmin();
 
     if (docenteId) {
-      const { error: errUpd } = await cliente.from('docentes').update({
+      const { error: errUpd } = await adminCl.from('docentes').update({
         nombre, apellido_paterno, apellido_materno, apellidos,
         campus, turno, oferta_academica, modalidad,
       }).eq('id', docenteId);
@@ -38,12 +39,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       if (existenteDoc) {
         docenteId = existenteDoc.id;
         await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
-        await cliente.from('docentes').update({
+        await adminCl.from('docentes').update({
           nombre, apellido_paterno, apellido_materno, apellidos,
           campus, turno, oferta_academica, modalidad,
         }).eq('id', docenteId);
       } else {
-        const { data: nuevo, error: errIns } = await cliente.from('docentes').insert({
+        const { data: nuevo, error: errIns } = await adminCl.from('docentes').insert({
           nombre, apellido_paterno, apellido_materno, apellidos,
           email: usuario.email, campus, turno, oferta_academica, modalidad,
         }).select('id').single();
