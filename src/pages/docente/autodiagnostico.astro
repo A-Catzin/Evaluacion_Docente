@@ -2,17 +2,19 @@
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerCuatrimestreActivo, obtenerOfertasAcademicas, obtenerCampus, obtenerTurnos } from '../../services/catalogos';
 import { obtenerAutodiagnostico } from '../../services/autodiagnostico';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { obtenerClienteSuperbase, obtenerClienteAdmin } from '../../lib/supabaseClient';
 
 const tokenAcceso = Astro.cookies.get('sb-access-token')?.value;
 const tokenRefresco = Astro.cookies.get('sb-refresh-token')?.value;
 if (!tokenAcceso || !tokenRefresco) return Astro.redirect('/auth');
 
 const cliente = obtenerClienteSuperbase();
+const adminCl = obtenerClienteAdmin();
 const { data: sesion } = await cliente.auth.setSession({ access_token: tokenAcceso, refresh_token: tokenRefresco });
 if (!sesion.user) return Astro.redirect('/auth');
 
-const { data: usuario } = await cliente.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
+// Usar admin client para leer entidad_id y verificar duplicado (evita RLS)
+const { data: usuario } = await adminCl.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
 if (!usuario || usuario.rol !== 'docente') return Astro.redirect('/docente/dashboard');
 let docenteId = usuario.entidad_id;
 // Si no tiene entidad_id, buscar por email
@@ -24,7 +26,7 @@ if (!docenteId && usuario.email) {
 const cuatrimestre = await obtenerCuatrimestreActivo();
 if (!cuatrimestre) return Astro.redirect('/docente/dashboard');
 
-const existente = docenteId ? await obtenerAutodiagnostico(docenteId, cuatrimestre.id) : null;
+const { data: existente } = docenteId ? await adminCl.from('autodiagnosticos').select('id').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestre.id).maybeSingle() : { data: null };
 const yaRespondido = !!existente;
 
 const ofertas = await obtenerOfertasAcademicas();

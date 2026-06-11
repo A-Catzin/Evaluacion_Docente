@@ -1,17 +1,18 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerCuatrimestreActivo } from '../../services/catalogos';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { obtenerClienteSuperbase, obtenerClienteAdmin } from '../../lib/supabaseClient';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
 if (!token || !refresh) return Astro.redirect('/auth');
 
 const cl = obtenerClienteSuperbase();
+const adminCl = obtenerClienteAdmin();
 const { data: sesion } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
 if (!sesion.user) return Astro.redirect('/auth');
 
-const { data: usuario } = await cl.from('usuarios').select('entidad_id,email').eq('id', sesion.user.id).maybeSingle();
+const { data: usuario } = await adminCl.from('usuarios').select('entidad_id,email').eq('id', sesion.user.id).maybeSingle();
 let docenteId = usuario?.entidad_id;
 if (!docenteId && usuario?.email) {
   const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
