@@ -34,13 +34,13 @@ for (const e of (eeData || [])) {
 
 // Observaciones por docente+asignatura
 const { data: obsData } = await cliente.from('observaciones').select('docente_id,asignatura_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids);
-const obsPorDocente = new Map<number, Map<number, number>>();
+// Observaciones por docente (general, no por materia)
+const obsPorDocente = new Map<number, number>();
 for (const o of (obsData || [])) {
   const r = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);
   if (r.length === 0) continue;
   const prom = Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100);
-  if (!obsPorDocente.has(o.docente_id)) obsPorDocente.set(o.docente_id, new Map());
-  obsPorDocente.get(o.docente_id)!.set(o.asignatura_id, prom);
+  if (!obsPorDocente.has(o.docente_id)) obsPorDocente.set(o.docente_id, prom);
 }
 
 // Grupos deduplicados por docente+asignatura+clave (colapsa inserts repetidos, preserva grupos distintos)
@@ -74,23 +74,22 @@ const filas = docentesFiltrados.map(d => {
   const coord = coordMap.get(d.id);
   const diag = diagMap.get(d.id);
   const eeMap = eePorDocente.get(d.id);
-  const obsMap2 = obsPorDocente.get(d.id);
+  const obsDoc = obsPorDocente.get(d.id);
   const planMap2 = planPorDocente.get(d.id);
   
   // Promedios generales de todas las materias
-  let sumEst = 0, sumObs = 0, sumPlan = 0, count = 0;
+  let sumEst = 0, sumPlan = 0, count = 0;
   const grupos = grupoMap.get(d.id) || [];
   for (const g of grupos) {
     const est = eeMap?.get(g.asignatura_id);
-    const obs = obsMap2?.get(g.asignatura_id);
+    const obs = obsDoc;
     const plan = planMap2?.get(g.asignatura_id);
-    if (est || obs || plan) count++;
+    if (est || plan) count++;
     if (est) sumEst += est;
-    if (obs) sumObs += obs;
     if (plan) sumPlan += plan;
   }
   const promEst = count > 0 ? Math.round(sumEst / count) : 0;
-  const promObs = count > 0 ? Math.round(sumObs / count) : 0;
+  const promObs = obsDoc || 0;
   const promPlan = count > 0 ? Math.round(sumPlan / count) : 0;
   const promCoord = coord?.score_normalizado ? Math.round(coord.score_normalizado) : 0;
   const promAuto = diag?.puntaje_total ? Math.round((diag.puntaje_total/120)*100) : 0;
@@ -162,7 +161,7 @@ const filas = docentesFiltrados.map(d => {
   gruposJson: JSON.stringify(Array.from(grupoMap.entries()).map(([k,v]) => [k, v])),
   asigJson: JSON.stringify(Object.fromEntries(asigMap)),
   eeJson: JSON.stringify(Array.from(eePorDocente.entries()).map(([k,v]) => [k, Array.from(v.entries())])),
-  obsJson: JSON.stringify(Array.from(obsPorDocente.entries()).map(([k,v]) => [k, Array.from(v.entries())])),
+  obsJson: JSON.stringify(Array.from(obsPorDocente.entries())),
   planJson: JSON.stringify(Array.from(planPorDocente.entries()).map(([k,v]) => [k, Array.from(v.entries())])),
   coordJson: JSON.stringify(Array.from(coordMap.entries()).map(([k,v]) => [k, v.score_normalizado])),
   diagJson: JSON.stringify(Array.from(diagMap.entries()).map(([k,v]) => [k, v.puntaje_total]))
@@ -177,7 +176,7 @@ const filas = docentesFiltrados.map(d => {
   // Reconstruir Maps externos e internos (Map<K, Map<K,V>>)
   var grupoMap2 = new Map(gruposData);
   var eeMap2 = new Map(eeData2.map(function(e){return [e[0], new Map(e[1])];}));
-  var obsMap2 = new Map(obsData2.map(function(e){return [e[0], new Map(e[1])];}));
+  var obsMap2 = new Map(obsData2);
   var planMap2 = new Map(planData2.map(function(e){return [e[0], new Map(e[1])];}));
   var coordMap2 = new Map(coordData2);
   var diagMap2 = new Map(diagData2);
@@ -187,7 +186,7 @@ const filas = docentesFiltrados.map(d => {
   function verMaterias(docenteId, nombreDocente) {
     var grupos = grupoMap2.get(docenteId) || [];
     var eeDoc = eeMap2.get(docenteId);
-    var obsDoc = obsMap2.get(docenteId);
+    var obsScore = obsMap2.get(docenteId);
     var planDoc = planMap2.get(docenteId);
     var coordScore = coordMap2.get(docenteId);
     var diagScore = diagMap2.get(docenteId);
@@ -199,7 +198,6 @@ const filas = docentesFiltrados.map(d => {
     grupos.forEach(function(g) {
       var a = asigData[g.asignatura_id] || {clave: '—', nombre: '—'};
       var eeScore = eeDoc ? eeDoc.get(g.asignatura_id) : null;
-      var obsScore = obsDoc ? obsDoc.get(g.asignatura_id) : null;
       var planScore = planDoc ? planDoc.get(g.asignatura_id) : null;
       html += '<tr><td class="text-center px-1 py-1">'+a.clave+'</td><td class="text-center px-1 py-1 font-medium">'+a.nombre+'</td><td class="text-center px-1 py-1">'+(g.modalidad||'—')+'</td><td class="text-center px-1 py-1 text-[10px] text-slate-600">'+g.clave_grupo+'</td><td class="text-center px-1 py-1">'+fmt(eeScore!=null?Math.round(eeScore):null)+'</td><td class="text-center px-1 py-1">'+fmt(obsScore)+'</td><td class="text-center px-1 py-1">'+fmt(planScore)+'</td><td class="text-center px-1 py-1">'+fmt(promCoord||null)+'</td><td class="text-center px-1 py-1">'+fmt(promAuto||null)+'</td></tr>';
     });
