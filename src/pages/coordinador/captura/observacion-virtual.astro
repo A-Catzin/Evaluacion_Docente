@@ -60,7 +60,7 @@ const SECCIONES = [
     e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Enviando...';
     var data={docente_id:parseInt(document.getElementById('docente_id').value),oferta_academica:document.getElementById('oferta').value,cuatrimestre_grupo:document.getElementById('cuatrimestre').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value};
     if(!data.docente_id||!data.oferta_academica||!data.cuatrimestre_grupo||!data.ciclo||!data.campus){toast('Completa todos los campos',true);btn.disabled=false;btn.textContent='Enviar Observación Virtual';return}
-    var prefs=['cco','cme','ccom','cso','cge','cno'];var counts=[6,4,5,2,2,1];
+    var prefs=['cco','cme','ccom','cso','cge','cno'];var counts=[6,4,4,2,2,1];
     prefs.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb&&rb.value!=='N/A')data[p+i]=parseInt(rb.value)}});
     prefs.forEach(function(p){var obs=document.querySelector('textarea[name="obs_'+p+'"]');if(obs&&obs.value.trim())data['obs_'+p]=obs.value.trim()});
     data.comentario_evaluador=document.getElementById('com_evaluador').value.trim()||null;
