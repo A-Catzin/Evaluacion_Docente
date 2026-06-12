@@ -13,9 +13,16 @@ if (!sesion.user) return Astro.redirect('/auth');
 
 const { data: usuario } = await cl.from('usuarios').select('entidad_id,email').eq('id', sesion.user.id).maybeSingle();
 let docenteId = usuario?.entidad_id;
-if (!docenteId && usuario?.email) {
-  const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
+let docenteEmail = usuario?.email || '';
+if (!docenteId && docenteEmail) {
+  const { data: doc } = await cl.from('docentes').select('id').eq('email', docenteEmail).maybeSingle();
   if (doc) docenteId = doc.id;
+}
+// Para observaciones/planeaciones: buscar tambien por email si entidad_id no coincide
+let docenteIds: number[] = docenteId ? [docenteId] : [];
+if (docenteEmail && docenteIds.length === 0) {
+  const { data: docsMatch } = await cl.from('docentes').select('id').eq('email', docenteEmail);
+  docenteIds = (docsMatch||[]).map(d=>d.id);
 }
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
@@ -28,17 +35,17 @@ let coordInfo: any = null;
 let planFeedback: any[] = [];
 let obsInfo: any = null;
 
-if (docenteId) {
-  const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteId).maybeSingle();
+if (docenteIds.length > 0) {
+  const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteIds[0]).maybeSingle();
   if (doc) nombreDocente = `${doc.nombre.toUpperCase()} ${doc.apellidos.toUpperCase()}`;
 
   const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
-    cl.from('encuesta_estudiantil').select('score_normalizado,comentarios').eq('docente_id', docenteId),
-    cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
-    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').eq('docente_id', docenteId).order('fecha_subida', { ascending: false }),
-    cl.from('observaciones').select('id,docente_id,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').eq('docente_id', docenteId),
-    cl.from('autodiagnosticos').select('*').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
-    cl.from('grupos').select('asignatura_id').eq('docente_id', docenteId),
+    cl.from('encuesta_estudiantil').select('score_normalizado,comentarios').in('docente_id', docenteIds),
+    cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
+    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').in('docente_id', docenteIds).order('fecha_subida', { ascending: false }),
+    cl.from('observaciones').select('id,docente_id,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds),
+    cl.from('autodiagnosticos').select('*').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
+    cl.from('grupos').select('asignatura_id').in('docente_id', docenteIds),
   ]);
 
   // Feedback
@@ -90,7 +97,7 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
       <span class="text-xs ">{cuatrimestre?.nombre || ''}</span>
     </div>
 
-    {!docenteId ? (
+    {docenteIds.length === 0 ? (
       <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center ">Completa tu autodiagnóstico para ver tus resultados.</div>
     ) : (
       <>
@@ -135,7 +142,7 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
     )}
 
     <!-- Retroalimentación -->
-    {docenteId && (
+    {docenteIds.length > 0 && (
       <div class="mb-8">
         <h2 class="text-lg font-bold text-slate-700 mb-4">📋 Retroalimentación de tus Evaluaciones</h2>
         <div class="space-y-3">
