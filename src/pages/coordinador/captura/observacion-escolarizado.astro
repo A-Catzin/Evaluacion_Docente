@@ -3,7 +3,10 @@ import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import { obtenerDocentes } from '../../../services/docentes';
 import { obtenerOfertasAcademicas, obtenerCampus } from '../../../services/catalogos';
 
-const docentes = await obtenerDocentes();
+const todos = await obtenerDocentes();
+const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
+const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
+const docentes = todos.filter(d => evalsSet.has(d.id));
 const ofertas = await obtenerOfertasAcademicas();
 const campusList = await obtenerCampus();
 const CUATRIMESTRES = ['1ro','2do','3ro','4to','5to','6to','7mo','8vo','9no','10mo','11vo','12vo'];
@@ -29,7 +32,7 @@ if (docenteIdParam) {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Docente *</label>
-            <input type="text" id="buscar-docente" placeholder="🔍 Buscar docente..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm mb-1" oninput="filtrarDocentes(this.value)" autocomplete="off" />
+            <input type="text" id="buscar-docente" placeholder="🔍 Buscar docente..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm mb-1"  autocomplete="off" />
             <select id="docente_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="autoLlenar(this.value)">
               <option value="">Seleccionar...</option>
               {docentes.map(d => (<option value={d.id} selected={docentePreseleccionado?.id === d.id}>{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</option>))}
@@ -126,6 +129,7 @@ if (docenteIdParam) {
   if (sel && sel.value) autoLlenar(sel.value);
 
   function filtrarDocentes(q) {
+  document.getElementById("buscar-docente").addEventListener("input", function(){ filtrarDocentes(this.value); });
     var sel = document.getElementById('docente_id');
     var term = (q || '').toLowerCase();
     for (var i = 1; i < sel.options.length; i++) {
