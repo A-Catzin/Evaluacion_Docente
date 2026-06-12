@@ -2,7 +2,9 @@
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import { obtenerDocentes } from '../../../services/docentes';
 import { obtenerOfertasAcademicas, obtenerCampus } from '../../../services/catalogos';
+import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
 
+const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();
 const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
