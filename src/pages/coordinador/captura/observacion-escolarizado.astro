@@ -1,0 +1,160 @@
+---
+import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
+import { obtenerDocentes } from '../../../services/docentes';
+import { obtenerOfertasAcademicas, obtenerCampus } from '../../../services/catalogos';
+
+const docentes = await obtenerDocentes();
+const ofertas = await obtenerOfertasAcademicas();
+const campusList = await obtenerCampus();
+const CUATRIMESTRES = ['1ro','2do','3ro','4to','5to','6to','7mo','8vo','9no','10mo','11vo','12vo'];
+const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
+
+// Precargar docente si viene de una tarjeta del dashboard
+const docenteIdParam = Astro.url.searchParams.get('docente_id');
+let docentePreseleccionado: { id: number; nombre: string; apellidos: string; oferta_academica?: string | null; campus?: string | null } | null = null;
+if (docenteIdParam) {
+  docentePreseleccionado = docentes.find(d => d.id === parseInt(docenteIdParam)) || null;
+}
+---
+
+<LayoutCoordinador titulo="Observación de Clase">
+  <div class="animate-flotar-entrada max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-tup mb-2">Observación de Clase</h1>
+    <p class="text-slate-500 mb-6">43 reactivos · 8 secciones · Escala 1-5 + N/A</p>
+
+    <form id="form-obs" class="space-y-6">
+      <!-- Datos de identificación -->
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
+        <h2 class="text-lg font-bold text-tup mb-4">Datos de Identificación</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Docente *</label>
+            <select id="docente_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="autoLlenar(this.value)">
+              <option value="">Seleccionar...</option>
+              {docentes.map(d => (<option value={d.id} selected={docentePreseleccionado?.id === d.id}>{d.nombre} {d.apellidos}</option>))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Oferta Académica *</label>
+            <select id="oferta" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+              <option value="">Seleccionar...</option>
+              {ofertas.map(o => (<option value={o.nombre} selected={docentePreseleccionado?.oferta_academica === o.nombre}>{o.nombre}</option>))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Cuatrimestre del grupo *</label>
+            <select id="cuatrimestre" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+              <option value="">Seleccionar...</option>
+              {CUATRIMESTRES.map(c => (<option value={c}>{c}</option>))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Ciclo *</label>
+            <select id="ciclo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+              <option value="">Seleccionar...</option>
+              {CICLOS.map(c => (<option value={c}>{c}</option>))}
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Campus *</label>
+            <div class="flex flex-wrap gap-2">
+              {campusList.map(c => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-tup/5"><input type="radio" name="campus" value={c.nombre} required class="accent-tup" checked={docentePreseleccionado?.campus === c.nombre} /><span class="text-sm">{c.nombre}</span></label>))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Secciones colapsables -->
+      {[
+        {id:'cco',titulo:'A. Cognitivas (7 reactivos)',items:['Expone, organiza, desarrolla y vincula los contenidos en forma clara.','Relaciona los contenidos con situaciones reales o casos prácticos.','Adapta los contenidos a los diversos estilos y necesidades.','Explica conceptos complejos utilizando analogías y ejemplos claros.','Clarifica términos técnicos según el nivel académico del grupo.','Facilita la apropiación del conocimiento mediante explicaciones.','Promueve el razonamiento crítico y la resolución de problemas.']},
+        {id:'cme',titulo:'B. Metacognitivas (9 reactivos)',items:['Organiza espacios de reflexión antes, durante y después de las actividades.','Orienta a los estudiantes para que identifiquen fortalezas y áreas de oportunidad.','Incluye actividades que promueven el aprendizaje autónomo.','Propone ejercicios para promover la metacognición.','Propone nuevas estrategias para mejorar los resultados.','Favorece la transferencia de conocimientos a nuevas situaciones.','Promueve la formulación de preguntas y pensamiento reflexivo.','Invita a seleccionar estrategias de estudio adaptadas.','Integra momentos de análisis sobre errores como oportunidades.']},
+        {id:'ccom',titulo:'C. Comunicativas (4 reactivos)',items:['Se comunica con lenguaje oral y escrito apropiado y de respeto.','Se comunica con lenguaje no verbal apropiado y de respeto.','Comunica propósitos, procedimientos y resultados esperados.','Diseña actividades que desarrollen expresión escrita y oral.']},
+        {id:'cso',titulo:'D. Sociales (4 reactivos)',items:['Procura relaciones empáticas y de respeto en la praxis docente.','Proporciona igualdad de oportunidades de participación.','Promueve compromiso y solidaridad entre los estudiantes.','Establece un clima de relaciones interpersonales respetuosas.']},
+        {id:'cge',titulo:'E. Gestión de la Enseñanza (7 reactivos)',items:['Organiza objetivos y contenidos de manera coherente con el modelo TUP.','Implementa diversas estrategias para aprendizaje significativo.','Considera saberes previos, intereses y experiencias.','Genera oportunidades de pensamiento crítico y creativo.','Motiva al aprendizaje, la indagación y búsqueda de conocimiento.','Integra recursos tecnológicos, didácticos y materiales.','Ofrece retroalimentación oportuna, pertinente y cálida.']},
+        {id:'caf',titulo:'F. Afectivas (2 reactivos)',items:['Genera un ambiente de confianza, seguridad y respeto.','Identifica fortalezas de sus estudiantes y las destaca.']},
+        {id:'ctepe',titulo:'G. Tecno-Pedagógicas (7 reactivos)',items:['Diseña tareas integradoras de proyectos usando NTIC.','Promueve empoderamiento del estudiante en uso de NTIC.','Muestra dominio de la tecnología como recurso para enseñanza.','Aplica métodos y técnicas pertinentes a la didáctica de su campo.','Identifica estrategias de enseñanza y dificultades recurrentes.','Promueve uso responsable, ético y seguro de tecnologías.','Genera situaciones de aprendizaje adecuadas a niveles de desarrollo.']},
+        {id:'cno',titulo:'H. Normativa (5 reactivos)',items:['Inicia puntualmente su sesión.','Entrega en tiempo y forma la planeación docente.','Desarrolla el tema correspondiente a la semana establecida.','Registra asistencia, evaluaciones y avances.','Concluye su sesión en el tiempo señalado.']}
+      ].map(sec => (
+        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+          <button type="button" class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors" onclick="this.parentElement.querySelector('.sec-content').classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')">
+            <h3 class="font-bold text-tup">{sec.titulo}</h3>
+            <svg class="w-5 h-5 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="sec-content px-6 pb-6 space-y-4">
+            {sec.items.map((item, i) => (
+              <div class="p-4 rounded-xl bg-slate-50">
+                <p class="text-sm font-medium text-slate-700 mb-3">{i+1}. {item}</p>
+                <div class="flex gap-2">
+                  {[1,2,3,4,5,'N/A'].map(v => (
+                    <label class={`flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer transition-colors`}>
+                      <input type="radio" name={`${sec.id}${i+1}`} value={v} class="sr-only peer" />
+                      <span class="text-sm font-bold text-slate-400 peer-checked:text-tup">{v}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <textarea name={`obs_${sec.id}`} placeholder="Observaciones de esta sección..." rows={3} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-tup focus:outline-none"></textarea>
+          </div>
+        </div>
+      ))}
+
+      <!-- Cierre -->
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta space-y-4">
+        <h2 class="text-lg font-bold text-tup">Comentarios Finales</h2>
+        <textarea id="com_docente" placeholder="Comentarios del docente (opcional)" rows={3} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-tup focus:outline-none"></textarea>
+        <textarea id="com_evaluador" placeholder="Comentarios adicionales del evaluador (opcional)" rows={3} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-tup focus:outline-none"></textarea>
+        <button type="submit" id="btn-enviar" class="w-full bg-tup text-white font-semibold text-lg py-4 rounded-2xl shadow-tarjeta hover:bg-tup/90 transition-all">Enviar Observación</button>
+      </div>
+    </form>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
+</LayoutCoordinador>
+
+<script is:inline define:vars={{ docentesData: JSON.stringify(docentes.map(d => ({id:d.id, oferta:d.oferta_academica||'', campus:d.campus||''}))) }}>
+  var docentesMap = JSON.parse(docentesData).reduce(function(m, d) { m[d.id] = d; return m; }, {});
+
+  function autoLlenar(docenteId) {
+    var d = docentesMap[parseInt(docenteId)];
+    if (!d) return;
+    if (d.oferta) { var of = document.getElementById('oferta'); for (var i = 0; i < of.options.length; i++) { if (of.options[i].value === d.oferta) { of.selectedIndex = i; break; } } }
+    if (d.campus) { var cbs = document.querySelectorAll('input[name="campus"]'); cbs.forEach(function(cb) { if (cb.value === d.campus) cb.checked = true; }); }
+  }
+  // Auto-llenar al cargar si ya hay docente preseleccionado
+  var sel = document.getElementById('docente_id');
+  if (sel && sel.value) autoLlenar(sel.value);
+
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
+
+  document.getElementById('form-obs').addEventListener('submit',async function(e){
+    e.preventDefault();
+    var btn=document.getElementById('btn-enviar');btn.disabled=true;btn.textContent='Enviando...';
+
+    var data={docente_id:parseInt(document.getElementById('docente_id').value),oferta_academica:document.getElementById('oferta').value,cuatrimestre_grupo:document.getElementById('cuatrimestre').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value};
+    if(!data.docente_id||!data.oferta_academica||!data.cuatrimestre_grupo||!data.ciclo||!data.campus){toast('Todos los campos de identificación son obligatorios',true);btn.disabled=false;btn.textContent='Enviar Observación';return}
+
+    // Recoger 43 reactivos
+    var prefijos=['cco','cme','ccom','cso','cge','caf','ctepe','cno'];
+    var cuentas=[7,9,4,4,7,2,7,5];
+    var totalReactivos=0;
+    prefijos.forEach(function(pref,si){
+      for(var i=1;i<=cuentas[si];i++){
+        var rb=document.querySelector('input[name="'+pref+i+'"]:checked');
+        if(rb&&rb.value!=='N/A'){data[pref+i]=parseInt(rb.value);totalReactivos++}
+      }
+    });
+
+    // Observaciones por sección
+    prefijos.forEach(function(pref){var obs=document.querySelector('textarea[name="obs_'+pref+'"]');if(obs&&obs.value.trim())data['obs_'+pref.replace('cco','cognitivas').replace('cme','metacognitivas').replace('ccom','comunicativas').replace('cso','sociales').replace('cge','gestion').replace('caf','afectivas').replace('ctepe','tecno').replace('cno','normativa')]=obs.value.trim()});
+
+    data.comentario_docente=document.getElementById('com_docente').value.trim()||null;
+    data.comentario_evaluador=document.getElementById('com_evaluador').value.trim()||null;
+
+    try{
+      var res=await fetch('/api/coordinador/observacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      var j=await res.json();
+      if(res.ok){toast('Observación guardada exitosamente',false);setTimeout(function(){location.href='/coordinador/dashboard'},1500)}
+      else{toast(j.error||'Error al guardar',true);btn.disabled=false;btn.textContent='Enviar Observación'}
+    }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación'}
+  });
+</script>
