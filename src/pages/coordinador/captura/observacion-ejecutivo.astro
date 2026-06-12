@@ -56,7 +56,7 @@ const SECCIONES = [
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
   document.getElementById('form-obs').addEventListener('submit',async function(e){
     e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Enviando...';
-    var data={docente_id:parseInt(document.getElementById('docente_id').value),oferta_academica:document.getElementById('oferta').value,cuatrimestre_grupo:document.getElementById('cuatrimestre').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value,tipo:'ejecutivo'};
+    var data={docente_id:parseInt(document.getElementById('docente_id').value),oferta_academica:document.getElementById('oferta').value,cuatrimestre_grupo:document.getElementById('cuatrimestre').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value};
     if(!data.docente_id||!data.oferta_academica||!data.cuatrimestre_grupo||!data.ciclo||!data.campus){toast('Completa todos los campos',true);btn.disabled=false;btn.textContent='Enviar Observación Ejecutiva';return}
     var prefs=['cco','cme','ccom','cso','cge'];var counts=[4,4,4,2,3];
     prefs.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb&&rb.value!=='N/A')data[p+i]=parseInt(rb.value)}});
