@@ -36,7 +36,7 @@ if (docenteId) {
     cl.from('encuesta_estudiantil').select('score_normalizado,comentarios').eq('docente_id', docenteId),
     cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
     cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').eq('docente_id', docenteId).order('fecha_subida', { ascending: false }),
-    cl.from('observaciones').select('*').eq('docente_id', docenteId),
+    cl.from('observaciones').select('id,docente_id,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').eq('docente_id', docenteId),
     cl.from('autodiagnosticos').select('*').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
     cl.from('grupos').select('asignatura_id').eq('docente_id', docenteId),
   ]);
