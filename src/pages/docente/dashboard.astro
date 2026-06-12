@@ -25,7 +25,7 @@ let nombreDocente = '';
 
 if (docenteId) {
   const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteId).maybeSingle();
-  if (doc) nombreDocente = `${doc.nombre} ${doc.apellidos}`;
+  if (doc) nombreDocente = `${doc.nombre.toUpperCase()} ${doc.apellidos.toUpperCase()}`;
 
   const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
     cl.from('encuesta_estudiantil').select('score_normalizado,comentarios').eq('docente_id', docenteId),
