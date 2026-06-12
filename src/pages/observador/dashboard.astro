@@ -32,7 +32,7 @@ for (const g of (gruposData || [])) {
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {lista.map(d => (
           <div class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover transition-shadow">
-            <h3 class="font-semibold text-tup mb-1">{d.nombre} {d.apellidos}</h3>
+            <h3 class="font-semibold text-tup mb-1">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</h3>
             <p class="text-xs text-slate-400 mb-3">{d.email}</p>
             <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
               <span>{d.campus || '—'}</span><span>·</span><span>{d.modalidad || '—'}</span><span>·</span><span>{matPorDocente.get(d.id) || 0} grupos</span>

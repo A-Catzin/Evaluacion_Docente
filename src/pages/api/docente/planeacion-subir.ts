@@ -35,10 +35,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     // Guardar en BD
     const asignaturaId = parseInt(formData.get('asignatura_id') as string);
+    const cuatrimestreId = parseInt(formData.get('cuatrimestre_id') as string);
+    if (isNaN(asignaturaId) || isNaN(cuatrimestreId)) return new Response(JSON.stringify({ error: 'Asignatura o cuatrimestre inválido' }), { status: 400 });
+    
+    // Validar que el docente esté vinculado a esta asignatura via grupos
+    const { data: vinc } = await cl.from('grupos').select('id').eq('docente_id', u.entidad_id).eq('asignatura_id', asignaturaId).limit(1);
+    if (!vinc || vinc.length === 0) return new Response(JSON.stringify({ error: 'No estás asignado a esta materia' }), { status: 403 });
+    
     const { error: dbError } = await cl.from('planeaciones').insert({
       docente_id: u.entidad_id,
-      cuatrimestre_id: parseInt(formData.get('cuatrimestre_id') as string),
-      asignatura_id: isNaN(asignaturaId) ? null : asignaturaId,
+      cuatrimestre_id: cuatrimestreId,
+      asignatura_id: asignaturaId,
       grupo: formData.get('grupo') as string,
       modalidad: formData.get('modalidad') as string,
       proyecto: formData.get('proyecto') === 'true',

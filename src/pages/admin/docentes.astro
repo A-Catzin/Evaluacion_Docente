@@ -124,7 +124,7 @@ const filas = docentesFiltrados.map(d => {
             const tieneMaterias = grupos.length > 0;
             return (
               <tr class="hover:bg-slate-50">
-                <td class="px-2 py-2 text-center font-medium">{f.nombre} {f.apellidos}</td>
+                <td class="px-2 py-2 text-center font-medium">{f.nombre.toUpperCase()} {f.apellidos.toUpperCase()}</td>
                 <td class="px-2 py-2 text-center text-slate-600 text-[10px]">{f.email}</td>
                 <td class="px-2 py-2 text-center">{f.campus || '—'}</td>
                 <td class="px-2 py-2 text-center">{f.modalidad || '—'}</td>

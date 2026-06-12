@@ -32,7 +32,7 @@ if (docenteIdParam) {
             <input type="text" id="buscar-docente" placeholder="🔍 Buscar docente..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm mb-1" oninput="filtrarDocentes(this.value)" autocomplete="off" />
             <select id="docente_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="autoLlenar(this.value)">
               <option value="">Seleccionar...</option>
-              {docentes.map(d => (<option value={d.id} selected={docentePreseleccionado?.id === d.id}>{d.nombre} {d.apellidos}</option>))}
+              {docentes.map(d => (<option value={d.id} selected={docentePreseleccionado?.id === d.id}>{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</option>))}
             </select>
           </div>
           <div>

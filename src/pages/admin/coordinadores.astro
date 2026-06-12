@@ -41,7 +41,7 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
             <div class="flex items-center gap-4">
               <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{f.nombre.charAt(0)}</div>
               <div>
-                <p class="font-medium text-slate-800">{f.nombre} {f.apellidos}</p>
+                <p class="font-medium text-slate-800">{f.nombre.toUpperCase()} {f.apellidos.toUpperCase()}</p>
                 <p class="text-xs ">{f.email}</p>
               </div>
             </div>

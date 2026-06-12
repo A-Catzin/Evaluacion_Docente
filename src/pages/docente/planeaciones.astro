@@ -1,7 +1,7 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
-import { obtenerCuatrimestreActivo, obtenerAsignaturas } from '../../services/catalogos';
+import { obtenerCuatrimestreActivo } from '../../services/catalogos';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -21,7 +21,10 @@ if (!entidadId && usuario.email) {
 if (!entidadId) return Astro.redirect('/docente/dashboard');
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
-const asignaturas = await obtenerAsignaturas();
+// Materias asignadas al docente via grupos
+const { data: gruposDocente } = await cl.from('grupos').select('id,clave,asignatura_id,modalidad').eq('docente_id', entidadId);
+const materiasIds = [...new Set((gruposDocente||[]).map(g => g.asignatura_id))];
+const { data: misAsignaturas } = materiasIds.length > 0 ? await cl.from('asignaturas').select('id,clave,nombre').in('id', materiasIds).order('nombre') : { data: [] };
 const { data: docente } = await cl.from('docentes').select('campus,turno').eq('id', entidadId).maybeSingle();
 const { data: planeacionesRaw } = await cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', entidadId).order('fecha_subida', { ascending: false });
 
@@ -75,8 +78,8 @@ for (const p of (planeacionesRaw || [])) {
       <h2 class="text-lg font-bold text-tup mb-4">Subir Nueva Planeación</h2>
       <form id="form-subir" class="space-y-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-slate-700 mb-1">Asignatura *</label><select id="asignatura_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option>{asignaturas.map(a => (<option value={a.id}>{a.nombre}</option>))}</select></div>
-          <div><label class="block text-sm font-medium text-slate-700 mb-1">Grupo *</label><input type="text" id="grupo" required placeholder="Ej: 3A" class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm" /></div>
+          <div><label class="block text-sm font-medium text-slate-700 mb-1">Asignatura *</label><select id="asignatura_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="actualizarGrupos()"><option value="">Seleccionar...</option>{misAsignaturas?.map(a => (<option value={a.id}>{a.nombre}</option>))}</select></div>
+          <div><label class="block text-sm font-medium text-slate-700 mb-1">Grupo *</label><select id="grupo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Primero selecciona la materia</option></select></div>
           <div><label class="block text-sm font-medium text-slate-700 mb-1">Modalidad</label><select id="modalidad" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option>Escolarizada</option><option>Ejecutiva</option></select></div>
           <div><label class="block text-sm font-medium text-slate-700 mb-1">Archivo PDF *</label><input type="file" id="archivo" accept=".pdf" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-tup file:text-white" /></div>
         </div>
@@ -104,19 +107,31 @@ for (const p of (planeacionesRaw || [])) {
   </div>
 </LayoutDocente>
 
-<script is:inline define:vars={{ docenteId: usuario.entidad_id, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '' }}>
+<script is:inline define:vars={{ docenteId: entidadId, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '', gruposJson: JSON.stringify(gruposDocente || []) }}>
+  var gruposData = JSON.parse(gruposJson);
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
+  
+  function actualizarGrupos(){
+    var asigId = parseInt(document.getElementById('asignatura_id').value);
+    var sel = document.getElementById('grupo');
+    sel.innerHTML = '<option value="">Seleccionar...</option>';
+    if (!asigId) return;
+    var matches = gruposData.filter(function(g){ return g.asignatura_id === asigId; });
+    matches.forEach(function(g){ var o = document.createElement('option'); o.value = g.clave || g.id; o.textContent = g.clave || ('Grupo '+g.id); sel.appendChild(o); });
+  }
+  
   document.getElementById('form-subir').addEventListener('submit',async function(e){
     e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Subiendo...';
     var file=document.getElementById('archivo').files[0];
     if(!file){toast('Selecciona un archivo PDF',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
-    var asig=document.getElementById('asignatura_id');var grupo=document.getElementById('grupo').value.trim();
+    var asig=document.getElementById('asignatura_id');var grupo=document.getElementById('grupo').value;
+    if(!asig.value||!grupo){toast('Selecciona asignatura y grupo',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
     var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_doc_26-3.pdf';
     try{
       var path=cuatrimestreId+'/'+docenteId+'/'+Date.now()+'_'+file.name.replace(/\s+/g,'_');
       var formData=new FormData();
       formData.append('file',file); formData.append('path',path);
-      formData.append('cuatrimestre',cuatrimestreId); formData.append('asignatura',asig.value);
+      formData.append('cuatrimestre_id',cuatrimestreId); formData.append('asignatura_id',asig.value);
       formData.append('grupo',grupo); formData.append('modalidad',document.getElementById('modalidad').value);
       formData.append('proyecto',document.getElementById('proyecto').value==='true'?'true':'false');
       formData.append('laboratorio',document.getElementById('laboratorio').value);

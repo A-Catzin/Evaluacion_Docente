@@ -6,8 +6,13 @@ import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
 const busqueda = Astro.url.searchParams.get('q') || '';
-const docentes = await obtenerDocentes();
+const todos = await obtenerDocentes();
 const cliente = obtenerClienteSuperbase();
+
+// Filtrar solo docentes con evaluaciones (mismo filtro que /admin/docentes)
+const { data: docsConEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
+const docsEvaluados = new Set((docsConEval || []).map(e => e.docente_id));
+const docentes = todos.filter(d => docsEvaluados.has(d.id));
 
 // Obtener observaciones, planeaciones y evaluaciones de coordinación
 const { data: obsData } = await cliente.from('observaciones').select('docente_id');
@@ -111,7 +116,7 @@ const completadosF = estadosMostrar.filter(e => e.completo);
               <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{e.docente.nombre.charAt(0)}</div>
                 <div class="flex-1 min-w-0">
-                  <p class="font-medium text-slate-800 text-sm truncate">{e.docente.nombre} {e.docente.apellidos}</p>
+                  <p class="font-medium text-slate-800 text-sm truncate">{e.docente.nombre.toUpperCase()} {e.docente.apellidos.toUpperCase()}</p>
                   <p class="text-xs text-slate-400 truncate">{e.docente.email}</p>
                 </div>
               </div>
@@ -153,7 +158,7 @@ const completadosF = estadosMostrar.filter(e => e.completo);
               <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">{e.docente.nombre.charAt(0)}</div>
                 <div class="flex-1 min-w-0">
-                  <p class="font-medium text-slate-700 text-sm truncate">{e.docente.nombre} {e.docente.apellidos}</p>
+                  <p class="font-medium text-slate-700 text-sm truncate">{e.docente.nombre.toUpperCase()} {e.docente.apellidos.toUpperCase()}</p>
                   <p class="text-xs ">Completado</p>
                 </div>
               </div>
