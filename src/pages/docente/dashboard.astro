@@ -35,7 +35,7 @@ if (docenteId) {
   const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
     cl.from('encuesta_estudiantil').select('score_normalizado,comentarios').eq('docente_id', docenteId),
     cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
-    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').eq('docente_id', docenteId).eq('estado', 'Aprobado'),
+    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').eq('docente_id', docenteId).order('fecha_subida', { ascending: false }),
     cl.from('observaciones').select('*').eq('docente_id', docenteId),
     cl.from('autodiagnosticos').select('*').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
     cl.from('grupos').select('asignatura_id').eq('docente_id', docenteId),
@@ -179,8 +179,17 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
               </summary>
               <div class="mt-3 text-sm text-slate-600 space-y-2">
                 {obsInfo.comentario_evaluador && <div class="bg-slate-50 rounded-xl p-3"><b>Comentario del evaluador:</b><p class="mt-1">"{obsInfo.comentario_evaluador}"</p></div>}
-                {obsInfo.observaciones && <div class="bg-slate-50 rounded-xl p-3"><b>Observaciones:</b><p class="mt-1">{obsInfo.observaciones}</p></div>}
-                {obsInfo.recomendaciones && <div class="bg-slate-50 rounded-xl p-3"><b>Recomendaciones:</b><p class="mt-1">{obsInfo.recomendaciones}</p></div>}
+                {obsInfo.comentario_docente && <div class="bg-slate-50 rounded-xl p-3"><b>Comentario del docente:</b><p class="mt-1">"{obsInfo.comentario_docente}"</p></div>}
+                <div class="grid grid-cols-1 gap-1 text-xs">
+                  {obsInfo.obs_cognitivas && <span class="text-slate-500">🧠 Cognitivas: {obsInfo.obs_cognitivas}</span>}
+                  {obsInfo.obs_metacognitivas && <span>🔄 Metacognitivas: {obsInfo.obs_metacognitivas}</span>}
+                  {obsInfo.obs_comunicativas && <span>💬 Comunicativas: {obsInfo.obs_comunicativas}</span>}
+                  {obsInfo.obs_sociales && <span>👥 Sociales: {obsInfo.obs_sociales}</span>}
+                  {obsInfo.obs_gestion && <span>📊 Gestión: {obsInfo.obs_gestion}</span>}
+                  {obsInfo.obs_afectivas && <span>❤️ Afectivas: {obsInfo.obs_afectivas}</span>}
+                  {obsInfo.obs_tecno && <span>💻 Tecnopedagógicas: {obsInfo.obs_tecno}</span>}
+                  {obsInfo.obs_normativa && <span>📏 Normativa: {obsInfo.obs_normativa}</span>}
+                </div>
               </div>
             </details>
           )}
@@ -194,7 +203,7 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
               <div class="mt-3 text-sm text-slate-600 space-y-3">
                 {planFeedback.map((p,i)=>(
                   <div class="border-b border-slate-100 pb-3">
-                    <p class="font-medium text-xs text-slate-400 mb-1">Evaluación #{i+1} — Puntaje: {p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'}</p>
+                    <p class="font-medium text-xs text-slate-400 mb-1">Evaluación #{i+1} — Puntaje: {p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'} · <span class={p.estado==='Aprobado'?'text-emerald-600':p.estado==='Corrección'?'text-red-500':'text-amber-500'}>{p.estado||'Pendiente'}</span></p>
                     {p.comentario_retroalimentacion && <div class="bg-slate-50 rounded-xl p-3"><b>Retroalimentación:</b><p class="mt-1">"{p.comentario_retroalimentacion}"</p></div>}
                     {p.observaciones_generales && <div class="bg-slate-50 rounded-xl p-3 mt-2"><b>Observaciones:</b><p class="mt-1">{p.observaciones_generales}</p></div>}
                   </div>
