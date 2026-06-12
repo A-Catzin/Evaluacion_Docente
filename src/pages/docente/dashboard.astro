@@ -22,6 +22,11 @@ const cuatrimestre = await obtenerCuatrimestreActivo();
 
 let scores = { promEst: 0, promCoord: 0, promPlan: 0, promObs: 0, promAuto: 0, final360: null as number|null, cat360: 'No iniciado', instrumentos: 0 };
 let nombreDocente = '';
+let diagInfo: any = null;
+let eeComentarios: string[] = [];
+let coordComentario: string|null = null;
+let planFeedback: any[] = [];
+let obsComentario: string[] = [];
 
 if (docenteId) {
   const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteId).maybeSingle();
