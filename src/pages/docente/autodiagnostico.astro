@@ -98,7 +98,7 @@ const REACTIVOS = [
               <div>
                 <label class="block text-sm font-medium text-slate-700 mb-2">Campus asignado *</label>
                 <div class="space-y-2">
-                  {CAMPUS.map(c => (<label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-tup/5 cursor-pointer"><input type="radio" name="campus" value={c} required class="accent-tup" /><span class="text-sm text-slate-700">{c}</span></label>))}
+                  {CAMPUS.map(c => (<label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-tup/5 cursor-pointer peer-checked:bg-tup peer-checked:text-white"><input type="radio" name="campus" value={c} required class="accent-tup" /><span class="text-sm text-slate-700">{c}</span></label>))}
                 </div>
               </div>
             </div>
@@ -111,19 +111,19 @@ const REACTIVOS = [
             <div class="mb-6">
               <label class="block text-sm font-medium text-slate-700 mb-2">Oferta académica *</label>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {OFERTA.map(o => (<label class="flex items-center gap-2 p-2 rounded-lg hover:bg-tup/5 cursor-pointer"><input type="checkbox" name="oferta" value={o} class="accent-tup" /><span class="text-sm text-slate-700">{o}</span></label>))}
+                {OFERTA.map(o => (<label class="flex items-center gap-2 p-2 rounded-lg hover:bg-tup/5 cursor-pointer peer-checked:bg-tup peer-checked:text-white"><input type="checkbox" name="oferta" value={o} class="accent-tup" /><span class="text-sm text-slate-700">{o}</span></label>))}
               </div>
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">Turno *</label>
               <div class="flex flex-wrap gap-2">
-                {TURNOS.map(t => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:bg-tup/5 cursor-pointer"><input type="checkbox" name="turno" value={t} class="accent-tup" /><span class="text-sm text-slate-700">{t}</span></label>))}
+                {TURNOS.map(t => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:bg-tup/5 cursor-pointer peer-checked:bg-tup peer-checked:text-white"><input type="checkbox" name="turno" value={t} class="accent-tup" /><span class="text-sm text-slate-700">{t}</span></label>))}
               </div>
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">Modalidad *</label>
               <div class="flex flex-wrap gap-2">
-                {['Escolarizado','Virtual','Ejecutivo'].map(m => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:bg-tup/5 cursor-pointer"><input type="checkbox" name="modalidad" value={m} class="accent-tup" /><span class="text-sm text-slate-700">{m}</span></label>))}
+                {['Escolarizado','Virtual','Ejecutivo'].map(m => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:bg-tup/5 cursor-pointer peer-checked:bg-tup peer-checked:text-white"><input type="checkbox" name="modalidad" value={m} class="accent-tup" /><span class="text-sm text-slate-700">{m}</span></label>))}
               </div>
             </div>
           </div>
@@ -139,10 +139,10 @@ const REACTIVOS = [
                   <p class="text-sm font-medium text-slate-700 mb-3">{i+1}. {r}</p>
                   <div class="flex gap-2">
                     {[1,2,3,4,5].map(v => (
-                      <label class={`flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer transition-colors text-center reactivo-${i}`}>
+                      <label class={`flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer peer-checked:bg-tup peer-checked:border-tup transition-colors text-center reactivo-${i}`}>
                         <input type="radio" name={`r${i+1}`} value={v} required class="sr-only peer" />
-                        <span class="text-lg font-bold text-slate-400 peer-checked:text-tup">{v}</span>
-                        <span class="text-[9px] text-slate-400 peer-checked:text-tup leading-tight">{['Nunca','Pocas veces','Algunas veces','Casi siempre','Siempre'][v-1]}</span>
+                        <span class="text-lg font-bold text-slate-400 peer-checked:text-white">{v}</span>
+                        <span class="text-[9px] text-slate-400 peer-checked:text-white leading-tight">{['Nunca','Pocas veces','Algunas veces','Casi siempre','Siempre'][v-1]}</span>
                       </label>
                     ))}
                   </div>

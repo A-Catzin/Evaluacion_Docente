@@ -64,9 +64,9 @@ const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docente
                 <p class="text-sm font-medium text-slate-700 mb-3">{i+1}. {item}</p>
                 <div class="flex gap-2">
                   {[1,2,3,4,5].map(v => (
-                    <label class="flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer">
+                    <label class="flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer peer-checked:bg-tup peer-checked:border-tup">
                       <input type="radio" name={`${cat.id}${i+1}`} value={v} required class="sr-only peer" />
-                      <span class="text-sm font-bold text-slate-400 peer-checked:text-tup">{v}</span>
+                      <span class="text-sm font-bold text-slate-400 peer-checked:text-white">{v}</span>
                       <span class="text-[9px] text-slate-400">{['Insuf.','Defic.','Acept.','Bueno','Excel.'][v-1]}</span>
                     </label>
                   ))}
