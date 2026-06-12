@@ -23,8 +23,8 @@ const { data: asignatura } = await cliente.from('asignaturas').select('nombre').
 // Cargar categorias desde la BD (editables via /admin/instrumentos)
 const { data: cats } = await cliente.from('instrumento_preguntas').select('*').eq('instrumento', 'planeacion').eq('tipo_respuesta', 'categoria').eq('activa', true).order('orden');
 const categorias = (cats || []).map(c => {
-  const ops = (c.opciones || {}) as Record<string, string[]>;
-  return { id: c.seccion, label: `${c.orden}. ${c.texto}`, obs2: ops.obs2 || [], obs1: ops.obs1 || [], obs0: ops.obs0 || [] };
+  const ops = (c.opciones || {}) as Record<string, any>;
+  return { id: c.seccion, label: `${c.orden}. ${c.texto}`, desc2: ops.desc2 || '', desc1: ops.desc1 || '', desc0: ops.desc0 || '', obs2: ops.obs2 || [], obs1: ops.obs1 || [], obs0: ops.obs0 || [] };
 });
 
 if (categorias.length === 0) {
@@ -46,8 +46,11 @@ if (categorias.length === 0) {
 
       {categorias.map((c, ci) => (
         <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
-          <p class="font-semibold text-slate-800 mb-3">{c.label}</p>
-          <div class="flex flex-wrap gap-2 mb-3">
+          <p class="font-semibold text-slate-800 mb-2">{c.label}</p>
+          {c.desc2 && (<p class="text-xs text-slate-500 mb-1"><b>(2) Satisfactorio:</b> {c.desc2}</p>)}
+          {c.desc1 && (<p class="text-xs text-slate-500 mb-1"><b>(1) Suficiente:</b> {c.desc1}</p>)}
+          {c.desc0 && (<p class="text-xs text-slate-500 mb-1"><b>(0) Insuficiente:</b> {c.desc0}</p>)}
+          <div class="flex flex-wrap gap-2 mt-3 mb-3">
             {[2,1,0].map(v => (
               <label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:border-tup cursor-pointer group has-[:checked]:bg-[#1e3a5f] has-[:checked]:text-white">
                 <input type="radio" name={`score_${c.id}`} value={v} required class="sr-only peer" onchange={`toggleObs('${c.id}',this.value)`} />
