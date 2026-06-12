@@ -53,13 +53,13 @@ if (categorias.length === 0) {
           <div class="flex flex-wrap gap-2 mt-3 mb-3">
             {[2,1,0].map(v => (
               <label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:border-tup cursor-pointer group has-[:checked]:bg-[#1e3a5f] has-[:checked]:text-white">
-                <input type="radio" name={`score_${c.id}`} value={v} required class="sr-only peer" onchange={`toggleObs('${c.id}',this.value)`} />
+                <input type="radio" name={`score_${c.id}`} value={v} required class="sr-only peer" />
                 <span class="text-sm font-bold">{v}</span>
                 <span class="text-[10px] text-slate-400 group-has-[:checked]:text-white/70">{v===2?'Satisfactorio':v===1?'Suficiente':'Insuficiente'}</span>
               </label>
             ))}
             <label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:border-amber-500 cursor-pointer has-[:checked]:bg-amber-500 has-[:checked]:text-white">
-              <input type="radio" name={`score_${c.id}`} value="na" class="sr-only peer" onchange={`toggleObs('${c.id}','na')`} />
+              <input type="radio" name={`score_${c.id}`} value="na" class="sr-only peer" />
               <span class="text-sm font-bold">N/A</span>
             </label>
           </div>
@@ -93,6 +93,14 @@ if (categorias.length === 0) {
 <script is:inline define:vars={{ obsData: JSON.stringify(categorias) }}>
   var catData = JSON.parse(obsData);
   var scores = {};
+
+  // Delegated event listener para todos los radios de puntuacion
+  document.addEventListener('change', function(e) {
+    var target = e.target;
+    if (!target || !target.name || !target.name.startsWith('score_')) return;
+    var catId = target.name.replace('score_', '');
+    toggleObs(catId, target.value);
+  });
 
   function toggleObs(catId, val) {
     var obsDiv = document.getElementById('obs_' + catId);
