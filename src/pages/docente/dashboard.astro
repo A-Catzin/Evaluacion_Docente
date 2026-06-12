@@ -42,11 +42,11 @@ if (docenteId) {
   ]);
 
   // Feedback
-  const eeComentarios = (eeData||[]).filter(e=>e.comentarios).map(e=>e.comentarios);
-  const coordComentario = coordData?.[0]?.comentarios || null;
-  const planFeedback = (planData||[]).filter(p=>p.comentario_retroalimentacion);
-  const obsComentario = (obsData||[]).filter(o=>o.comentario_evaluador).map(o=>o.comentario_evaluador);
-  const diagInfo = diagData?.[0] || null;
+  eeComentarios = (eeData||[]).filter(e=>e.comentarios).map(e=>e.comentarios);
+  coordComentario = coordData?.[0]?.comentarios || null;
+  planFeedback = (planData||[]).filter(p=>p.comentario_retroalimentacion);
+  obsComentario = (obsData||[]).filter(o=>o.comentario_evaluador).map(o=>o.comentario_evaluador);
+  diagInfo = diagData?.[0] || null;
 
   // EE promedio
   const eeScores = (eeData||[]).map(e=>e.score_normalizado).filter(v=>v);
