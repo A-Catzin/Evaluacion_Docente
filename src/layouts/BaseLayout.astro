@@ -46,4 +46,6 @@ const {
   @media (max-width: 640px) { html { font-size: 15px; } }
   button, a[role='button'] { min-height: 44px; min-width: 44px; }
   ::selection { background-color: rgba(30, 58, 95, 0.2); color: #1e3a5f; }
+  label:has(input:checked) { background-color: #1e3a5f !important; border-color: #1e3a5f !important; }
+  label:has(input:checked) span, label:has(input:checked) p { color: white !important; }
 </style>

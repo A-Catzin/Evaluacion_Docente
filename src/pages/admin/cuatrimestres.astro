@@ -41,7 +41,7 @@ const cuatrimestres = await obtenerCuatrimestres();
                 <input type="date" class="edit-fin hidden rounded-lg border border-slate-200 px-2 py-1 text-xs" value={c.fecha_fin || ''} />
               </td>
               <td class="px-3 py-3 text-center">
-                <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${c.cerrado ? 'bg-slate-100 text-slate-400' : c.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`} data-id={c.id} data-activa={c.activo} data-cerrado={c.cerrado}>{c.cerrado ? 'Cerrado' : c.activo ? 'Activo' : 'Inactivo'}</button>
+                <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${c.cerrado ? 'bg-slate-100 ' : c.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`} data-id={c.id} data-activa={c.activo} data-cerrado={c.cerrado}>{c.cerrado ? 'Cerrado' : c.activo ? 'Activo' : 'Inactivo'}</button>
               </td>
               <td class="px-3 py-3 text-center">
                 <button class="btn-editar text-xs text-tup hover:underline mr-2" data-id={c.id}>Editar</button>
@@ -51,7 +51,7 @@ const cuatrimestres = await obtenerCuatrimestres();
               </td>
             </tr>
           ))}
-          {cuatrimestres.length === 0 && <tr><td colspan="6" class="text-center py-12 text-slate-400">No hay cuatrimestres.</td></tr>}
+          {cuatrimestres.length === 0 && <tr><td colspan="6" class="text-center py-12 ">No hay cuatrimestres.</td></tr>}
         </tbody>
       </table>
     </div>

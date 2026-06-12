@@ -34,7 +34,7 @@ const items = busqueda ? ofertas.filter(o => o.nombre.toLowerCase().includes(bus
     <!-- Tabla -->
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       {items.length === 0 ? (
-        <div class="p-12 text-center text-slate-400">No hay ofertas académicas.</div>
+        <div class="p-12 text-center ">No hay ofertas académicas.</div>
       ) : (
         <table class="w-full text-sm">
           <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Estado</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 w-36">Acciones</th></tr></thead>
@@ -46,7 +46,7 @@ const items = busqueda ? ofertas.filter(o => o.nombre.toLowerCase().includes(bus
                   <input type="text" class="oferta-edit hidden rounded-lg border border-slate-200 px-2 py-1 text-sm w-full" value={o.nombre} />
                 </td>
                 <td class="px-4 py-3 text-center">
-                  <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${o.activa ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`} data-id={o.id} data-activa={o.activa}>
+                  <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${o.activa ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 '}`} data-id={o.id} data-activa={o.activa}>
                     {o.activa ? 'Activa' : 'Inactiva'}
                   </button>
                 </td>

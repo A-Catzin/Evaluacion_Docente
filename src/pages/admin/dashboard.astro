@@ -127,7 +127,7 @@ const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bue
 filasTodas.forEach(f => { catCounts[f.cat360]++; });
 
 function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
-function colorN(n: number|null|undefined): string { if (!n) return 'text-slate-400'; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
+function colorN(n: number|null|undefined): string { if (!n) return ''; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
 
 const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSeleccionado) || cuatrimestre;
 ---
@@ -171,9 +171,9 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       <div class="px-6 py-4 border-b flex items-center justify-between">
         <h2 class="font-semibold text-slate-700">Docentes ({filas.length})</h2>
-        {busqueda && (<span class="text-xs text-slate-400">Filtrado: "{busqueda}"</span>)}
+        {busqueda && (<span class="text-xs ">Filtrado: "{busqueda}"</span>)}
       </div>
-      {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>) : (
+      {filas.length === 0 ? (<div class="p-12 text-center ">No se encontraron docentes.</div>) : (
         <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b">
           <th class="text-center px-3 py-3 text-xs uppercase">Docente</th>
           <th class="text-center px-3 py-3 text-xs uppercase">Email</th>
@@ -218,7 +218,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
             <span id="toggle-label">Visible</span>
             <span class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" id="toggle-visible" class="sr-only peer" />
-              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#1e3a5f]"></div>
+              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
             </span>
           </label>
           <button onclick="var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
@@ -258,18 +258,18 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
 
       // Body
       var html = '';
-      html += '<div class="mb-4"><span class="text-xs text-slate-400">Progreso: </span><span class="text-sm font-medium">'+d.instrumentos+'/5 instrumentos</span></div>';
+      html += '<div class="mb-4"><span class="text-xs ">Progreso: </span><span class="text-sm font-medium">'+d.instrumentos+'/5 instrumentos</span></div>';
       
       // Canvas para gráfica individual
       html += '<div class="mb-4" style="height:180px"><canvas id="chart-individual" style="max-height:180px"></canvas></div>';
       
       // Scores en texto
       html += '<div class="grid grid-cols-5 gap-2 text-center text-xs mb-4">';
-      html += '<div><span class="text-slate-400">Est.</span><br/><span class="font-bold '+(d.promEst>=80?'text-emerald-600':d.promEst>=60?'text-amber-600':d.promEst>0?'text-red-600':'text-slate-300')+'">'+(d.promEst||'—')+'</span></div>';
-      html += '<div><span class="text-slate-400">Coord.</span><br/><span class="font-bold '+(d.promCoord>=80?'text-emerald-600':d.promCoord>=60?'text-amber-600':d.promCoord>0?'text-red-600':'text-slate-300')+'">'+(d.promCoord||'—')+'</span></div>';
-      html += '<div><span class="text-slate-400">Plan.</span><br/><span class="font-bold '+(d.promPlan>=80?'text-emerald-600':d.promPlan>=60?'text-amber-600':d.promPlan>0?'text-red-600':'text-slate-300')+'">'+(d.promPlan||'—')+'</span></div>';
-      html += '<div><span class="text-slate-400">Obs.</span><br/><span class="font-bold '+(d.promObs>=80?'text-emerald-600':d.promObs>=60?'text-amber-600':d.promObs>0?'text-red-600':'text-slate-300')+'">'+(d.promObs||'—')+'</span></div>';
-      html += '<div><span class="text-slate-400">Auto.</span><br/><span class="font-bold '+(d.promAuto>=80?'text-emerald-600':d.promAuto>=60?'text-amber-600':d.promAuto>0?'text-red-600':'text-slate-300')+'">'+(d.promAuto||'—')+'</span></div>';
+      html += '<div><span class="">Est.</span><br/><span class="font-bold '+(d.promEst>=80?'text-emerald-600':d.promEst>=60?'text-amber-600':d.promEst>0?'text-red-600':'text-slate-300')+'">'+(d.promEst||'—')+'</span></div>';
+      html += '<div><span class="">Coord.</span><br/><span class="font-bold '+(d.promCoord>=80?'text-emerald-600':d.promCoord>=60?'text-amber-600':d.promCoord>0?'text-red-600':'text-slate-300')+'">'+(d.promCoord||'—')+'</span></div>';
+      html += '<div><span class="">Plan.</span><br/><span class="font-bold '+(d.promPlan>=80?'text-emerald-600':d.promPlan>=60?'text-amber-600':d.promPlan>0?'text-red-600':'text-slate-300')+'">'+(d.promPlan||'—')+'</span></div>';
+      html += '<div><span class="">Obs.</span><br/><span class="font-bold '+(d.promObs>=80?'text-emerald-600':d.promObs>=60?'text-amber-600':d.promObs>0?'text-red-600':'text-slate-300')+'">'+(d.promObs||'—')+'</span></div>';
+      html += '<div><span class="">Auto.</span><br/><span class="font-bold '+(d.promAuto>=80?'text-emerald-600':d.promAuto>=60?'text-amber-600':d.promAuto>0?'text-red-600':'text-slate-300')+'">'+(d.promAuto||'—')+'</span></div>';
       html += '</div>';
       
       var fin = d.final360 != null ? Math.round(d.final360) : null;

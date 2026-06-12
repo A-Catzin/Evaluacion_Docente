@@ -26,7 +26,7 @@ const COLOR: Record<string,string> = {superadmin:'bg-purple-50 text-purple-700',
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Asignación de Roles</h1>
-      <span class="text-sm text-slate-400">{usuarios.length} usuarios</span>
+      <span class="text-sm ">{usuarios.length} usuarios</span>
     </div>
 
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
@@ -45,7 +45,7 @@ const COLOR: Record<string,string> = {superadmin:'bg-purple-50 text-purple-700',
 
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       {usuarios.length === 0 ? (
-        <div class="p-12 text-center text-slate-400">No se encontraron usuarios.</div>
+        <div class="p-12 text-center ">No se encontraron usuarios.</div>
       ) : (
         <table class="w-full text-sm">
           <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Usuario</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Rol Actual</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Cambiar a</th></tr></thead>

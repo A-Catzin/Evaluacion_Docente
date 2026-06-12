@@ -42,9 +42,9 @@ const { data: asignatura } = await cliente.from('asignaturas').select('nombre').
           <p class="text-xs text-slate-400 mb-3">{c.desc}</p>
           <div class="flex gap-2">
             {[1,2,3,4,5].map(v => (
-              <label class="flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer peer-checked:bg-[#1e3a5f] peer-checked:border-tup">
+              <label class="flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer  ">
                 <input type="radio" name={`criterio_${c.id}`} value={v} required class="sr-only peer" />
-                <span class="text-lg font-bold text-slate-400 peer-checked:text-white">{v}</span>
+                <span class="text-lg font-bold ">{v}</span>
               </label>
             ))}
           </div>

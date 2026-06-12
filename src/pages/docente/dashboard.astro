@@ -68,18 +68,18 @@ if (docenteId) {
 }
 
 function fmt(n:number|null|undefined):string{return n!=null ? Math.round(n).toString() : '—';}
-function colorN(n:number|null|undefined):string{return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60?'text-amber-600':'text-red-600';}
+function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald-600':n>=60?'text-amber-600':'text-red-600';}
 ---
 
 <LayoutDocente titulo="Mi Evaluación — Docente">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
       <div><h1 class="text-3xl font-bold text-tup">Mi Evaluación 360°</h1><p class="text-slate-500">{nombreDocente}</p></div>
-      <span class="text-xs text-slate-400">{cuatrimestre?.nombre || ''}</span>
+      <span class="text-xs ">{cuatrimestre?.nombre || ''}</span>
     </div>
 
     {!docenteId ? (
-      <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center text-slate-400">Completa tu autodiagnóstico para ver tus resultados.</div>
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center ">Completa tu autodiagnóstico para ver tus resultados.</div>
     ) : (
       <>
         <!-- KPIs -->

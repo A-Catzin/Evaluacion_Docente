@@ -66,7 +66,7 @@ for (const p of (planData || [])) {
 }
 
 function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
-function colorScore(n: number|null|undefined): string { if (!n) return 'text-slate-400'; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
+function colorScore(n: number|null|undefined): string { if (!n) return ''; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
 function cat360(p: number|null|undefined): string { if (!p) return '—'; if (p>=90) return 'Sobresaliente'; if (p>=80) return 'Distinguido'; if (p>=70) return 'Bueno'; if (p>=60) return 'Aprobado'; if (p>=50) return 'A mejorar'; return 'Insuficiente'; }
 
 // Fila principal — promedio general de todas las materias
@@ -103,7 +103,7 @@ const filas = docentesFiltrados.map(d => {
 
 <LayoutAdmin titulo="Docentes — Admin">
   <div class="animate-flotar-entrada">
-    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm text-slate-400">{filas.length} docentes</span></div>
+    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm ">{filas.length} docentes</span></div>
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
@@ -112,7 +112,7 @@ const filas = docentesFiltrados.map(d => {
       </form>
     </div>
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden overflow-x-auto">
-      {filas.length === 0 ? (<div class="p-12 text-center text-slate-400">No se encontraron docentes.</div>) : (
+      {filas.length === 0 ? (<div class="p-12 text-center ">No se encontraron docentes.</div>) : (
         <table class="w-full text-[11px] whitespace-nowrap">
           <thead><tr class="bg-slate-50 border-b">
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Email</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Campus</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Modalidad</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Materias</th>

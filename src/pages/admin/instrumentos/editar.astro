@@ -56,13 +56,13 @@ const nombres: Record<string,string> = { autodiagnostico:'Autoevaluación Docent
               <textarea class="edit-input hidden rounded-lg border border-slate-200 px-2 py-1 text-sm w-full resize-none" rows={2}>{p.texto}</textarea>
               <div class="flex items-center gap-3 mt-2">
                 <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{p.tipo_respuesta === 'abierta' ? '📝 Abierta' : p.tipo_respuesta === 'opcion_multiple' ? '☑️ Opción múltiple' : '🔢 Cerrada'}</span>
-                {(p.opciones as unknown[] || []).length > 0 && <span class="text-[10px] text-slate-400">{(p.opciones as string[]).join(', ')}</span>}
+                {(p.opciones as unknown[] || []).length > 0 && <span class="text-[10px] ">{(p.opciones as string[]).join(', ')}</span>}
               </div>
             </div>
             <div class="flex gap-1 flex-shrink-0">
               <button class="btn-editar text-[10px] px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" data-id={p.id}>✏️</button>
               <button class="btn-guardar text-[10px] px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 hidden" data-id={p.id}>💾</button>
-              <button class={`toggle-btn text-[10px] px-2 py-1 rounded-lg ${p.activa?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-400'}`} data-id={p.id} data-activa={p.activa}>{p.activa?'ON':'OFF'}</button>
+              <button class={`toggle-btn text-[10px] px-2 py-1 rounded-lg ${p.activa?'bg-emerald-50 text-emerald-700':'bg-slate-100 '}`} data-id={p.id} data-activa={p.activa}>{p.activa?'ON':'OFF'}</button>
               <button class="btn-eliminar text-[10px] px-2 py-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100" data-id={p.id}>🗑️</button>
             </div>
           </div>

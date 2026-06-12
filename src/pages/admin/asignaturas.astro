@@ -12,7 +12,7 @@ if (busqueda) { const t = busqueda.toLowerCase(); items = items.filter(a => a.no
 
 <LayoutAdmin titulo="Asignaturas — Admin">
   <div class="animate-flotar-entrada">
-    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Asignaturas</h1><span class="text-sm text-slate-400">{items.length} materias</span></div>
+    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Asignaturas</h1><span class="text-sm ">{items.length} materias</span></div>
 
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3 items-center">
@@ -31,7 +31,7 @@ if (busqueda) { const t = busqueda.toLowerCase(); items = items.filter(a => a.no
     </div>
 
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      {items.length === 0 ? (<div class="p-12 text-center text-slate-400">No hay asignaturas.</div>) : (
+      {items.length === 0 ? (<div class="p-12 text-center ">No hay asignaturas.</div>) : (
         <table class="w-full text-sm">
           <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Clave</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600 w-32">Acciones</th></tr></thead>
           <tbody class="divide-y">{items.map(a => (

@@ -25,7 +25,7 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
 
 <LayoutAdmin titulo="Coordinadores — Admin">
   <div class="animate-flotar-entrada">
-    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Coordinadores</h1><span class="text-sm text-slate-400">{items.length} coordinadores</span></div>
+    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Coordinadores</h1><span class="text-sm ">{items.length} coordinadores</span></div>
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
@@ -42,11 +42,11 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
               <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{f.nombre.charAt(0)}</div>
               <div>
                 <p class="font-medium text-slate-800">{f.nombre} {f.apellidos}</p>
-                <p class="text-xs text-slate-400">{f.email}</p>
+                <p class="text-xs ">{f.email}</p>
               </div>
             </div>
             <div class="flex items-center gap-6">
-              <div class="text-center"><p class="text-lg font-bold text-tup">{f.maestrosEvaluados}</p><p class="text-[10px] text-slate-400">Evaluados</p></div>
+              <div class="text-center"><p class="text-lg font-bold text-tup">{f.maestrosEvaluados}</p><p class="text-[10px] ">Evaluados</p></div>
               <div class="flex gap-2">
                 <span class="w-2 h-2 rounded-full bg-red-500" title="Crítico"></span>
                 <span class="w-2 h-2 rounded-full bg-amber-500" title="Proceso"></span>
