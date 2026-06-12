@@ -24,9 +24,9 @@ let scores = { promEst: 0, promCoord: 0, promPlan: 0, promObs: 0, promAuto: 0, f
 let nombreDocente = '';
 let diagInfo: any = null;
 let eeComentarios: string[] = [];
-let coordComentario: string|null = null;
+let coordInfo: any = null;
 let planFeedback: any[] = [];
-let obsComentario: string[] = [];
+let obsInfo: any = null;
 
 if (docenteId) {
   const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteId).maybeSingle();
@@ -34,18 +34,18 @@ if (docenteId) {
 
   const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
     cl.from('encuesta_estudiantil').select('score_normalizado,comentarios').eq('docente_id', docenteId),
-    cl.from('evaluacion_coordinacion').select('score_normalizado,comentarios').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
-    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado').eq('docente_id', docenteId).eq('estado', 'Aprobado'),
-    cl.from('observaciones').select('cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5,comentario_evaluador').eq('docente_id', docenteId),
-    cl.from('autodiagnosticos').select('puntaje_total,nivel_desempeno,comentarios').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
+    cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
+    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').eq('docente_id', docenteId).eq('estado', 'Aprobado'),
+    cl.from('observaciones').select('*').eq('docente_id', docenteId),
+    cl.from('autodiagnosticos').select('*').eq('docente_id', docenteId).order('id', { ascending: false }).limit(1),
     cl.from('grupos').select('asignatura_id').eq('docente_id', docenteId),
   ]);
 
   // Feedback
   eeComentarios = (eeData||[]).filter(e=>e.comentarios).map(e=>e.comentarios);
-  coordComentario = coordData?.[0]?.comentarios || null;
-  planFeedback = (planData||[]).filter(p=>p.comentario_retroalimentacion);
-  obsComentario = (obsData||[]).filter(o=>o.comentario_evaluador).map(o=>o.comentario_evaluador);
+  coordInfo = coordData?.[0] || null;
+  planFeedback = (planData||[]).filter(p=>p.comentario_retroalimentacion || p.observaciones_generales || p.evaluacion_detalle);
+  obsInfo = obsData?.[0] || null;
   diagInfo = diagData?.[0] || null;
 
   // EE promedio
@@ -135,52 +135,84 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
     )}
 
     <!-- Retroalimentación -->
-    {docenteId && (!!diagInfo || eeComentarios.length > 0 || coordComentario || planFeedback.length > 0 || obsComentario.length > 0) && (
+    {docenteId && (
       <div class="mb-8">
         <h2 class="text-lg font-bold text-slate-700 mb-4">📋 Retroalimentación de tus Evaluaciones</h2>
         <div class="space-y-3">
-          {diagInfo && (diagInfo.comentarios || diagInfo.nivel_desempeno) && (
+          <!-- Autodiagnóstico -->
+          {diagInfo && (
             <details class="bg-white rounded-2xl p-5 shadow-tarjeta group" open>
               <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
-                🧪 Autodiagnóstico — {diagInfo.nivel_desempeno || 'Completado'}
+                🧪 Autodiagnóstico — {diagInfo.nivel_desempeno || 'Completado'} ({Math.round((diagInfo.puntaje_total||0)/120*100)}%)
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="mt-3 text-sm text-slate-600 space-y-2">
+              <div class="mt-3 text-sm text-slate-600 space-y-3">
                 <p><b>Nivel:</b> {diagInfo.nivel_desempeno || '—'}</p>
-                {diagInfo.comentarios && <p><b>Reflexión:</b> {diagInfo.comentarios}</p>}
+                {diagInfo.comentarios && (
+                  <div class="bg-slate-50 rounded-xl p-3"><b>Reflexión personal:</b><p class="mt-1 italic">"{diagInfo.comentarios}"</p></div>
+                )}
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs">
+                  {[diagInfo.r1,diagInfo.r2,diagInfo.r3,diagInfo.r4,diagInfo.r5,diagInfo.r6,diagInfo.r7,diagInfo.r8,diagInfo.r9,diagInfo.r10,diagInfo.r11,diagInfo.r12,diagInfo.r13,diagInfo.r14,diagInfo.r15,diagInfo.r16,diagInfo.r17,diagInfo.r18,diagInfo.r19,diagInfo.r20,diagInfo.r21,diagInfo.r22,diagInfo.r23,diagInfo.r24].map((v,i)=><span class={v>=4?'text-emerald-600':v>=3?'text-amber-600':'text-red-500'}>R{i+1}: {v||'—'}</span>)}
+                </div>
               </div>
             </details>
           )}
-          {obsComentario.length > 0 && (
+          <!-- Coordinación -->
+          {coordInfo && (
+            <details class="bg-white rounded-2xl p-5 shadow-tarjeta group">
+              <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
+                📋 Coordinación Académica — {coordInfo.categoria || 'Evaluado'}
+                <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
+              </summary>
+              <div class="mt-3 text-sm text-slate-600 space-y-2">
+                <p><b>Categoría:</b> {coordInfo.categoria || '—'} · <b>Puntos:</b> {coordInfo.puntos_obtenidos || '—'}/75</p>
+                {coordInfo.comentarios && <div class="bg-slate-50 rounded-xl p-3"><b>Observaciones:</b><p class="mt-1">"{coordInfo.comentarios}"</p></div>}
+              </div>
+            </details>
+          )}
+          <!-- Observación -->
+          {obsInfo && (
             <details class="bg-white rounded-2xl p-5 shadow-tarjeta group">
               <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
                 👁️ Observación de Clase
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
               <div class="mt-3 text-sm text-slate-600 space-y-2">
-                {obsComentario.map((c,i)=><p key={i}>"{c}"</p>)}
+                {obsInfo.comentario_evaluador && <div class="bg-slate-50 rounded-xl p-3"><b>Comentario del evaluador:</b><p class="mt-1">"{obsInfo.comentario_evaluador}"</p></div>}
+                {obsInfo.observaciones && <div class="bg-slate-50 rounded-xl p-3"><b>Observaciones:</b><p class="mt-1">{obsInfo.observaciones}</p></div>}
+                {obsInfo.recomendaciones && <div class="bg-slate-50 rounded-xl p-3"><b>Recomendaciones:</b><p class="mt-1">{obsInfo.recomendaciones}</p></div>}
               </div>
             </details>
           )}
+          <!-- Planeación -->
           {planFeedback.length > 0 && (
             <details class="bg-white rounded-2xl p-5 shadow-tarjeta group">
               <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
                 📄 Planeación Didáctica ({planFeedback.length} evaluadas)
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="mt-3 text-sm text-slate-600 space-y-2">
-                {planFeedback.map((p,i)=><div key={i} class="border-b border-slate-100 pb-2"><b>Retroalimentación #{i+1}:</b> {p.comentario_retroalimentacion}</div>)}
+              <div class="mt-3 text-sm text-slate-600 space-y-3">
+                {planFeedback.map((p,i)=>(
+                  <div class="border-b border-slate-100 pb-3">
+                    <p class="font-medium text-xs text-slate-400 mb-1">Evaluación #{i+1} — Puntaje: {p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'}</p>
+                    {p.comentario_retroalimentacion && <div class="bg-slate-50 rounded-xl p-3"><b>Retroalimentación:</b><p class="mt-1">"{p.comentario_retroalimentacion}"</p></div>}
+                    {p.observaciones_generales && <div class="bg-slate-50 rounded-xl p-3 mt-2"><b>Observaciones:</b><p class="mt-1">{p.observaciones_generales}</p></div>}
+                  </div>
+                ))}
               </div>
             </details>
           )}
+          <!-- Encuesta -->
           {eeComentarios.length > 0 && (
             <details class="bg-white rounded-2xl p-5 shadow-tarjeta group">
               <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
                 📝 Encuesta Estudiantil ({eeComentarios.length} comentarios)
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="mt-3 text-sm text-slate-600 space-y-2">
-                {eeComentarios.map((c,i)=><p key={i} class="italic">"{c}"</p>)}
+              <div class="mt-3">
+                <div class="bg-slate-50 rounded-xl p-4 max-h-60 overflow-y-auto text-sm text-slate-600 space-y-2">
+                  {eeComentarios.map((c,i)=><p key={i} class="italic border-b border-slate-200 pb-2 last:border-0">"{c}"</p>)}
+                </div>
               </div>
             </details>
           )}
