@@ -43,7 +43,7 @@ if (docenteIds.length > 0) {
     cl.from('encuesta_estudiantil').select('score_normalizado,comentarios').in('docente_id', docenteIds),
     cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
     cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').in('docente_id', docenteIds).order('fecha_subida', { ascending: false }),
-    cl.from('observaciones').select('id,docente_id,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds),
+    cl.from('observaciones').select('id,docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds),
     cl.from('autodiagnosticos').select('*').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
     cl.from('grupos').select('asignatura_id').in('docente_id', docenteIds),
   ]);
