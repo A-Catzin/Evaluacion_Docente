@@ -131,7 +131,6 @@ if (docenteIdParam) {
   if (sel && sel.value) autoLlenar(sel.value);
 
   function filtrarDocentes(q) {
-  document.getElementById("buscar-docente").addEventListener("input", function(){ filtrarDocentes(this.value); });
     var sel = document.getElementById('docente_id');
     var term = (q || '').toLowerCase();
     for (var i = 1; i < sel.options.length; i++) {
@@ -172,4 +171,5 @@ if (docenteIdParam) {
       else{toast(j.error||'Error al guardar',true);btn.disabled=false;btn.textContent='Enviar Observación'}
     }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación'}
   });
+document.addEventListener("input", function(e){ if(e.target.id==="buscar-docente") filtrarDocentes(e.target.value); });
 </script>
