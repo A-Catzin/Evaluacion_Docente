@@ -129,7 +129,7 @@ for (const p of (planeacionesRaw || [])) {
     if(!asig.value||!grupo){toast('Selecciona asignatura y grupo',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
     var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_doc_26-3.pdf';
     try{
-      var path=cuatrimestreId+'/'+docenteId+'/'+Date.now()+'_'+file.name.replace(/\s+/g,'_');
+      var path=cuatrimestreId+'/'+docenteId+'/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/\s+/g,'_');
       var formData=new FormData();
       formData.append('file',file); formData.append('path',path);
       formData.append('cuatrimestre_id',cuatrimestreId); formData.append('asignatura_id',asig.value);

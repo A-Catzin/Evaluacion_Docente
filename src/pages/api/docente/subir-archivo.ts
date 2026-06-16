@@ -29,8 +29,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const { error: dbErr } = await cl.from('planeaciones').insert({
       docente_id: u.entidad_id,
-      cuatrimestre_id: parseInt(formData.get('cuatrimestre') as string),
-      asignatura_id: parseInt(formData.get('asignatura') as string) || null,
+      cuatrimestre_id: parseInt(formData.get('cuatrimestre_id') as string),
+      asignatura_id: parseInt(formData.get('asignatura_id') as string) || null,
       grupo: formData.get('grupo') as string,
       modalidad: formData.get('modalidad') as string,
       proyecto: formData.get('proyecto') === 'true',
