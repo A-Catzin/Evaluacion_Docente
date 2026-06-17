@@ -41,6 +41,16 @@ let eeComentarios: string[] = [];
 let coordInfo: any = null;
 let planFeedback: any[] = [];
 let obsInfo: any = null;
+
+// Textos de preguntas para mostrar en feedback
+const diagPreguntas = ['Domino los conceptos para la construcción del aprendizaje en los cursos o programas académicos que imparto.','Expongo, organizo, desarrollo y vinculo los contenidos en forma clara.','Adapto los contenidos a los diversos estilos y necesidades de los estudiantes.','Organizo espacios de reflexión antes, durante y después de las actividades de aprendizaje.','Incluyo actividades en clase que promueven el aprendizaje autónomo en los estudiantes.','Propongo ejercicios para promover la metacognición en su ambiente de aprendizaje.','Propongo nuevas estrategias para mejorar los resultados obtenidos en el desempeño de los estudiantes.','Me comunico con claridad y precisión.','Escucho activamente a mis estudiantes.','Fomento la participación y el diálogo respetuoso.','Mantengo un trato respetuoso con mis estudiantes.','Atiendo situaciones grupales con sensibilidad y objetividad.','Organizo los objetivos y contenidos de manera coherente con el modelo educativo.','Implemento diversas estrategias para inducir el aprendizaje significativo.','Considero saberes previos, intereses y experiencias de sus estudiantes.','Genero oportunidades de desarrollo del pensamiento crítico y creativo.','Motivo al aprendizaje, la indagación y la búsqueda de conocimiento.','Ofrezco retroalimentación oportuna, pertinente y cálida a los estudiantes.','Promuevo un ambiente de confianza y respeto.','Identifico fortalezas de mis estudiantes y las destaco.','Cumplo con puntualidad y asistencia a mis clases.','Utilizo la plataforma Moodle como apoyo al aprendizaje.','Me actualizo profesionalmente para mejorar mi práctica docente.','Evalúo el aprendizaje de manera justa y transparente.'];
+const coordSecciones = [
+  { icon:'📋',label:'A. Cumplimiento Académico',keys:['a1','a2','a3'],items:['Cumplimiento del programa, planeación y avance académico.','Organización y conducción de sesiones (presenciales, virtuales o ejecutivas).','Uso y disponibilidad de materiales didácticos o recursos en plataforma.']},
+  { icon:'📊',label:'B. Gestión y Organización',keys:['b1','b2','b3'],items:['Entrega de calificaciones en tiempo y forma.','Puntualidad, asistencia y cumplimiento administrativo.','Uso adecuado de plataformas institucionales (Moodle, Saeko, sistemas).']},
+  { icon:'💬',label:'C. Desempeño Profesional y Comunicación',keys:['c1','c2','c3'],items:['Comunicación clara, oportuna y profesional con estudiantes y coordinación.','Trabajo colaborativo con docentes y áreas institucionales.','Participación en reuniones, actividades y procesos institucionales.']},
+  { icon:'💡',label:'D. Innovación y Mejora Continua',keys:['d1','d2','d3'],items:['Implementación de estrategias didácticas innovadoras.','Participación en procesos de capacitación o actualización docente.','Aplicación de mejoras en su práctica docente.']},
+  { icon:'🏛️',label:'E. Compromiso Institucional y Ética',keys:['e1','e2','e3'],items:['Cumplimiento de normatividad institucional.','Trato respetuoso, ético y profesional.','Representación institucional adecuada en entornos presenciales o digitales.']}
+];
 // Definiciones de secciones de observacion con textos de preguntas (escolarizado)
 const obsSecciones = [
   { icon:'🧠',label:'A. Cognitivas',keys:['cco1','cco2','cco3','cco4','cco5','cco6','cco7'],items:['Expone, organiza, desarrolla y vincula los contenidos en forma clara.','Relaciona los contenidos con situaciones reales o casos prácticos.','Adapta los contenidos a los diversos estilos y necesidades.','Explica conceptos complejos utilizando analogías y ejemplos claros.','Clarifica términos técnicos según el nivel académico del grupo.','Facilita la apropiación del conocimiento mediante explicaciones.','Promueve el razonamiento crítico y la resolución de problemas.']},
@@ -59,7 +69,7 @@ if (docenteIds.length > 0) {
 
   const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
     cl.from('encuesta_estudiantil').select('score_normalizado,comentarios').in('docente_id', docenteIds),
-    cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
+    cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
     cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').in('docente_id', docenteIds).order('fecha_subida', { ascending: false }),
     cl.from('observaciones').select('id,docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds),
     cl.from('autodiagnosticos').select('*').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
@@ -177,8 +187,8 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
                   <div class="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl p-4 text-center"><p class="text-xs text-slate-500 uppercase font-medium">Puntaje</p><p class="text-2xl font-bold text-slate-700 mt-1">{Math.round((diagInfo.puntaje_total||0)/120*100)}%</p></div>
                 </div>
                 {diagInfo.comentarios && <div class="bg-slate-50 rounded-xl p-4 border border-slate-100"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Reflexión Personal</p><p class="text-sm text-slate-600 italic">"{diagInfo.comentarios}"</p></div>}
-                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                  {Array.from({length:24},(_,i)=>(<div class={"rounded-lg px-2 py-1.5 text-xs font-medium text-center "+(diagInfo["r"+(i+1)]>=4?"bg-emerald-50 text-emerald-700":diagInfo["r"+(i+1)]>=3?"bg-amber-50 text-amber-700":diagInfo["r"+(i+1)]>=1?"bg-red-50 text-red-600":"bg-slate-50 text-slate-400")}>P{i+1}: {diagInfo["r"+(i+1)]||"—"}</div>))}
+                <div class="bg-slate-50 rounded-xl p-4 space-y-2">
+                  {Array.from({length:24},(_,i)=>diagInfo["r"+(i+1)]).map((v,i)=>(<div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600 flex-1">{diagPreguntas[i]}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(v>=4?"bg-emerald-100 text-emerald-700":v>=3?"bg-amber-100 text-amber-700":v>=1?"bg-red-50 text-red-600":"bg-slate-100 text-slate-400")}>{v||'—'}</span></div>))}
                 </div>
               </div>
             </details>
@@ -196,6 +206,11 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
                   <div class="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl p-4 text-center"><p class="text-xs text-slate-500 uppercase font-medium">Puntuación</p><p class="text-xl font-bold text-slate-700 mt-1">{coordInfo.puntos_obtenidos || '—'}<span class="text-sm font-normal text-slate-400">/75</span></p></div>
                 </div>
                 {coordInfo.comentarios && <div class="bg-slate-50 rounded-xl p-4 border border-slate-100"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Observaciones</p><p class="text-sm text-slate-600 italic">"{coordInfo.comentarios}"</p></div>}
+                {coordSecciones.map(sec => {
+                  const pares = sec.keys.map((k,i) => ({ texto: sec.items[i], score: coordInfo[k] })).filter(p => p.score != null);
+                  if (pares.length === 0) return <></>;
+                  return <div class="bg-slate-50 rounded-xl p-4"><p class="text-xs font-semibold text-slate-500 uppercase mb-2">{sec.icon} {sec.label}</p><div class="space-y-2">{pares.map((p,i) => <div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600 flex-1">{p.texto}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(p.score>=4?"bg-emerald-100 text-emerald-700":p.score>=3?"bg-amber-100 text-amber-700":"bg-red-50 text-red-600")}>{p.score}</span></div>)}</div></div>;
+                })}
               </div>
             </details>
           )}
