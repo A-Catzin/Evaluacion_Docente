@@ -41,6 +41,7 @@ let eeComentarios: string[] = [];
 let coordInfo: any = null;
 let planFeedback: any[] = [];
 let obsInfo: any = null;
+let eeInfo: any = null;
 
 // Textos de preguntas para mostrar en feedback
 const diagPreguntas = ['Domino los conceptos para la construcción del aprendizaje en los cursos o programas académicos que imparto.','Expongo, organizo, desarrollo y vinculo los contenidos en forma clara.','Adapto los contenidos a los diversos estilos y necesidades de los estudiantes.','Organizo espacios de reflexión antes, durante y después de las actividades de aprendizaje.','Incluyo actividades en clase que promueven el aprendizaje autónomo en los estudiantes.','Propongo ejercicios para promover la metacognición en su ambiente de aprendizaje.','Propongo nuevas estrategias para mejorar los resultados obtenidos en el desempeño de los estudiantes.','Me comunico con claridad y precisión.','Escucho activamente a mis estudiantes.','Fomento la participación y el diálogo respetuoso.','Mantengo un trato respetuoso con mis estudiantes.','Atiendo situaciones grupales con sensibilidad y objetividad.','Organizo los objetivos y contenidos de manera coherente con el modelo educativo.','Implemento diversas estrategias para inducir el aprendizaje significativo.','Considero saberes previos, intereses y experiencias de sus estudiantes.','Genero oportunidades de desarrollo del pensamiento crítico y creativo.','Motivo al aprendizaje, la indagación y la búsqueda de conocimiento.','Ofrezco retroalimentación oportuna, pertinente y cálida a los estudiantes.','Promuevo un ambiente de confianza y respeto.','Identifico fortalezas de mis estudiantes y las destaco.','Cumplo con puntualidad y asistencia a mis clases.','Utilizo la plataforma Moodle como apoyo al aprendizaje.','Me actualizo profesionalmente para mejorar mi práctica docente.','Evalúo el aprendizaje de manera justa y transparente.'];
@@ -85,7 +86,7 @@ if (docenteIds.length > 0) {
   obsInfo = obsData?.[0] || null;
   diagInfo = diagData?.[0] || null;
   // Datos de encuesta para feedback
-  const eeInfo = eeData?.[0] || null;
+  eeInfo = eeData?.[0] || null;
 
   // EE promedio
   const eeScores = (eeData||[]).map(e=>e.score_normalizado).filter(v=>v);
