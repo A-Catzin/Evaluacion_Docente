@@ -244,12 +244,23 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
                   </div>
                 )}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {['🧠 Cognitiva','🔄 Metacognitiva','💬 Comunicativa','👥 Social','📊 Gestión','❤️ Afectiva','💻 Tecno-pedagógica','📏 Normativa'].map((sec,si) => {
-                    const keys = [['cco1','cco2','cco3','cco4','cco5','cco6','cco7'],['cme1','cme2','cme3','cme4','cme5','cme6','cme7','cme8','cme9'],['ccom1','ccom2','ccom3','ccom4'],['cso1','cso2','cso3','cso4'],['cge1','cge2','cge3','cge4','cge5','cge6','cge7'],['caf1','caf2'],['ctepe1','ctepe2','ctepe3','ctepe4','ctepe5','ctepe6','ctepe7'],['cno1','cno2','cno3','cno4','cno5']];
-                    const vals = keys[si].map(k => obsInfo[k]).filter(v=>v!=null);
-                    if (vals.length === 0) return null;
-                    return <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">{sec}</p><p class="text-sm font-medium text-slate-700">{vals.join(' · ')}</p></div>;
-                  })}
+                  {(()=>{
+                    const sections = [
+                      {label:'🧠 Cognitiva',keys:['cco1','cco2','cco3','cco4','cco5','cco6','cco7']},
+                      {label:'🔄 Metacognitiva',keys:['cme1','cme2','cme3','cme4','cme5','cme6','cme7','cme8','cme9']},
+                      {label:'💬 Comunicativa',keys:['ccom1','ccom2','ccom3','ccom4']},
+                      {label:'👥 Social',keys:['cso1','cso2','cso3','cso4']},
+                      {label:'📊 Gestión',keys:['cge1','cge2','cge3','cge4','cge5','cge6','cge7']},
+                      {label:'❤️ Afectiva',keys:['caf1','caf2']},
+                      {label:'💻 Tecno-pedagógica',keys:['ctepe1','ctepe2','ctepe3','ctepe4','ctepe5','ctepe6','ctepe7']},
+                      {label:'📏 Normativa',keys:['cno1','cno2','cno3','cno4','cno5']}
+                    ];
+                    return sections.map(s => {
+                      const vals = s.keys.map(k => obsInfo[k]).filter(v=>v!=null);
+                      if (vals.length===0) return null;
+                      return <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">{s.label}</p><p class="text-sm font-medium text-slate-700">{vals.join(' · ')}</p></div>;
+                    });
+                  })()}
                 </div>
                 <div class="grid grid-cols-1 gap-1 text-xs text-slate-500">
                   {obsInfo.obs_cognitivas && <span><b>🧠 Cognitiva:</b> {obsInfo.obs_cognitivas}</span>}
