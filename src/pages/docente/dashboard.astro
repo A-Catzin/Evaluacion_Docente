@@ -15,9 +15,17 @@ const { data: usuario } = await cl.from('usuarios').select('entidad_id,email').e
 let docenteId = usuario?.entidad_id;
 let docenteEmail = usuario?.email || '';
 
-// Buscar todos los docentes con este email (union de entidad_id + email matches)
+// Buscar todos los docentes que corresponden a este usuario (por entidad_id, email, y nombre)
 let docenteIdsSet = new Set<number>();
-if (docenteId) docenteIdsSet.add(docenteId);
+if (docenteId) {
+  docenteIdsSet.add(docenteId);
+  // Obtener nombre del docente vinculado para buscar coincidencias por nombre
+  const { data: miDoc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteId).maybeSingle();
+  if (miDoc?.nombre && miDoc?.apellidos) {
+    const { data: mismosNombres } = await cl.from('docentes').select('id').eq('nombre', miDoc.nombre).eq('apellidos', miDoc.apellidos);
+    (mismosNombres||[]).forEach(d => docenteIdsSet.add(d.id));
+  }
+}
 if (docenteEmail) {
   const { data: docsMatch } = await cl.from('docentes').select('id').eq('email', docenteEmail);
   (docsMatch||[]).forEach(d => docenteIdsSet.add(d.id));
