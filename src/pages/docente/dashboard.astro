@@ -152,63 +152,150 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
     {docenteIds.length > 0 && (
       <div class="mb-8">
         <h2 class="text-lg font-bold text-slate-700 mb-4">📋 Retroalimentación de tus Evaluaciones</h2>
-        <div class="space-y-3">
+        <div class="space-y-4">
           <!-- Autodiagnóstico -->
           {diagInfo && (
-            <details class="bg-white rounded-2xl p-5 shadow-tarjeta group" open>
-              <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
-                🧪 Autodiagnóstico — {diagInfo.nivel_desempeno || 'Completado'} ({Math.round((diagInfo.puntaje_total||0)/120*100)}%)
+            <details class="bg-white rounded-2xl shadow-tarjeta group overflow-hidden" open>
+              <summary class="font-semibold text-tup cursor-pointer list-none flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-lg">🧪</span>
+                  <div><p class="text-sm">Autodiagnóstico Docente</p><p class="text-xs text-slate-400 font-normal">{diagInfo.nivel_desempeno || 'Completado'}</p></div>
+                </div>
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="mt-3 text-sm text-slate-600 space-y-3">
-                <p><b>Nivel:</b> {diagInfo.nivel_desempeno || '—'}</p>
+              <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-xl p-4 text-center">
+                    <p class="text-xs text-purple-500 uppercase font-medium">Nivel de Desempeño</p>
+                    <p class="text-2xl font-bold text-purple-700 mt-1">{diagInfo.nivel_desempeno || '—'}</p>
+                  </div>
+                  <div class="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl p-4 text-center">
+                    <p class="text-xs text-slate-500 uppercase font-medium">Puntaje Total</p>
+                    <p class="text-2xl font-bold text-slate-700 mt-1">{Math.round((diagInfo.puntaje_total||0)/120*100)}%</p>
+                  </div>
+                </div>
                 {diagInfo.comentarios && (
-                  <div class="bg-slate-50 rounded-xl p-3"><b>Reflexión personal:</b><p class="mt-1 italic">"{diagInfo.comentarios}"</p></div>
+                  <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs font-medium text-slate-400 uppercase mb-1">Reflexión Personal</p>
+                    <p class="text-sm text-slate-600 italic">"{diagInfo.comentarios}"</p>
+                  </div>
                 )}
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs">
-                  {[diagInfo.r1,diagInfo.r2,diagInfo.r3,diagInfo.r4,diagInfo.r5,diagInfo.r6,diagInfo.r7,diagInfo.r8,diagInfo.r9,diagInfo.r10,diagInfo.r11,diagInfo.r12,diagInfo.r13,diagInfo.r14,diagInfo.r15,diagInfo.r16,diagInfo.r17,diagInfo.r18,diagInfo.r19,diagInfo.r20,diagInfo.r21,diagInfo.r22,diagInfo.r23,diagInfo.r24].map((v,i)=><span class={v>=4?'text-emerald-600':v>=3?'text-amber-600':'text-red-500'}>R{i+1}: {v||'—'}</span>)}
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {[diagInfo.r1,diagInfo.r2,diagInfo.r3,diagInfo.r4,diagInfo.r5,diagInfo.r6,diagInfo.r7,diagInfo.r8,diagInfo.r9,diagInfo.r10,diagInfo.r11,diagInfo.r12,diagInfo.r13,diagInfo.r14,diagInfo.r15,diagInfo.r16,diagInfo.r17,diagInfo.r18,diagInfo.r19,diagInfo.r20,diagInfo.r21,diagInfo.r22,diagInfo.r23,diagInfo.r24].map((v,i)=>(
+                    <div class={`rounded-lg px-3 py-2 text-xs font-medium text-center ${v>=4?'bg-emerald-50 text-emerald-700':v>=3?'bg-amber-50 text-amber-700':v>=1?'bg-red-50 text-red-600':'bg-slate-50 text-slate-400'}`}>
+                      P{i+1}: {v||'—'}
+                    </div>
+                  ))}
                 </div>
               </div>
             </details>
           )}
           <!-- Coordinación -->
           {coordInfo && (
-            <details class="bg-white rounded-2xl p-5 shadow-tarjeta group">
-              <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
-                📋 Coordinación Académica — {coordInfo.categoria || 'Evaluado'}
+            <details class="bg-white rounded-2xl shadow-tarjeta group overflow-hidden">
+              <summary class="font-semibold text-tup cursor-pointer list-none flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-lg">📋</span>
+                  <div><p class="text-sm">Coordinación Académica</p><p class="text-xs text-slate-400 font-normal">{coordInfo.categoria || 'Evaluado'}</p></div>
+                </div>
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="mt-3 text-sm text-slate-600 space-y-2">
-                <p><b>Categoría:</b> {coordInfo.categoria || '—'} · <b>Puntos:</b> {coordInfo.puntos_obtenidos || '—'}/75</p>
-                {coordInfo.comentarios && <div class="bg-slate-50 rounded-xl p-3"><b>Observaciones:</b><p class="mt-1">"{coordInfo.comentarios}"</p></div>}
+              <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+                <div class="grid grid-cols-2 gap-4">
+                  <div class="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 text-center">
+                    <p class="text-xs text-blue-500 uppercase font-medium">Categoría</p>
+                    <p class="text-xl font-bold text-blue-700 mt-1">{coordInfo.categoria || '—'}</p>
+                  </div>
+                  <div class="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl p-4 text-center">
+                    <p class="text-xs text-slate-500 uppercase font-medium">Puntuación</p>
+                    <p class="text-xl font-bold text-slate-700 mt-1">{coordInfo.puntos_obtenidos || '—'}<span class="text-sm font-normal text-slate-400">/75</span></p>
+                  </div>
+                </div>
+                {coordInfo.comentarios && (
+                  <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs font-medium text-slate-400 uppercase mb-1">Observaciones</p>
+                    <p class="text-sm text-slate-600 italic">"{coordInfo.comentarios}"</p>
+                  </div>
+                )}
               </div>
             </details>
           )}
           <!-- Observación -->
           {obsInfo && (
-            <details class="bg-white rounded-2xl p-5 shadow-tarjeta group" open>
-              <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
-                👁️ Observación de Clase
+            <details class="bg-white rounded-2xl shadow-tarjeta group overflow-hidden" open>
+              <summary class="font-semibold text-tup cursor-pointer list-none flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center text-lg">👁️</span>
+                  <div><p class="text-sm">Observación de Clase</p><p class="text-xs text-slate-400 font-normal">{obsInfo.fecha_observacion || ''}</p></div>
+                </div>
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="mt-3 text-sm text-slate-600 space-y-2">
-                <pre class="text-xs bg-slate-50 p-2 rounded overflow-auto max-h-40">{JSON.stringify(obsInfo, null, 2)}</pre>
+              <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+                {obsInfo.comentario_evaluador && (
+                  <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs font-medium text-slate-400 uppercase mb-1">Comentario del Evaluador</p>
+                    <p class="text-sm text-slate-600 italic">"{obsInfo.comentario_evaluador}"</p>
+                  </div>
+                )}
+                {obsInfo.comentario_docente && (
+                  <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs font-medium text-slate-400 uppercase mb-1">Comentario del Docente</p>
+                    <p class="text-sm text-slate-600 italic">"{obsInfo.comentario_docente}"</p>
+                  </div>
+                )}
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {['🧠 Cognitiva','🔄 Metacognitiva','💬 Comunicativa','👥 Social','📊 Gestión','❤️ Afectiva','💻 Tecno-pedagógica','📏 Normativa'].map((sec,si) => {
+                    const keys = [['cco1','cco2','cco3','cco4','cco5','cco6','cco7'],['cme1','cme2','cme3','cme4','cme5','cme6','cme7','cme8','cme9'],['ccom1','ccom2','ccom3','ccom4'],['cso1','cso2','cso3','cso4'],['cge1','cge2','cge3','cge4','cge5','cge6','cge7'],['caf1','caf2'],['ctepe1','ctepe2','ctepe3','ctepe4','ctepe5','ctepe6','ctepe7'],['cno1','cno2','cno3','cno4','cno5']];
+                    const vals = keys[si].map(k => obsInfo[k]).filter(v=>v!=null);
+                    if (vals.length === 0) return null;
+                    return <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">{sec}</p><p class="text-sm font-medium text-slate-700">{vals.join(' · ')}</p></div>;
+                  })}
+                </div>
+                <div class="grid grid-cols-1 gap-1 text-xs text-slate-500">
+                  {obsInfo.obs_cognitivas && <span><b>🧠 Cognitiva:</b> {obsInfo.obs_cognitivas}</span>}
+                  {obsInfo.obs_metacognitivas && <span><b>🔄 Metacognitiva:</b> {obsInfo.obs_metacognitivas}</span>}
+                  {obsInfo.obs_comunicativas && <span><b>💬 Comunicativa:</b> {obsInfo.obs_comunicativas}</span>}
+                  {obsInfo.obs_sociales && <span><b>👥 Social:</b> {obsInfo.obs_sociales}</span>}
+                  {obsInfo.obs_gestion && <span><b>📊 Gestión:</b> {obsInfo.obs_gestion}</span>}
+                  {obsInfo.obs_afectivas && <span><b>❤️ Afectiva:</b> {obsInfo.obs_afectivas}</span>}
+                  {obsInfo.obs_tecno && <span><b>💻 Tecno-pedagógica:</b> {obsInfo.obs_tecno}</span>}
+                  {obsInfo.obs_normativa && <span><b>📏 Normativa:</b> {obsInfo.obs_normativa}</span>}
+                </div>
               </div>
             </details>
           )}
           <!-- Planeación -->
           {planFeedback.length > 0 && (
-            <details class="bg-white rounded-2xl p-5 shadow-tarjeta group">
-              <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
-                📄 Planeación Didáctica ({planFeedback.length} evaluadas)
+            <details class="bg-white rounded-2xl shadow-tarjeta group overflow-hidden">
+              <summary class="font-semibold text-tup cursor-pointer list-none flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-lg">📄</span>
+                  <div><p class="text-sm">Planeación Didáctica</p><p class="text-xs text-slate-400 font-normal">{planFeedback.length} evaluación{planFeedback.length>1?'es':''}</p></div>
+                </div>
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="mt-3 text-sm text-slate-600 space-y-3">
+              <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
                 {planFeedback.map((p,i)=>(
-                  <div class="border-b border-slate-100 pb-3">
-                    <p class="font-medium text-xs text-slate-400 mb-1">Evaluación #{i+1} — Puntaje: {p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'} · <span class={p.estado==='Aprobado'?'text-emerald-600':p.estado==='Corrección'?'text-red-500':'text-amber-500'}>{p.estado||'Pendiente'}</span></p>
-                    {p.comentario_retroalimentacion && <div class="bg-slate-50 rounded-xl p-3"><b>Retroalimentación:</b><p class="mt-1">"{p.comentario_retroalimentacion}"</p></div>}
-                    {p.observaciones_generales && <div class="bg-slate-50 rounded-xl p-3 mt-2"><b>Observaciones:</b><p class="mt-1">{p.observaciones_generales}</p></div>}
+                  <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                    <div class="flex items-center justify-between mb-3">
+                      <p class="text-sm font-medium text-slate-700">Evaluación #{i+1}</p>
+                      <span class={`px-2.5 py-1 rounded-lg text-xs font-medium ${p.estado==='Aprobado'?'bg-emerald-100 text-emerald-700':p.estado==='Corrección'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-700'}`}>{p.estado||'Pendiente'}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                      <div class="bg-white rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Puntaje</p><p class="text-lg font-bold text-slate-700">{p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'}</p></div>
+                    </div>
+                    {p.comentario_retroalimentacion && (
+                      <div class="bg-white rounded-lg p-3 border border-slate-200">
+                        <p class="text-xs font-medium text-slate-400 uppercase mb-1">Retroalimentación</p>
+                        <p class="text-sm text-slate-600 italic">"{p.comentario_retroalimentacion}"</p>
+                      </div>
+                    )}
+                    {p.observaciones_generales && (
+                      <div class="bg-white rounded-lg p-3 border border-slate-200 mt-2">
+                        <p class="text-xs font-medium text-slate-400 uppercase mb-1">Observaciones</p>
+                        <p class="text-sm text-slate-600">{p.observaciones_generales}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -216,21 +303,26 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
           )}
           <!-- Encuesta -->
           {eeComentarios.length > 0 && (
-            <details class="bg-white rounded-2xl p-5 shadow-tarjeta group">
-              <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
-                📝 Encuesta Estudiantil ({eeComentarios.length} comentarios)
+            <details class="bg-white rounded-2xl shadow-tarjeta group overflow-hidden">
+              <summary class="font-semibold text-tup cursor-pointer list-none flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-lg">📝</span>
+                  <div><p class="text-sm">Encuesta Estudiantil</p><p class="text-xs text-slate-400 font-normal">{eeComentarios.length} comentario{eeComentarios.length>1?'s':''}</p></div>
+                </div>
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="mt-3">
-                <div class="bg-slate-50 rounded-xl p-4 max-h-60 overflow-y-auto text-sm text-slate-600 space-y-2">
-                  {eeComentarios.map((c,i)=><p key={i} class="italic border-b border-slate-200 pb-2 last:border-0">"{c}"</p>)}
+              <div class="px-5 pb-5 space-y-2 border-t border-slate-100 pt-4">
+                <div class="bg-slate-50 rounded-xl p-4 max-h-60 overflow-y-auto space-y-3">
+                  {eeComentarios.map((c,i)=>(
+                    <div class="flex gap-3">
+                      <span class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-600 flex-shrink-0">{i+1}</span>
+                      <p class="text-sm text-slate-600 italic pt-1">"{c}"</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </details>
           )}
-        </div>
-      </div>
-    )}
 
     <!-- Accesos rápidos -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
