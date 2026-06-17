@@ -41,16 +41,6 @@ let eeComentarios: string[] = [];
 let coordInfo: any = null;
 let planFeedback: any[] = [];
 let obsInfo: any = null;
-const obsSections = [
-  {label:'🧠 Cognitiva',keys:['cco1','cco2','cco3','cco4','cco5','cco6','cco7']},
-  {label:'🔄 Metacognitiva',keys:['cme1','cme2','cme3','cme4','cme5','cme6','cme7','cme8','cme9']},
-  {label:'💬 Comunicativa',keys:['ccom1','ccom2','ccom3','ccom4']},
-  {label:'👥 Social',keys:['cso1','cso2','cso3','cso4']},
-  {label:'📊 Gestión',keys:['cge1','cge2','cge3','cge4','cge5','cge6','cge7']},
-  {label:'❤️ Afectiva',keys:['caf1','caf2']},
-  {label:'💻 Tecno-pedagógica',keys:['ctepe1','ctepe2','ctepe3','ctepe4','ctepe5','ctepe6','ctepe7']},
-  {label:'📏 Normativa',keys:['cno1','cno2','cno3','cno4','cno5']}
-];
 
 if (docenteIds.length > 0) {
   const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteIds[0]).maybeSingle();
@@ -254,11 +244,14 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
                   </div>
                 )}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {obsSections.map(s => {
-                    const vals = s.keys.map(k => obsInfo[k]).filter(v=>v!=null);
-                    if (vals.length===0) return <></>;
-                    return <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">{s.label}</p><p class="text-sm font-medium text-slate-700">{vals.join(' · ')}</p></div>;
-                  })}
+                  {obsInfo.cco1!=null && <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">🧠 Cognitiva</p><p class="text-sm font-medium text-slate-700">{[obsInfo.cco1,obsInfo.cco2,obsInfo.cco3,obsInfo.cco4,obsInfo.cco5,obsInfo.cco6,obsInfo.cco7].filter(v=>v!=null).join(' · ')}</p></div>}
+                  {obsInfo.cme1!=null && <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">🔄 Metacognitiva</p><p class="text-sm font-medium text-slate-700">{[obsInfo.cme1,obsInfo.cme2,obsInfo.cme3,obsInfo.cme4,obsInfo.cme5,obsInfo.cme6,obsInfo.cme7,obsInfo.cme8,obsInfo.cme9].filter(v=>v!=null).join(' · ')}</p></div>}
+                  {obsInfo.ccom1!=null && <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">💬 Comunicativa</p><p class="text-sm font-medium text-slate-700">{[obsInfo.ccom1,obsInfo.ccom2,obsInfo.ccom3,obsInfo.ccom4].filter(v=>v!=null).join(' · ')}</p></div>}
+                  {obsInfo.cso1!=null && <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">👥 Social</p><p class="text-sm font-medium text-slate-700">{[obsInfo.cso1,obsInfo.cso2,obsInfo.cso3,obsInfo.cso4].filter(v=>v!=null).join(' · ')}</p></div>}
+                  {obsInfo.cge1!=null && <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">📊 Gestión</p><p class="text-sm font-medium text-slate-700">{[obsInfo.cge1,obsInfo.cge2,obsInfo.cge3,obsInfo.cge4,obsInfo.cge5,obsInfo.cge6,obsInfo.cge7].filter(v=>v!=null).join(' · ')}</p></div>}
+                  {obsInfo.caf1!=null && <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">❤️ Afectiva</p><p class="text-sm font-medium text-slate-700">{[obsInfo.caf1,obsInfo.caf2].filter(v=>v!=null).join(' · ')}</p></div>}
+                  {obsInfo.ctepe1!=null && <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">💻 Tecno-pedagógica</p><p class="text-sm font-medium text-slate-700">{[obsInfo.ctepe1,obsInfo.ctepe2,obsInfo.ctepe3,obsInfo.ctepe4,obsInfo.ctepe5,obsInfo.ctepe6,obsInfo.ctepe7].filter(v=>v!=null).join(' · ')}</p></div>}
+                  {obsInfo.cno1!=null && <div class="bg-slate-50 rounded-lg px-3 py-2 text-center"><p class="text-xs text-slate-400">📏 Normativa</p><p class="text-sm font-medium text-slate-700">{[obsInfo.cno1,obsInfo.cno2,obsInfo.cno3,obsInfo.cno4,obsInfo.cno5].filter(v=>v!=null).join(' · ')}</p></div>}
                 </div>
                 <div class="grid grid-cols-1 gap-1 text-xs text-slate-500">
                   {obsInfo.obs_cognitivas && <span><b>🧠 Cognitiva:</b> {obsInfo.obs_cognitivas}</span>}
