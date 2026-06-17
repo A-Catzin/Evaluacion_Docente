@@ -51,6 +51,8 @@ const coordSecciones = [
   { icon:'💡',label:'D. Innovación y Mejora Continua',keys:['d1','d2','d3'],items:['Implementación de estrategias didácticas innovadoras.','Participación en procesos de capacitación o actualización docente.','Aplicación de mejoras en su práctica docente.']},
   { icon:'🏛️',label:'E. Compromiso Institucional y Ética',keys:['e1','e2','e3'],items:['Cumplimiento de normatividad institucional.','Trato respetuoso, ético y profesional.','Representación institucional adecuada en entornos presenciales o digitales.']}
 ];
+const eeCategorias = ['Asistencia','Organización','Actitud','Enseñanza','Dominio','Evaluación','Comunicación','Gestión','Tecnología','Satisfacción'];
+const eeCatKeys = ['prom_asistencia','prom_organizacion','prom_actitud','prom_ensenanza','prom_dominio','prom_evaluacion','prom_comunicacion','prom_gestion','prom_tecnologia','prom_satisfaccion'];
 // Definiciones de secciones de observacion con textos de preguntas (escolarizado)
 const obsSecciones = [
   { icon:'🧠',label:'A. Cognitivas',keys:['cco1','cco2','cco3','cco4','cco5','cco6','cco7'],items:['Expone, organiza, desarrolla y vincula los contenidos en forma clara.','Relaciona los contenidos con situaciones reales o casos prácticos.','Adapta los contenidos a los diversos estilos y necesidades.','Explica conceptos complejos utilizando analogías y ejemplos claros.','Clarifica términos técnicos según el nivel académico del grupo.','Facilita la apropiación del conocimiento mediante explicaciones.','Promueve el razonamiento crítico y la resolución de problemas.']},
@@ -68,7 +70,7 @@ if (docenteIds.length > 0) {
   if (doc) nombreDocente = `${doc.nombre.toUpperCase()} ${doc.apellidos.toUpperCase()}`;
 
   const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
-    cl.from('encuesta_estudiantil').select('score_normalizado,comentarios').in('docente_id', docenteIds),
+    cl.from('encuesta_estudiantil').select('score_normalizado,comentarios,prom_asistencia,prom_organizacion,prom_actitud,prom_ensenanza,prom_dominio,prom_evaluacion,prom_comunicacion,prom_gestion,prom_tecnologia,prom_satisfaccion,promedio_general').in('docente_id', docenteIds),
     cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
     cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').in('docente_id', docenteIds).order('fecha_subida', { ascending: false }),
     cl.from('observaciones').select('id,docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds),
@@ -82,6 +84,8 @@ if (docenteIds.length > 0) {
   planFeedback = (planData||[]).filter(p=>p.comentario_retroalimentacion || p.observaciones_generales || p.evaluacion_detalle);
   obsInfo = obsData?.[0] || null;
   diagInfo = diagData?.[0] || null;
+  // Datos de encuesta para feedback
+  const eeInfo = eeData?.[0] || null;
 
   // EE promedio
   const eeScores = (eeData||[]).map(e=>e.score_normalizado).filter(v=>v);
@@ -258,8 +262,10 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
                 <div class="flex items-center gap-3"><span class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-lg">📝</span><div><p class="text-sm">Encuesta Estudiantil</p><p class="text-xs text-slate-400 font-normal">{eeComentarios.length} comentario{eeComentarios.length>1?'s':''}</p></div></div>
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="px-5 pb-5 space-y-2 border-t border-slate-100 pt-4">
-                <div class="bg-slate-50 rounded-xl p-4 max-h-60 overflow-y-auto space-y-3">
+              <div class="px-5 pb-5 space-y-3 border-t border-slate-100 pt-4">
+                {eeInfo && <div class="bg-slate-50 rounded-xl p-4"><p class="text-xs font-semibold text-slate-500 uppercase mb-2">📊 Promedios por Categoría</p><div class="space-y-2">{eeCategorias.map((cat,i)=>{const v=eeInfo[eeCatKeys[i]];return v!=null?<div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600">{cat}</p><span class="px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-100 text-emerald-700">{typeof v==='number'?v.toFixed(1):v}</span></div>:<></>;})}</div></div>}
+                <div class="bg-slate-50 rounded-xl p-4 space-y-3">
+                  <p class="text-xs font-semibold text-slate-500 uppercase">💬 Comentarios de Estudiantes</p>
                   {eeComentarios.map((c,i)=>(<div class="flex gap-3"><span class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-600 flex-shrink-0">{i+1}</span><p class="text-sm text-slate-600 italic pt-1">"{c}"</p></div>))}
                 </div>
               </div>
