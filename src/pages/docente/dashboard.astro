@@ -186,34 +186,13 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
           )}
           <!-- Observación -->
           {obsInfo && (
-            <details class="bg-white rounded-2xl p-5 shadow-tarjeta group">
+            <details class="bg-white rounded-2xl p-5 shadow-tarjeta group" open>
               <summary class="font-medium text-tup cursor-pointer list-none flex items-center justify-between">
-                👁️ Observación de Clase — Puntaje: {Math.round(([obsInfo.cco1,obsInfo.cco2,obsInfo.cco3,obsInfo.cco4,obsInfo.cco5,obsInfo.cco6,obsInfo.cco7,obsInfo.cme1,obsInfo.cme2,obsInfo.cme3,obsInfo.cme4,obsInfo.cme5,obsInfo.cme6,obsInfo.cme7,obsInfo.cme8,obsInfo.cme9,obsInfo.ccom1,obsInfo.ccom2,obsInfo.ccom3,obsInfo.ccom4,obsInfo.cso1,obsInfo.cso2,obsInfo.cso3,obsInfo.cso4,obsInfo.cge1,obsInfo.cge2,obsInfo.cge3,obsInfo.cge4,obsInfo.cge5,obsInfo.cge6,obsInfo.cge7,obsInfo.caf1,obsInfo.caf2,obsInfo.ctepe1,obsInfo.ctepe2,obsInfo.ctepe3,obsInfo.ctepe4,obsInfo.ctepe5,obsInfo.ctepe6,obsInfo.ctepe7,obsInfo.cno1,obsInfo.cno2,obsInfo.cno3,obsInfo.cno4,obsInfo.cno5].filter(v=>v).reduce((a,b)=>a+b,0)/([...].length*5))*100)}%
+                👁️ Observación de Clase
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
-              <div class="mt-3 text-sm text-slate-600 space-y-3">
-                {obsInfo.comentario_evaluador && <div class="bg-slate-50 rounded-xl p-3"><b>Comentario del evaluador:</b><p class="mt-1">"{obsInfo.comentario_evaluador}"</p></div>}
-                {obsInfo.comentario_docente && <div class="bg-slate-50 rounded-xl p-3"><b>Comentario del docente:</b><p class="mt-1">"{obsInfo.comentario_docente}"</p></div>}
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-1 text-xs">
-                  {obsInfo.cco1!==null && <span class="bg-slate-50 rounded p-1 text-center">🧠 CCO: {[obsInfo.cco1,obsInfo.cco2,obsInfo.cco3,obsInfo.cco4,obsInfo.cco5,obsInfo.cco6,obsInfo.cco7].filter(v=>v).join(',')}</span>}
-                  {obsInfo.cme1!==null && <span class="bg-slate-50 rounded p-1 text-center">🔄 CME: {[obsInfo.cme1,obsInfo.cme2,obsInfo.cme3,obsInfo.cme4,obsInfo.cme5,obsInfo.cme6,obsInfo.cme7,obsInfo.cme8,obsInfo.cme9].filter(v=>v).join(',')}</span>}
-                  {obsInfo.ccom1!==null && <span class="bg-slate-50 rounded p-1 text-center">💬 CCOM: {[obsInfo.ccom1,obsInfo.ccom2,obsInfo.ccom3,obsInfo.ccom4].filter(v=>v).join(',')}</span>}
-                  {obsInfo.cso1!==null && <span class="bg-slate-50 rounded p-1 text-center">👥 CSO: {[obsInfo.cso1,obsInfo.cso2,obsInfo.cso3,obsInfo.cso4].filter(v=>v).join(',')}</span>}
-                  {obsInfo.cge1!==null && <span class="bg-slate-50 rounded p-1 text-center">📊 CGE: {[obsInfo.cge1,obsInfo.cge2,obsInfo.cge3,obsInfo.cge4,obsInfo.cge5,obsInfo.cge6,obsInfo.cge7].filter(v=>v).join(',')}</span>}
-                  {obsInfo.caf1!==null && <span class="bg-slate-50 rounded p-1 text-center">❤️ CAF: {[obsInfo.caf1,obsInfo.caf2].filter(v=>v).join(',')}</span>}
-                  {obsInfo.ctepe1!==null && <span class="bg-slate-50 rounded p-1 text-center">💻 CTEPE: {[obsInfo.ctepe1,obsInfo.ctepe2,obsInfo.ctepe3,obsInfo.ctepe4,obsInfo.ctepe5,obsInfo.ctepe6,obsInfo.ctepe7].filter(v=>v).join(',')}</span>}
-                  {obsInfo.cno1!==null && <span class="bg-slate-50 rounded p-1 text-center">📏 CNO: {[obsInfo.cno1,obsInfo.cno2,obsInfo.cno3,obsInfo.cno4,obsInfo.cno5].filter(v=>v).join(',')}</span>}
-                </div>
-                <div class="grid grid-cols-1 gap-1 text-xs">
-                  {obsInfo.obs_cognitivas && <span>🧠 Obs. Cognitivas: {obsInfo.obs_cognitivas}</span>}
-                  {obsInfo.obs_metacognitivas && <span>🔄 Obs. Metacognitivas: {obsInfo.obs_metacognitivas}</span>}
-                  {obsInfo.obs_comunicativas && <span>💬 Obs. Comunicativas: {obsInfo.obs_comunicativas}</span>}
-                  {obsInfo.obs_sociales && <span>👥 Obs. Sociales: {obsInfo.obs_sociales}</span>}
-                  {obsInfo.obs_gestion && <span>📊 Obs. Gestión: {obsInfo.obs_gestion}</span>}
-                  {obsInfo.obs_afectivas && <span>❤️ Obs. Afectivas: {obsInfo.obs_afectivas}</span>}
-                  {obsInfo.obs_tecno && <span>💻 Obs. Tecnopedagógicas: {obsInfo.obs_tecno}</span>}
-                  {obsInfo.obs_normativa && <span>📏 Obs. Normativa: {obsInfo.obs_normativa}</span>}
-                </div>
+              <div class="mt-3 text-sm text-slate-600 space-y-2">
+                <pre class="text-xs bg-slate-50 p-2 rounded overflow-auto max-h-40">{JSON.stringify(obsInfo, null, 2)}</pre>
               </div>
             </details>
           )}
