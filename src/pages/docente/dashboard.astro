@@ -14,16 +14,15 @@ if (!sesion.user) return Astro.redirect('/auth');
 const { data: usuario } = await cl.from('usuarios').select('entidad_id,email').eq('id', sesion.user.id).maybeSingle();
 let docenteId = usuario?.entidad_id;
 let docenteEmail = usuario?.email || '';
-if (!docenteId && docenteEmail) {
-  const { data: doc } = await cl.from('docentes').select('id').eq('email', docenteEmail).maybeSingle();
-  if (doc) docenteId = doc.id;
-}
-// Para observaciones/planeaciones: buscar tambien por email si entidad_id no coincide
-let docenteIds: number[] = docenteId ? [docenteId] : [];
-if (docenteEmail && docenteIds.length === 0) {
+
+// Buscar todos los docentes con este email (union de entidad_id + email matches)
+let docenteIdsSet = new Set<number>();
+if (docenteId) docenteIdsSet.add(docenteId);
+if (docenteEmail) {
   const { data: docsMatch } = await cl.from('docentes').select('id').eq('email', docenteEmail);
-  docenteIds = (docsMatch||[]).map(d=>d.id);
+  (docsMatch||[]).forEach(d => docenteIdsSet.add(d.id));
 }
+const docenteIds: number[] = [...docenteIdsSet];
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
 
