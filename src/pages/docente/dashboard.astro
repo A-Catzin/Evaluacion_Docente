@@ -43,28 +43,36 @@ let planFeedback: any[] = [];
 let obsInfo: any = null;
 let eeInfo: any = null;
 
-// Textos de preguntas para mostrar en feedback
-const diagPreguntas = ['Domino los conceptos para la construcción del aprendizaje en los cursos o programas académicos que imparto.','Expongo, organizo, desarrollo y vinculo los contenidos en forma clara.','Adapto los contenidos a los diversos estilos y necesidades de los estudiantes.','Organizo espacios de reflexión antes, durante y después de las actividades de aprendizaje.','Incluyo actividades en clase que promueven el aprendizaje autónomo en los estudiantes.','Propongo ejercicios para promover la metacognición en su ambiente de aprendizaje.','Propongo nuevas estrategias para mejorar los resultados obtenidos en el desempeño de los estudiantes.','Me comunico con claridad y precisión.','Escucho activamente a mis estudiantes.','Fomento la participación y el diálogo respetuoso.','Mantengo un trato respetuoso con mis estudiantes.','Atiendo situaciones grupales con sensibilidad y objetividad.','Organizo los objetivos y contenidos de manera coherente con el modelo educativo.','Implemento diversas estrategias para inducir el aprendizaje significativo.','Considero saberes previos, intereses y experiencias de sus estudiantes.','Genero oportunidades de desarrollo del pensamiento crítico y creativo.','Motivo al aprendizaje, la indagación y la búsqueda de conocimiento.','Ofrezco retroalimentación oportuna, pertinente y cálida a los estudiantes.','Promuevo un ambiente de confianza y respeto.','Identifico fortalezas de mis estudiantes y las destaco.','Cumplo con puntualidad y asistencia a mis clases.','Utilizo la plataforma Moodle como apoyo al aprendizaje.','Me actualizo profesionalmente para mejorar mi práctica docente.','Evalúo el aprendizaje de manera justa y transparente.'];
-const coordSecciones = [
-  { icon:'📋',label:'A. Cumplimiento Académico',keys:['a1','a2','a3'],items:['Cumplimiento del programa, planeación y avance académico.','Organización y conducción de sesiones (presenciales, virtuales o ejecutivas).','Uso y disponibilidad de materiales didácticos o recursos en plataforma.']},
-  { icon:'📊',label:'B. Gestión y Organización',keys:['b1','b2','b3'],items:['Entrega de calificaciones en tiempo y forma.','Puntualidad, asistencia y cumplimiento administrativo.','Uso adecuado de plataformas institucionales (Moodle, Saeko, sistemas).']},
-  { icon:'💬',label:'C. Desempeño Profesional y Comunicación',keys:['c1','c2','c3'],items:['Comunicación clara, oportuna y profesional con estudiantes y coordinación.','Trabajo colaborativo con docentes y áreas institucionales.','Participación en reuniones, actividades y procesos institucionales.']},
-  { icon:'💡',label:'D. Innovación y Mejora Continua',keys:['d1','d2','d3'],items:['Implementación de estrategias didácticas innovadoras.','Participación en procesos de capacitación o actualización docente.','Aplicación de mejoras en su práctica docente.']},
-  { icon:'🏛️',label:'E. Compromiso Institucional y Ética',keys:['e1','e2','e3'],items:['Cumplimiento de normatividad institucional.','Trato respetuoso, ético y profesional.','Representación institucional adecuada en entornos presenciales o digitales.']}
+// Cargar textos de preguntas desde BD (editables via /admin/instrumentos)
+const { data: preguntasAD } = await cl.from('instrumento_preguntas').select('texto').eq('instrumento','autodiagnostico').eq('activa',true).order('orden');
+const diagPreguntas = (preguntasAD||[]).map(p=>p.texto);
+const { data: preguntasCoord } = await cl.from('instrumento_preguntas').select('texto,seccion').eq('instrumento','coordinacion').eq('activa',true).order('orden');
+const { data: preguntasObs } = await cl.from('instrumento_preguntas').select('texto,seccion').eq('instrumento','observacion').eq('activa',true).order('orden');
+const obsSecciones = [
+  {icon:'🧠',label:'A. Cognitivas',keys:['cco1','cco2','cco3','cco4','cco5','cco6','cco7'],items:[]},
+  {icon:'🔄',label:'B. Metacognitivas',keys:['cme1','cme2','cme3','cme4','cme5','cme6','cme7','cme8','cme9'],items:[]},
+  {icon:'💬',label:'C. Comunicativas',keys:['ccom1','ccom2','ccom3','ccom4'],items:[]},
+  {icon:'👥',label:'D. Sociales',keys:['cso1','cso2','cso3','cso4'],items:[]},
+  {icon:'📊',label:'E. Gestión de la Enseñanza',keys:['cge1','cge2','cge3','cge4','cge5','cge6','cge7'],items:[]},
+  {icon:'❤️',label:'F. Afectivas',keys:['caf1','caf2'],items:[]},
+  {icon:'💻',label:'G. Tecno-Pedagógicas',keys:['ctepe1','ctepe2','ctepe3','ctepe4','ctepe5','ctepe6','ctepe7'],items:[]},
+  {icon:'📏',label:'H. Normativa',keys:['cno1','cno2','cno3','cno4','cno5'],items:[]}
 ];
+const secObsMap = {};
+(preguntasObs||[]).forEach(p=>{const s=p.seccion||'';if(!secObsMap[s])secObsMap[s]=[];secObsMap[s].push(p.texto);});
+obsSecciones.forEach(s=>{s.items = secObsMap[s.keys[0].replace(/[0-9]/g,'')] || s.items;});
+const coordSecciones = [
+  {icon:'📋',label:'A. Cumplimiento Académico',keys:['a1','a2','a3'],items:[]},
+  {icon:'📊',label:'B. Gestión y Organización',keys:['b1','b2','b3'],items:[]},
+  {icon:'💬',label:'C. Desempeño Profesional y Comunicación',keys:['c1','c2','c3'],items:[]},
+  {icon:'💡',label:'D. Innovación y Mejora Continua',keys:['d1','d2','d3'],items:[]},
+  {icon:'🏛️',label:'E. Compromiso Institucional y Ética',keys:['e1','e2','e3'],items:[]}
+];
+const secCoordMap = {};
+(preguntasCoord||[]).forEach(p=>{const s=p.seccion||'';if(!secCoordMap[s])secCoordMap[s]=[];secCoordMap[s].push(p.texto);});
+coordSecciones.forEach(s=>{s.items = secCoordMap[s.keys[0].replace(/[0-9]/g,'')] || s.items;});
 const eeCategorias = ['Asistencia','Organización','Actitud','Enseñanza','Dominio','Evaluación','Comunicación','Gestión','Tecnología','Satisfacción'];
 const eeCatKeys = ['prom_asistencia','prom_organizacion','prom_actitud','prom_ensenanza','prom_dominio','prom_evaluacion','prom_comunicacion','prom_gestion','prom_tecnologia','prom_satisfaccion'];
-// Definiciones de secciones de observacion con textos de preguntas (escolarizado)
-const obsSecciones = [
-  { icon:'🧠',label:'A. Cognitivas',keys:['cco1','cco2','cco3','cco4','cco5','cco6','cco7'],items:['Expone, organiza, desarrolla y vincula los contenidos en forma clara.','Relaciona los contenidos con situaciones reales o casos prácticos.','Adapta los contenidos a los diversos estilos y necesidades.','Explica conceptos complejos utilizando analogías y ejemplos claros.','Clarifica términos técnicos según el nivel académico del grupo.','Facilita la apropiación del conocimiento mediante explicaciones.','Promueve el razonamiento crítico y la resolución de problemas.']},
-  { icon:'🔄',label:'B. Metacognitivas',keys:['cme1','cme2','cme3','cme4','cme5','cme6','cme7','cme8','cme9'],items:['Organiza espacios de reflexión antes, durante y después de las actividades.','Orienta a los estudiantes para que identifiquen fortalezas y áreas de oportunidad.','Incluye actividades que promueven el aprendizaje autónomo.','Propone ejercicios para promover la metacognición.','Propone nuevas estrategias para mejorar los resultados.','Favorece la transferencia de conocimientos a nuevas situaciones.','Promueve la formulación de preguntas y pensamiento reflexivo.','Invita a seleccionar estrategias de estudio adaptadas.','Integra momentos de análisis sobre errores como oportunidades.']},
-  { icon:'💬',label:'C. Comunicativas',keys:['ccom1','ccom2','ccom3','ccom4'],items:['Se comunica con lenguaje oral y escrito apropiado y de respeto.','Se comunica con lenguaje no verbal apropiado y de respeto.','Comunica propósitos, procedimientos y resultados esperados.','Diseña actividades que desarrollen expresión escrita y oral.']},
-  { icon:'👥',label:'D. Sociales',keys:['cso1','cso2','cso3','cso4'],items:['Procura relaciones empáticas y de respeto en la praxis docente.','Proporciona igualdad de oportunidades de participación.','Promueve compromiso y solidaridad entre los estudiantes.','Establece un clima de relaciones interpersonales respetuosas.']},
-  { icon:'📊',label:'E. Gestión de la Enseñanza',keys:['cge1','cge2','cge3','cge4','cge5','cge6','cge7'],items:['Organiza objetivos y contenidos de manera coherente con el modelo TUP.','Implementa diversas estrategias para aprendizaje significativo.','Considera saberes previos, intereses y experiencias.','Genera oportunidades de pensamiento crítico y creativo.','Motiva al aprendizaje, la indagación y búsqueda de conocimiento.','Integra recursos tecnológicos, didácticos y materiales.','Ofrece retroalimentación oportuna, pertinente y cálida.']},
-  { icon:'❤️',label:'F. Afectivas',keys:['caf1','caf2'],items:['Genera un ambiente de confianza, seguridad y respeto.','Identifica fortalezas de sus estudiantes y las destaca.']},
-  { icon:'💻',label:'G. Tecno-Pedagógicas',keys:['ctepe1','ctepe2','ctepe3','ctepe4','ctepe5','ctepe6','ctepe7'],items:['Diseña tareas integradoras de proyectos usando NTIC.','Promueve empoderamiento del estudiante en uso de NTIC.','Muestra dominio de la tecnología como recurso para enseñanza.','Aplica métodos y técnicas pertinentes a la didáctica de su campo.','Identifica estrategias de enseñanza y dificultades recurrentes.','Promueve uso responsable, ético y seguro de tecnologías.','Genera situaciones de aprendizaje adecuadas a niveles de desarrollo.']},
-  { icon:'📏',label:'H. Normativa',keys:['cno1','cno2','cno3','cno4','cno5'],items:['Inicia puntualmente su sesión.','Entrega en tiempo y forma la planeación docente.','Desarrolla el tema correspondiente a la semana establecida.','Registra asistencia, evaluaciones y avances.','Concluye su sesión en el tiempo señalado.']}
-];
 
 if (docenteIds.length > 0) {
   const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteIds[0]).maybeSingle();
