@@ -41,16 +41,16 @@ let eeComentarios: string[] = [];
 let coordInfo: any = null;
 let planFeedback: any[] = [];
 let obsInfo: any = null;
-// Secciones de rubrica para mostrar en el dashboard
+// Definiciones de secciones de observacion con textos de preguntas (escolarizado)
 const obsSecciones = [
-  { icon: '🧠', label: 'Cognitiva', keys: ['cco1','cco2','cco3','cco4','cco5','cco6','cco7'] },
-  { icon: '🔄', label: 'Metacognitiva', keys: ['cme1','cme2','cme3','cme4','cme5','cme6','cme7','cme8','cme9'] },
-  { icon: '💬', label: 'Comunicativa', keys: ['ccom1','ccom2','ccom3','ccom4'] },
-  { icon: '👥', label: 'Social', keys: ['cso1','cso2','cso3','cso4'] },
-  { icon: '📊', label: 'Gestión', keys: ['cge1','cge2','cge3','cge4','cge5','cge6','cge7'] },
-  { icon: '❤️', label: 'Afectiva', keys: ['caf1','caf2'] },
-  { icon: '💻', label: 'Tecno-pedagógica', keys: ['ctepe1','ctepe2','ctepe3','ctepe4','ctepe5','ctepe6','ctepe7'] },
-  { icon: '📏', label: 'Normativa', keys: ['cno1','cno2','cno3','cno4','cno5'] }
+  { icon:'🧠',label:'A. Cognitivas',keys:['cco1','cco2','cco3','cco4','cco5','cco6','cco7'],items:['Expone, organiza, desarrolla y vincula los contenidos en forma clara.','Relaciona los contenidos con situaciones reales o casos prácticos.','Adapta los contenidos a los diversos estilos y necesidades.','Explica conceptos complejos utilizando analogías y ejemplos claros.','Clarifica términos técnicos según el nivel académico del grupo.','Facilita la apropiación del conocimiento mediante explicaciones.','Promueve el razonamiento crítico y la resolución de problemas.']},
+  { icon:'🔄',label:'B. Metacognitivas',keys:['cme1','cme2','cme3','cme4','cme5','cme6','cme7','cme8','cme9'],items:['Organiza espacios de reflexión antes, durante y después de las actividades.','Orienta a los estudiantes para que identifiquen fortalezas y áreas de oportunidad.','Incluye actividades que promueven el aprendizaje autónomo.','Propone ejercicios para promover la metacognición.','Propone nuevas estrategias para mejorar los resultados.','Favorece la transferencia de conocimientos a nuevas situaciones.','Promueve la formulación de preguntas y pensamiento reflexivo.','Invita a seleccionar estrategias de estudio adaptadas.','Integra momentos de análisis sobre errores como oportunidades.']},
+  { icon:'💬',label:'C. Comunicativas',keys:['ccom1','ccom2','ccom3','ccom4'],items:['Se comunica con lenguaje oral y escrito apropiado y de respeto.','Se comunica con lenguaje no verbal apropiado y de respeto.','Comunica propósitos, procedimientos y resultados esperados.','Diseña actividades que desarrollen expresión escrita y oral.']},
+  { icon:'👥',label:'D. Sociales',keys:['cso1','cso2','cso3','cso4'],items:['Procura relaciones empáticas y de respeto en la praxis docente.','Proporciona igualdad de oportunidades de participación.','Promueve compromiso y solidaridad entre los estudiantes.','Establece un clima de relaciones interpersonales respetuosas.']},
+  { icon:'📊',label:'E. Gestión de la Enseñanza',keys:['cge1','cge2','cge3','cge4','cge5','cge6','cge7'],items:['Organiza objetivos y contenidos de manera coherente con el modelo TUP.','Implementa diversas estrategias para aprendizaje significativo.','Considera saberes previos, intereses y experiencias.','Genera oportunidades de pensamiento crítico y creativo.','Motiva al aprendizaje, la indagación y búsqueda de conocimiento.','Integra recursos tecnológicos, didácticos y materiales.','Ofrece retroalimentación oportuna, pertinente y cálida.']},
+  { icon:'❤️',label:'F. Afectivas',keys:['caf1','caf2'],items:['Genera un ambiente de confianza, seguridad y respeto.','Identifica fortalezas de sus estudiantes y las destaca.']},
+  { icon:'💻',label:'G. Tecno-Pedagógicas',keys:['ctepe1','ctepe2','ctepe3','ctepe4','ctepe5','ctepe6','ctepe7'],items:['Diseña tareas integradoras de proyectos usando NTIC.','Promueve empoderamiento del estudiante en uso de NTIC.','Muestra dominio de la tecnología como recurso para enseñanza.','Aplica métodos y técnicas pertinentes a la didáctica de su campo.','Identifica estrategias de enseñanza y dificultades recurrentes.','Promueve uso responsable, ético y seguro de tecnologías.','Genera situaciones de aprendizaje adecuadas a niveles de desarrollo.']},
+  { icon:'📏',label:'H. Normativa',keys:['cno1','cno2','cno3','cno4','cno5'],items:['Inicia puntualmente su sesión.','Entrega en tiempo y forma la planeación docente.','Desarrolla el tema correspondiente a la semana establecida.','Registra asistencia, evaluaciones y avances.','Concluye su sesión en el tiempo señalado.']}
 ];
 
 if (docenteIds.length > 0) {
@@ -210,9 +210,9 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
                 {obsInfo.comentario_evaluador && <div class="bg-slate-50 rounded-xl p-4 border border-slate-100"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Comentario del Evaluador</p><p class="text-sm text-slate-600 italic">"{obsInfo.comentario_evaluador}"</p></div>}
                 {obsInfo.comentario_docente && <div class="bg-slate-50 rounded-xl p-4 border border-slate-100"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Comentario del Docente</p><p class="text-sm text-slate-600 italic">"{obsInfo.comentario_docente}"</p></div>}
                 {obsSecciones.map(sec => {
-                  const items = sec.keys.map(k => obsInfo[k]).filter(v => v != null);
-                  if (items.length === 0) return <></>;
-                  return <div class="bg-slate-50 rounded-xl p-4"><p class="text-xs font-semibold text-slate-500 uppercase mb-2">{sec.icon} {sec.label}</p><div class="flex flex-wrap gap-1.5">{items.map((v,i) => <span class={"px-2 py-0.5 rounded-md text-xs font-bold "+(v>=4?"bg-emerald-100 text-emerald-700":v>=3?"bg-amber-100 text-amber-700":"bg-red-50 text-red-600")}>{v}</span>)}</div></div>;
+                  const pares = sec.keys.map((k,i) => ({ texto: sec.items[i], score: obsInfo[k] })).filter(p => p.score != null);
+                  if (pares.length === 0) return <></>;
+                  return <div class="bg-slate-50 rounded-xl p-4"><p class="text-xs font-semibold text-slate-500 uppercase mb-2">{sec.icon} {sec.label}</p><div class="space-y-2">{pares.map(p => <div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600 flex-1">{p.texto}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(p.score>=4?"bg-emerald-100 text-emerald-700":p.score>=3?"bg-amber-100 text-amber-700":"bg-red-50 text-red-600")}>{p.score}</span></div>)}</div></div>;
                 })}
               </div>
             </details>
