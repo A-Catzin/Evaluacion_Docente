@@ -1,26 +1,93 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { obtenerClienteSuperbase } from '../lib/supabaseClient';
+
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+let email = '';
+let rolActual = '';
+if (token && refresh) {
+  try {
+    const cl = obtenerClienteSuperbase();
+    const { data: s } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
+    if (s.user) {
+      email = s.user.email || '';
+      const { data: u } = await cl.from('usuarios').select('rol').eq('id', s.user.id).maybeSingle();
+      rolActual = u?.rol || '';
+      if (rolActual && rolActual !== 'pendiente') return Astro.redirect(rolActual==='superadmin'||rolActual==='coordinador'?'/admin/dashboard':rolActual==='docente'?'/docente/dashboard':rolActual==='observador'?'/observador/dashboard':'/');
+    }
+  } catch {}
+}
 ---
-<Layout titulo="SED-360 — Cuenta en revisión" modoEnfoque={true}>
-  <div class="flex flex-col items-center justify-center min-h-[80vh] gap-6 text-center px-4">
-    <div class="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center shadow-tarjeta">
-      <span class="text-4xl">⏳</span>
+
+<Layout titulo="SED-360 — Solicitar Acceso" modoEnfoque={true}>
+  <div class="flex flex-col items-center justify-center min-h-[80vh] gap-6 px-4">
+    <div class="w-24 h-24 rounded-full bg-amber-100 flex items-center justify-center shadow-tarjeta">
+      <span class="text-5xl">⏳</span>
     </div>
-    <h1 class="text-2xl font-bold text-tup">Cuenta en revisión</h1>
-    <p class="text-slate-500 max-w-md">
-      Tu cuenta <strong class="text-slate-700" id="email-usuario"></strong> está pendiente de validación.
-      Un administrador revisará tu solicitud y te asignará un rol pronto.
-    </p>
-    <p class="text-xs ">Si crees que esto es un error, contacta a soporte.</p>
-    <a href="/api/auth/signout" class="mt-4 px-6 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500 hover:bg-slate-50 transition-colors">Cerrar sesión</a>
+    <div class="text-center">
+      <h1 class="text-2xl font-bold text-tup">Cuenta pendiente de activación</h1>
+      <p class="text-slate-500 mt-2 max-w-md">{email}</p>
+    </div>
+
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-tarjeta p-6 space-y-4">
+      <p class="text-sm text-slate-600 text-center">Selecciona el tipo de acceso que necesitas:</p>
+      
+      <div class="space-y-3" id="opciones-rol">
+        <label class="flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-tup cursor-pointer transition-colors has-[:checked]:border-tup has-[:checked]:bg-tup/5">
+          <input type="radio" name="rol_solicitado" value="docente" class="accent-tup w-4 h-4" />
+          <div><p class="font-medium text-slate-700">👨‍🏫 Docente</p><p class="text-xs text-slate-400">Ver mis evaluaciones, subir planeaciones</p></div>
+        </label>
+        <label class="flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-tup cursor-pointer transition-colors has-[:checked]:border-tup has-[:checked]:bg-tup/5">
+          <input type="radio" name="rol_solicitado" value="coordinador" class="accent-tup w-4 h-4" />
+          <div><p class="font-medium text-slate-700">📋 Coordinador</p><p class="text-xs text-slate-400">Evaluar docentes, observaciones, planeaciones</p></div>
+        </label>
+        <label class="flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-tup cursor-pointer transition-colors has-[:checked]:border-tup has-[:checked]:bg-tup/5">
+          <input type="radio" name="rol_solicitado" value="observador" class="accent-tup w-4 h-4" />
+          <div><p class="font-medium text-slate-700">🔍 Observador</p><p class="text-xs text-slate-400">Realizar observaciones de clase</p></div>
+        </label>
+      </div>
+
+      <button id="btn-solicitar" class="w-full bg-tup text-white font-semibold py-3 rounded-xl hover:bg-tup/90 disabled:opacity-50">Solicitar Acceso</button>
+      <p id="msg-estado" class="text-xs text-center hidden"></p>
+    </div>
+
+    <div id="confirmacion" class="w-full max-w-md bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center hidden">
+      <p class="text-emerald-800 font-semibold text-lg">✅ Solicitud enviada</p>
+      <p class="text-emerald-600 text-sm mt-1">Un administrador revisará tu caso pronto.</p>
+      <a href="/api/auth/signout" class="inline-block mt-4 px-6 py-2.5 rounded-xl border border-emerald-200 text-sm text-emerald-700 hover:bg-emerald-100">Cerrar sesión</a>
+    </div>
+
+    <a href="/api/auth/signout" id="link-salir" class="text-xs text-slate-400 hover:text-slate-600">Cerrar sesión</a>
   </div>
 </Layout>
 
 <script is:inline>
-  // Mostrar el email del usuario desde el token (si esta disponible)
-  fetch('/api/auth/rol').then(r => r.json()).then(d => {
-    if (d.rol && d.rol !== 'pendiente') {
-      window.location.href = '/admin/dashboard';
+  document.getElementById('btn-solicitar').addEventListener('click', async function() {
+    var sel = document.querySelector('input[name="rol_solicitado"]:checked');
+    if (!sel) { alert('Selecciona un tipo de acceso'); return; }
+    var btn = this; btn.disabled = true; btn.textContent = 'Enviando...';
+    try {
+      var res = await fetch('/api/auth/solicitar-acceso', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ rol_solicitado: sel.value })
+      });
+      if (res.ok) {
+        document.getElementById('opciones-rol').parentElement.classList.add('hidden');
+        btn.parentElement.classList.add('hidden');
+        document.getElementById('confirmacion').classList.remove('hidden');
+        document.getElementById('link-salir').classList.add('hidden');
+      } else {
+        var d = await res.json();
+        document.getElementById('msg-estado').textContent = d.error || 'Error';
+        document.getElementById('msg-estado').classList.remove('hidden');
+        document.getElementById('msg-estado').className += ' text-red-600';
+        btn.disabled = false; btn.textContent = 'Solicitar Acceso';
+      }
+    } catch(e) {
+      document.getElementById('msg-estado').textContent = 'Error de conexión';
+      document.getElementById('msg-estado').classList.remove('hidden');
+      btn.disabled = false; btn.textContent = 'Solicitar Acceso';
     }
-  }).catch(() => {});
+  });
 </script>
