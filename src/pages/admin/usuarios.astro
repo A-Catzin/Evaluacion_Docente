@@ -17,6 +17,7 @@ interface FilaUsuario {
   prom_coordinador?: number; prom_planeacion?: number; prom_autodiagnostico?: number;
   turno?: string;
   maestros_evaluados?: number;
+  rol_solicitado?: string;
 }
 
 let filas: FilaUsuario[] = [];
@@ -44,13 +45,13 @@ try {
       });
     }
   } else {
-    let query = cliente.from('usuarios').select('id, email, rol, entidad_id');
+    let query = cliente.from('usuarios').select('id, email, rol, entidad_id, rol_solicitado');
     if (rolFiltro) query = query.eq('rol', rolFiltro);
     const { data: usuarios, error } = await query.order('email');
     if (error) throw error;
 
     for (const u of (usuarios || [])) {
-      const fila: FilaUsuario = { id: u.id, email: u.email, rol: u.rol, nombre: '', apellidos: '' };
+      const fila: FilaUsuario = { id: u.id, email: u.email, rol: u.rol, nombre: '', apellidos: '', rol_solicitado: u.rol_solicitado };
 
       if (u.entidad_id && u.rol === 'docente') {
         const { data: doc } = await cliente.from('docentes').select('nombre,apellidos,campus,turno,oferta_academica,num_empleado,modalidad').eq('id', u.entidad_id).maybeSingle();
@@ -212,6 +213,12 @@ function formatear(n: number | undefined): string {
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Rol</th></tr></thead>
               <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
+            </table>
+          )}
+          {rolFiltro === 'pendiente' && (
+            <table class="w-full text-sm">
+              <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Rol Solicitado</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Acción</th></tr></thead>
+              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-slate-100">{f.rol_solicitado || '—'}</span></td><td class="px-4 py-3 text-center"><a href={`/admin/roles?q=${f.email}`} class="text-xs text-tup hover:underline">Asignar Rol</a></td></tr>))}</tbody>
             </table>
           )}
         </div>
