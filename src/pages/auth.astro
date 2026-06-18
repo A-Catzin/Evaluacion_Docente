@@ -122,6 +122,7 @@ const MENSAJES_ERROR: Record<string, { titulo: string; descripcion: string }> = 
         // con los tokens en el hash: /#access_token=...&refresh_token=...
         await clienteNavegador.auth.signInWithOAuth({
           provider: 'google',
+          options: { redirectTo: window.location.origin + '/auth/callback' }
         });
       } catch (err) {
         console.error('[SED-360 Auth] Error al iniciar OAuth:', err);
