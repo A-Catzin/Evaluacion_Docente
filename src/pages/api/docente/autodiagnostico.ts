@@ -12,7 +12,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (!sesion.user) return new Response(JSON.stringify({ error: 'Sesión inválida' }), { status: 401 });
 
     const { data: usuario } = await cliente.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
-    if (!usuario || usuario.rol !== 'docente') {
+    if (!usuario || (usuario.rol !== 'docente' && usuario.rol !== 'pendiente')) {
       return new Response(JSON.stringify({ error: 'Solo docentes pueden enviar autodiagnóstico' }), { status: 403 });
     }
 
@@ -26,6 +26,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     // 1. Crear o actualizar docente
     let docenteId = usuario.entidad_id;
     const apellidos = `${apellido_paterno} ${apellido_materno}`.trim();
+
+    // Si es pendiente, auto-asignar rol docente al completar AD
+    if (usuario.rol === 'pendiente') {
+      await cliente.from('usuarios').update({ rol: 'docente' }).eq('id', sesion.user.id);
+    }
 
     if (docenteId) {
       const { error: errUpd } = await cliente.from('docentes').update({
