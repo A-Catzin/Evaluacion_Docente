@@ -75,5 +75,4 @@ const SECCIONES = [
     }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación Ejecutiva'}
   });
 document.addEventListener("input", function(e){ if(e.target.id==="buscar-docente") filtrarDocentes(e.target.value); });
-document.getElementById("docente_id").addEventListener("change",function(){ autoLlenar(this.value); });
 </script>
