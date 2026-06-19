@@ -96,8 +96,10 @@ import Layout from '../../layouts/Layout.astro';
             var rol = d.rol;
             if (rol === 'pendiente' || !rol) {
               window.location.href = '/pendiente';
-            } else if (rol === 'superadmin' || rol === 'coordinador') {
+            } else if (rol === 'superadmin') {
               window.location.href = '/admin/dashboard';
+            } else if (rol === 'coordinador') {
+              window.location.href = '/coordinador/dashboard';
             } else if (rol === 'docente') {
               window.location.href = '/docente/dashboard';
             } else if (rol === 'observador') {
