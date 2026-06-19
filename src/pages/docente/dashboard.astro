@@ -74,7 +74,7 @@ const coordSecciones = [
 ];
 const secCoordMap = {};
 (preguntasCoord||[]).forEach(p=>{const s=p.seccion||'';if(!secCoordMap[s])secCoordMap[s]=[];secCoordMap[s].push(p.texto);});
-coordSecciones.forEach(s=>{s.items = secCoordMap[s.keys[0].replace(/[0-9]/g,'')] || s.items;});
+coordSecciones.forEach(s=>{s.items = secCoordMap[s.keys[0].replace(/[0-9]/g,'').toUpperCase()] || s.items;});
 const eeCategorias = ['Asistencia','Organización','Actitud','Enseñanza','Dominio','Evaluación','Comunicación','Gestión','Tecnología','Satisfacción'];
 const eeCatKeys = ['prom_asistencia','prom_organizacion','prom_actitud','prom_ensenanza','prom_dominio','prom_evaluacion','prom_comunicacion','prom_gestion','prom_tecnologia','prom_satisfaccion'];
 
