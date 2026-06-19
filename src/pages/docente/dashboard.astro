@@ -61,6 +61,10 @@ const obsSecciones = [
 const secObsMap = {};
 (preguntasObs||[]).forEach(p=>{const s=p.seccion||'';if(!secObsMap[s])secObsMap[s]=[];secObsMap[s].push(p.texto);});
 obsSecciones.forEach(s=>{s.items = secObsMap[s.keys[0].replace(/[0-9]/g,'')] || s.items;});
+
+// Cargar categorias de planeacion desde BD
+const { data: planCats } = await cl.from('instrumento_preguntas').select('*').eq('instrumento','planeacion').eq('tipo_respuesta','categoria').eq('activa',true).order('orden');
+const planeacionCats = (planCats||[]).map(c => ({ id: c.seccion, label: `${c.orden}. ${c.texto}` }));
 const coordSecciones = [
   {icon:'📋',label:'A. Cumplimiento Académico',keys:['a1','a2','a3'],items:[]},
   {icon:'📊',label:'B. Gestión y Organización',keys:['b1','b2','b3'],items:[]},
@@ -256,7 +260,8 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
                 {planFeedback.map((p,i)=>(
                   <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
                     <div class="flex items-center justify-between mb-3"><p class="text-sm font-medium text-slate-700">Evaluación #{i+1}</p><span class={"px-2.5 py-1 rounded-lg text-xs font-medium "+(p.estado==='Aprobado'?'bg-emerald-100 text-emerald-700':p.estado==='Corrección'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-700')}>{p.estado||'Pendiente'}</span></div>
-                    <div class="grid grid-cols-1 gap-3"><div class="bg-white rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Puntaje</p><p class="text-lg font-bold text-slate-700">{p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'}</p></div></div>
+                    <div class="grid grid-cols-1 gap-3 mb-3"><div class="bg-white rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Puntaje</p><p class="text-lg font-bold text-slate-700">{p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'}</p></div></div>
+                    {p.evaluacion_detalle && <div class="space-y-2 mt-2">{planeacionCats.map(cat => { const det = (p.evaluacion_detalle||{})[cat.id]; if (!det) return <></>; const scoreMap = {2:'Satisfactorio',1:'Suficiente',0:'Insuficiente',na:'No aplica'}; return <div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600 flex-1">{cat.label}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(det.score==='2'||det.score===2?'bg-emerald-100 text-emerald-700':det.score==='1'||det.score===1?'bg-amber-100 text-amber-700':det.score==='na'?'bg-slate-100 text-slate-500':'bg-red-50 text-red-600')}>{scoreMap[String(det.score)]||det.score}</span></div>; })}</div>}
                     {p.comentario_retroalimentacion && <div class="bg-white rounded-lg p-3 border border-slate-200 mt-2"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Retroalimentación</p><p class="text-sm text-slate-600 italic">"{p.comentario_retroalimentacion}"</p></div>}
                     {p.observaciones_generales && <div class="bg-white rounded-lg p-3 border border-slate-200 mt-2"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Observaciones</p><p class="text-sm text-slate-600">{p.observaciones_generales}</p></div>}
                   </div>
