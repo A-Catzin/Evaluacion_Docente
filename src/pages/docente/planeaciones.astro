@@ -28,9 +28,13 @@ const { data: misAsignaturas } = materiasIds.length > 0 ? await cl.from('asignat
 const { data: docente } = await cl.from('docentes').select('campus,turno').eq('id', entidadId).maybeSingle();
 const { data: planeacionesRaw } = await cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', entidadId).order('fecha_subida', { ascending: false });
 
-// Filtrar materias que ya tienen planeacion enviada
-const materiasEnviadas = new Set((planeacionesRaw||[]).map(p => (p as Record<string,unknown>).asignatura_id as number));
-const materiasDisponibles = (misAsignaturas||[]).filter(a => !materiasEnviadas.has(a.id));
+// Filtrar materias que ya tienen planeacion APROBADA (correcciones si se pueden reenviar)
+const materiasBloqueadas = new Set((planeacionesRaw||[]).filter(p => (p as any).estado === 'Aprobado' || (p as any).estado === 'Pendiente').map(p => (p as any).asignatura_id as number));
+const materiasDisponibles = (misAsignaturas||[]).filter(a => !materiasBloqueadas.has(a.id));
+
+// Materias en correccion (se pueden reenviar)
+const materiasCorreccion = new Map<number, number>(); // asignatura_id → planeacion_id
+(planeacionesRaw||[]).filter(p => (p as any).estado === 'Corrección').forEach(p => materiasCorreccion.set((p as any).asignatura_id, (p as any).id));
 
 interface PlaneacionItem { id: number; asignatura: string; grupo: string; estado: string; puntaje: number | null; url: string; }
 const planeaciones: PlaneacionItem[] = [];
@@ -77,13 +81,28 @@ for (const p of (planeacionesRaw || [])) {
       <p class="font-medium text-slate-500">Agradecemos su colaboración, responsabilidad académica y compromiso con la mejora continua y la calidad educativa institucional.</p>
     </div>
 
+    <!-- Correcciones pendientes -->
+    {materiasCorreccion.size > 0 && (
+      <div class="bg-red-50 rounded-2xl p-5 border border-red-200 mb-6">
+        <h3 class="font-bold text-red-700 mb-3">⚠️ Planeaciones que requieren corrección</h3>
+        <p class="text-sm text-red-600 mb-4">El coordinador solicitó cambios en las siguientes materias. Corregí y volvé a subir el archivo.</p>
+        <div class="space-y-2">
+          {[...materiasCorreccion.entries()].map(([asigId, planId]) => {
+            const asig = (misAsignaturas||[]).find(a => a.id === asigId);
+            return <div class="flex items-center justify-between bg-white rounded-lg px-4 py-3"><span class="text-sm font-medium text-slate-700">{asig?.nombre || asigId}</span><button class="btn-corregir px-4 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700" data-plan-id={planId} data-asig-id={asigId}>📤 Reenviar</button></div>;
+          })}
+        </div>
+      </div>
+    )}
+
     <!-- Formulario de subida -->
     <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8">
       <h2 class="text-lg font-bold text-tup mb-4">Subir Nueva Planeación</h2>
-      {materiasDisponibles.length === 0 ? (
+      {materiasDisponibles.length === 0 && materiasCorreccion.size === 0 ? (
         <p class="text-sm text-slate-400">Ya subiste planeación para todas tus materias. 🎉</p>
       ) : (
       <form id="form-subir" class="space-y-4">
+        <input type="hidden" id="plan_id" value="" />
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><label class="block text-sm font-medium text-slate-700 mb-1">Asignatura *</label><select id="asignatura_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option>{materiasDisponibles?.map(a => (<option value={a.id}>{a.nombre}</option>))}</select></div>
           <div><label class="block text-sm font-medium text-slate-700 mb-1">Grupo *</label><select id="grupo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Primero selecciona la materia</option></select></div>
@@ -115,10 +134,28 @@ for (const p of (planeacionesRaw || [])) {
   </div>
 </LayoutDocente>
 
-<script is:inline define:vars={{ docenteId: entidadId, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '', gruposJson: JSON.stringify(gruposDocente || []) }}>
+<script is:inline define:vars={{ docenteId: entidadId, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '', gruposJson: JSON.stringify(gruposDocente || []), correccionesJson: JSON.stringify([...materiasCorreccion.entries()]) }}>
   var gruposData = JSON.parse(gruposJson);
+  var correccionesData = new Map(JSON.parse(correccionesJson));
   document.getElementById("asignatura_id").addEventListener("change", actualizarGrupos);
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
+  
+  // Botones Reenviar
+  document.querySelectorAll('.btn-corregir').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var planId = this.dataset.planId;
+      var asigId = this.dataset.asigId;
+      document.getElementById('plan_id').value = planId;
+      document.getElementById('asignatura_id').value = asigId;
+      actualizarGrupos();
+      // Seleccionar el grupo de la planeacion original
+      var grupos = gruposData.filter(function(g){ return g.asignatura_id === parseInt(asigId); });
+      if (grupos.length > 0) setTimeout(function(){ document.getElementById('grupo').value = grupos[0].clave || ''; }, 100);
+      document.getElementById('form-subir').scrollIntoView({behavior:'smooth'});
+      var submitBtn = document.querySelector('#form-subir button[type="submit"]');
+      submitBtn.textContent = 'Reenviar Corrección';
+    });
+  });
   
   function actualizarGrupos(){
     var asigId = parseInt(document.getElementById('asignatura_id').value);
@@ -141,6 +178,8 @@ for (const p of (planeacionesRaw || [])) {
       var formData=new FormData();
       formData.append('file',file); formData.append('path',path);
       formData.append('cuatrimestre_id',cuatrimestreId); formData.append('asignatura_id',asig.value);
+      var planId = document.getElementById('plan_id').value;
+      if (planId) formData.append('plan_id', planId);
       formData.append('grupo',grupo); formData.append('modalidad',document.getElementById('modalidad').value);
       formData.append('proyecto',document.getElementById('proyecto').value==='true'?'true':'false');
       formData.append('laboratorio',document.getElementById('laboratorio').value);

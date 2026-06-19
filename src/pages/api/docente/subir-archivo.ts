@@ -26,10 +26,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (upErr) { console.error('[Subir] Storage:', upErr); return new Response(JSON.stringify({ error: 'Error Storage: ' + upErr.message }), { status: 400 }); }
 
     const { data: urlData } = cl.storage.from('planeaciones').getPublicUrl(path);
-
-    const { error: dbErr } = await cl.from('planeaciones').insert({
-      docente_id: u.entidad_id,
-      cuatrimestre_id: parseInt(formData.get('cuatrimestre_id') as string),
+    const planId = formData.get('plan_id') as string;
+    
+    const datos = {
       asignatura_id: parseInt(formData.get('asignatura_id') as string) || null,
       grupo: formData.get('grupo') as string,
       modalidad: formData.get('modalidad') as string,
@@ -41,7 +40,21 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       comentario_docente: (formData.get('comentario') as string) || null,
       campus: formData.get('campus') as string,
       turno: formData.get('turno') as string,
-    });
+      estado: planId ? 'Pendiente' : undefined,
+    };
+
+    let dbErr = null;
+    if (planId) {
+      // Reenviar correccion: actualizar existente
+      const { error } = await cl.from('planeaciones').update(datos).eq('id', parseInt(planId));
+      dbErr = error;
+    } else {
+      const { error } = await cl.from('planeaciones').insert({
+        ...datos, docente_id: u.entidad_id,
+        cuatrimestre_id: parseInt(formData.get('cuatrimestre_id') as string),
+      });
+      dbErr = error;
+    }
 
     if (dbErr) {
       console.error('[Subir] DB:', dbErr);
