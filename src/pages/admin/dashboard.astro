@@ -14,8 +14,8 @@ const cliente = obtenerClienteSuperbase();
 const { count: pendientes } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
 
 const todos = await obtenerDocentes();
-const { data: docsConEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
-const docsEvaluados = new Set((docsConEval || []).map(e => e.docente_id));
+const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('encuesta_estudiantil').select('docente_id').limit(10000), cliente.from('autodiagnosticos').select('docente_id').limit(10000), cliente.from('observaciones').select('docente_id').limit(10000), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000), cliente.from('planeaciones').select('docente_id').limit(10000)]);
+const docsEvaluados = new Set([...(eeIds||[]),...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
 const docentes = todos.filter(d => docsEvaluados.has(d.id) && d.visible_dashboard !== false);
 
 const ids = docentes.map(d => d.id);
