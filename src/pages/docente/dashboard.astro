@@ -60,7 +60,13 @@ const obsSecciones = [
 ];
 const secObsMap = {};
 (preguntasObs||[]).forEach(p=>{const s=p.seccion||'';if(!secObsMap[s])secObsMap[s]=[];secObsMap[s].push(p.texto);});
-obsSecciones.forEach(s=>{s.items = secObsMap[s.keys[0].replace(/[0-9]/g,'')] || s.items;});
+// Mapear letras de seccion DB (A,B,C...) a prefijos de keys (cco,cme,ccom...)
+const obsLetraPrefijo = {A:'cco',B:'cme',C:'ccom',D:'cso',E:'cge',F:'caf',G:'ctepe',H:'cno'};
+obsSecciones.forEach(s=>{
+  const p = s.keys[0].replace(/[0-9]/g,'');
+  const letra = Object.entries(obsLetraPrefijo).find(([,v])=>v===p)?.[0];
+  s.items = secObsMap[letra||p] || s.items;
+});
 
 // Cargar categorias de planeacion desde BD
 const { data: planCats } = await cl.from('instrumento_preguntas').select('*').eq('instrumento','planeacion').eq('tipo_respuesta','categoria').eq('activa',true).order('orden');
