@@ -13,7 +13,7 @@ const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('do
 const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 const campusList = await obtenerCampus();
-const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id));
+const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreActivo?.id);
 const { data: obsAsignaturas } = await cliente.from('asignaturas').select('id,nombre');
 const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
 const docenteIdParam = Astro.url.searchParams.get('docente_id');

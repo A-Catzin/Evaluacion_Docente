@@ -15,7 +15,7 @@ const campusList = await obtenerCampus();
 const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
 
 // Cargar grupos y asignaturas para selector dinamico
-const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id));
+const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreActivo?.id);
 const { data: obsAsignaturas } = await cliente.from('asignaturas').select('id,nombre');
 
 // Precargar docente si viene de una tarjeta del dashboard
