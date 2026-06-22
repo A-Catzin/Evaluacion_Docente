@@ -155,7 +155,6 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
         </select>
       </form>
     </div>
-      <span class="text-xs ">{cuatrimestre?.nombre || ''}</span>
     </div>
 
     {docenteIds.length === 0 ? (
@@ -307,11 +306,11 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
     )}
     <!-- Accesos rápidos -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <a href="/docente/autodiagnostico" class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
+      <a href={`/docente/autodiagnostico?cuatrimestre=${cuatrimestreId}`} class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
         <p class="text-lg font-semibold text-tup">🧪 Autodiagnóstico</p>
         <p class="text-sm text-slate-500 mt-1">24 reactivos de auto-evaluación</p>
       </a>
-      <a href="/docente/planeaciones" class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
+      <a href={`/docente/planeaciones?cuatrimestre=${cuatrimestreId}`} class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover transition-all text-center">
         <p class="text-lg font-semibold text-tup">📄 Planeaciones</p>
         <p class="text-sm text-slate-500 mt-1">Sube tus planeaciones didácticas</p>
       </a>

@@ -1,6 +1,6 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
-import { obtenerCuatrimestreActivo, obtenerOfertasAcademicas, obtenerCampus, obtenerTurnos } from '../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres, obtenerOfertasAcademicas, obtenerCampus, obtenerTurnos } from '../../services/catalogos';
 import { obtenerAutodiagnostico } from '../../services/autodiagnostico';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
@@ -21,7 +21,11 @@ if (!docenteId && usuario.email) {
   if (doc) docenteId = doc.id;
 }
 
-const cuatrimestre = await obtenerCuatrimestreActivo();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
 if (!cuatrimestre) return Astro.redirect('/docente/dashboard');
 
 const { data: existente } = docenteId ? await cliente.from('autodiagnosticos').select('id').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestre.id).maybeSingle() : { data: null };
