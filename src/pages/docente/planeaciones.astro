@@ -1,7 +1,7 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
-import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -20,7 +20,11 @@ if (!entidadId && usuario.email) {
 }
 if (!entidadId) return Astro.redirect('/docente/dashboard');
 
-const cuatrimestre = await obtenerCuatrimestreActivo();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
 // Materias asignadas al docente via grupos
 const { data: gruposDocente } = await cl.from('grupos').select('id,clave,asignatura_id,modalidad').eq('docente_id', entidadId);
 const materiasIds = [...new Set((gruposDocente||[]).map(g => g.asignatura_id))];
@@ -61,22 +65,21 @@ for (const p of (planeacionesRaw || [])) {
 
 <LayoutDocente titulo="Mis Planeaciones">
   <div class="animate-flotar-entrada max-w-4xl mx-auto">
-    <h1 class="text-3xl font-bold text-tup mb-2">Buzón de entrega Planeación Docente 26-3</h1>
+    <h1 class="text-3xl font-bold text-tup mb-2">Buzón de entrega Planeación Docente {cuatrimestre?.clave || ''}</h1>
     <p class="text-slate-500 mb-6">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'}</p>
 
     <!-- Leyenda -->
     <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8 text-sm text-slate-600 leading-relaxed space-y-3">
       <p class="font-medium text-tup">Estimado(a) docente:</p>
       <p>Una vez que haya cursado y acreditado el curso en Moodle <strong>"Formación Docente I"</strong>, en el cual se encuentra integrado el proceso para el uso del nuevo formato de Planeación Didáctica correspondiente al ciclo 26-2, deberá haber elaborado las planeaciones didácticas de cada una de las asignaturas y grupos a su cargo.</p>
-      <p>Le invitamos a realizar el registro y la carga de sus planeaciones didácticas en este buzón electrónico, correspondiente al periodo académico vigente <strong>26-3</strong>. Este espacio ha sido habilitado para centralizar, resguardar y dar seguimiento institucional a las planeaciones, como parte del proceso de aseguramiento de la calidad educativa y del <strong>Sistema de Evaluación del Desempeño Docente 360</strong>.</p>
+      <p>Le invitamos a realizar el registro y la carga de sus planeaciones didácticas en este buzón electrónico, correspondiente al periodo académico vigente <strong>{cuatrimestre?.clave || 'actual'}</strong>. Este espacio ha sido habilitado para centralizar, resguardar y dar seguimiento institucional a las planeaciones, como parte del proceso de aseguramiento de la calidad educativa y del <strong>Sistema de Evaluación del Desempeño Docente 360</strong>.</p>
       <p>Es importante considerar que el registro y el proceso de envío deberán realizarse de manera individual por cada planeación, ya que el sistema se encuentra estructurado para recepcionar una planeación por registro. En el caso de asignaturas que se impartan a dos o más grupos, aun cuando el contenido sea el mismo, deberá elaborarse y enviarse una planeación didáctica por cada grupo.</p>
       <p>Cada archivo deberá corresponder claramente a la asignatura, grupo, modalidad y ciclo académico, a fin de garantizar el orden, la trazabilidad y la correcta validación académica.</p>
       <div class="bg-slate-50 rounded-xl p-4 text-xs font-mono">
         <p class="font-medium mb-1">Nomenclatura estandarizada:</p>
-        <code>Asignatura_Grupo_Modalidad_ApellidoDocente_26-3.pdf</code>
-        <p class="mt-1 ">Ejemplo: <code>Fundamentos_Enfermeria_3A_Escolarizada_Perez_26-3.pdf</code></p>
+        <code>Asignatura_Grupo_Modalidad_ApellidoDocente_{cuatrimestre?.clave || 'XX-X'}.pdf</code>
+        <p class="mt-1 ">Ejemplo: <code>Fundamentos_Enfermeria_3A_Escolarizada_Perez_{cuatrimestre?.clave || 'XX-X'}.pdf</code></p>
       </div>
-      <p>La fecha límite de entrega de las planeaciones será el <strong>16 de mayo (Docentes continuantes)</strong> y <strong>23 de mayo (Docentes de Nuevo Ingreso)</strong>, conforme al calendario académico vigente. Una vez concluida esta fecha, el proceso se considerará cerrado y se notificará a la Coordinación Académica correspondiente para el seguimiento institucional de su estatus.</p>
       <p>Por favor, asegúrese de completar correctamente la información solicitada y de adjuntar el archivo correspondiente conforme a los lineamientos establecidos.</p>
       <p class="font-medium text-slate-500">Agradecemos su colaboración, responsabilidad académica y compromiso con la mejora continua y la calidad educativa institucional.</p>
     </div>
@@ -134,7 +137,7 @@ for (const p of (planeacionesRaw || [])) {
   </div>
 </LayoutDocente>
 
-<script is:inline define:vars={{ docenteId: entidadId, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '', gruposJson: JSON.stringify(gruposDocente || []), correccionesJson: JSON.stringify([...materiasCorreccion.entries()]) }}>
+<script is:inline define:vars={{ docenteId: entidadId, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '', gruposJson: JSON.stringify(gruposDocente || []), correccionesJson: JSON.stringify([...materiasCorreccion.entries()]), cuatrimestreClave: cuatrimestre?.clave || 'XX' }}>
   var gruposData = JSON.parse(gruposJson);
   var correccionesData = new Map(JSON.parse(correccionesJson));
   document.getElementById("asignatura_id").addEventListener("change", actualizarGrupos);
@@ -172,7 +175,7 @@ for (const p of (planeacionesRaw || [])) {
     if(!file){toast('Selecciona un archivo PDF',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
     var asig=document.getElementById('asignatura_id');var grupo=document.getElementById('grupo').value;
     if(!asig.value||!grupo){toast('Selecciona asignatura y grupo',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
-    var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_doc_26-3.pdf';
+    var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_doc_'+cuatrimestreClave+'.pdf';
     try{
       var path=cuatrimestreId+'/'+docenteId+'/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/\s+/g,'_');
       var formData=new FormData();
