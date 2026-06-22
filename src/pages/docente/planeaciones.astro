@@ -30,7 +30,7 @@ const { data: gruposDocente } = await cl.from('grupos').select('id,clave,asignat
 const materiasIds = [...new Set((gruposDocente||[]).map(g => g.asignatura_id))];
 const { data: misAsignaturas } = materiasIds.length > 0 ? await cl.from('asignaturas').select('id,clave,nombre').in('id', materiasIds).order('nombre') : { data: [] };
 const { data: docente } = await cl.from('docentes').select('campus,turno').eq('id', entidadId).maybeSingle();
-const { data: planeacionesRaw } = await cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', entidadId).order('fecha_subida', { ascending: false });
+const { data: planeacionesRaw } = await cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).order('fecha_subida', { ascending: false });
 
 // Filtrar materias que ya tienen planeacion APROBADA (correcciones si se pueden reenviar)
 const materiasBloqueadas = new Set((planeacionesRaw||[]).filter(p => (p as any).estado === 'Aprobado' || (p as any).estado === 'Pendiente').map(p => (p as any).asignatura_id as number));
