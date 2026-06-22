@@ -9,10 +9,12 @@ const todos = await obtenerDocentes();
 const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
-const ofertas = await obtenerOfertasAcademicas();
 const campusList = await obtenerCampus();
-const CUATRIMESTRES = ['1ro','2do','3ro','4to','5to','6to','7mo','8vo','9no','10mo','11vo','12vo'];
 const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
+
+// Cargar grupos y asignaturas para selector dinamico
+const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id));
+const { data: obsAsignaturas } = await cliente.from('asignaturas').select('id,nombre');
 
 // Precargar docente si viene de una tarjeta del dashboard
 const docenteIdParam = Astro.url.searchParams.get('docente_id');
@@ -41,17 +43,15 @@ if (docenteIdParam) {
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Oferta Académica *</label>
-            <select id="oferta" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
-              <option value="">Seleccionar...</option>
-              {ofertas.map(o => (<option value={o.nombre} selected={docentePreseleccionado?.oferta_academica === o.nombre}>{o.nombre}</option>))}
+            <label class="block text-sm font-medium text-slate-700 mb-1">Asignatura *</label>
+            <select id="asignatura_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+              <option value="">Primero selecciona el docente</option>
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Cuatrimestre del grupo *</label>
-            <select id="cuatrimestre" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
-              <option value="">Seleccionar...</option>
-              {CUATRIMESTRES.map(c => (<option value={c}>{c}</option>))}
+            <label class="block text-sm font-medium text-slate-700 mb-1">Grupo *</label>
+            <select id="grupo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+              <option value="">Primero selecciona la materia</option>
             </select>
           </div>
           <div>
@@ -117,18 +117,34 @@ if (docenteIdParam) {
   </div>
 </LayoutCoordinador>
 
-<script is:inline define:vars={{ docentesData: JSON.stringify(docentes.map(d => ({id:d.id, oferta:d.oferta_academica||'', campus:d.campus||''}))) }}>
-  var docentesMap = JSON.parse(docentesData).reduce(function(m, d) { m[d.id] = d; return m; }, {});
-
-  function autoLlenar(docenteId) {
-    var d = docentesMap[parseInt(docenteId)];
-    if (!d) return;
-    if (d.oferta) { var of = document.getElementById('oferta'); for (var i = 0; i < of.options.length; i++) { if (of.options[i].value === d.oferta) { of.selectedIndex = i; break; } } }
-    if (d.campus) { var cbs = document.querySelectorAll('input[name="campus"]'); cbs.forEach(function(cb) { if (cb.value === d.campus) cb.checked = true; }); }
+<script is:inline define:vars={{ obsGruposJson: JSON.stringify(obsGrupos||[]), obsAsigsJson: JSON.stringify(obsAsignaturas||[]) }}>
+  var gruposObs = JSON.parse(obsGruposJson);
+  var asigsObs = JSON.parse(obsAsigsJson);
+  
+  function actualizarAsignaturas() {
+    var did = parseInt(document.getElementById('docente_id').value);
+    var sel = document.getElementById('asignatura_id');
+    sel.innerHTML = '<option value="">Seleccionar...</option>';
+    if (!did) return;
+    var ids = [...new Set(gruposObs.filter(function(g){return g.docente_id===did}).map(function(g){return g.asignatura_id}))];
+    ids.forEach(function(aid){
+      var a = asigsObs.find(function(x){return x.id===aid});
+      if (a) { var o = document.createElement('option'); o.value = a.id; o.textContent = a.nombre; sel.appendChild(o); }
+    });
+    document.getElementById('grupo').innerHTML = '<option value="">Primero selecciona la materia</option>';
   }
-  // Auto-llenar al cargar si ya hay docente preseleccionado
-  var sel = document.getElementById('docente_id');
-  if (sel && sel.value) autoLlenar(sel.value);
+  function actualizarGruposObs() {
+    var aid = parseInt(document.getElementById('asignatura_id').value);
+    var did = parseInt(document.getElementById('docente_id').value);
+    var sel = document.getElementById('grupo');
+    sel.innerHTML = '<option value="">Seleccionar...</option>';
+    if (!aid || !did) return;
+    gruposObs.filter(function(g){return g.docente_id===did && g.asignatura_id===aid}).forEach(function(g){
+      var o = document.createElement('option'); o.value = g.clave || g.id; o.textContent = g.clave || ('Grupo '+g.id); sel.appendChild(o);
+    });
+  }
+  document.getElementById('docente_id').addEventListener('change', function(){ actualizarAsignaturas(); });
+  document.getElementById('asignatura_id').addEventListener('change', function(){ actualizarGruposObs(); });
 
   function filtrarDocentes(q) {
     var sel = document.getElementById('docente_id');
@@ -144,22 +160,19 @@ if (docenteIdParam) {
     e.preventDefault();
     var btn=document.getElementById('btn-enviar');btn.disabled=true;btn.textContent='Enviando...';
 
-    var data={docente_id:parseInt(document.getElementById('docente_id').value),oferta_academica:document.getElementById('oferta').value,cuatrimestre_grupo:document.getElementById('cuatrimestre').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value};
-    if(!data.docente_id||!data.oferta_academica||!data.cuatrimestre_grupo||!data.ciclo||!data.campus){toast('Todos los campos de identificación son obligatorios',true);btn.disabled=false;btn.textContent='Enviar Observación';return}
+    var data={docente_id:parseInt(document.getElementById('docente_id').value),asignatura_id:parseInt(document.getElementById('asignatura_id').value),grupo:document.getElementById('grupo').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value};
+    if(!data.docente_id||!data.asignatura_id||!data.grupo||!data.ciclo||!data.campus){toast('Todos los campos de identificación son obligatorios',true);btn.disabled=false;btn.textContent='Enviar Observación';return}
 
-    // Recoger 43 reactivos
     var prefijos=['cco','cme','ccom','cso','cge','caf','ctepe','cno'];
     var cuentas=[7,9,4,4,7,2,7,5];
-    var totalReactivos=0;
     prefijos.forEach(function(pref,si){
       for(var i=1;i<=cuentas[si];i++){
         var rb=document.querySelector('input[name="'+pref+i+'"]:checked');
-        if(rb&&rb.value!=='N/A'){data[pref+i]=parseInt(rb.value);totalReactivos++}
+        if(rb&&rb.value!=='N/A'){data[pref+i]=parseInt(rb.value)}
       }
     });
 
-    // Observaciones por sección
-    prefijos.forEach(function(pref){var obs=document.querySelector('textarea[name="obs_'+pref+'"]');if(obs&&obs.value.trim())data['obs_'+pref.replace('cco','cognitivas').replace('cme','metacognitivas').replace('ccom','comunicativas').replace('cso','sociales').replace('cge','gestion').replace('caf','afectivas').replace('ctepe','tecno').replace('cno','normativa')]=obs.value.trim()});
+    prefijos.forEach(function(pref){var obs=document.querySelector('textarea[name="obs_'+pref+'"]');if(obs&&obs.value.trim())data['obs_'+pref]=obs.value.trim()});
 
     data.comentario_docente=document.getElementById('com_docente').value.trim()||null;
     data.comentario_evaluador=document.getElementById('com_evaluador').value.trim()||null;
@@ -172,5 +185,4 @@ if (docenteIdParam) {
     }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación'}
   });
 document.addEventListener("input", function(e){ if(e.target.id==="buscar-docente") filtrarDocentes(e.target.value); });
-document.getElementById("docente_id").addEventListener("change",function(){ autoLlenar(this.value); });
 </script>
