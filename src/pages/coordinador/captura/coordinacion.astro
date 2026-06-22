@@ -3,6 +3,9 @@ import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import { obtenerDocentes } from '../../../services/docentes';
 import { obtenerCuatrimestreActivo, obtenerCampus } from '../../../services/catalogos';
 import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
+
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 
 const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();

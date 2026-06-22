@@ -3,6 +3,9 @@ import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import { obtenerDocentes } from '../../../services/docentes';
 import { obtenerCampus } from '../../../services/catalogos';
 import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
+
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 
 const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();
@@ -58,7 +61,7 @@ const SECCIONES = [
   </div>
 </LayoutCoordinador>
 
-<script is:inline define:vars={{ obsGruposJson: JSON.stringify(obsGrupos||[]), obsAsigsJson: JSON.stringify(obsAsignaturas||[]) }}>
+<script is:inline define:vars={{ cuatrimestreId: cuatrimestreActivo?.id, obsGruposJson: JSON.stringify(obsGrupos||[]), obsAsigsJson: JSON.stringify(obsAsignaturas||[]) }}>
   var gruposObs = JSON.parse(obsGruposJson);
   var asigsObs = JSON.parse(obsAsigsJson);
   function actualizarAsignaturas() {
