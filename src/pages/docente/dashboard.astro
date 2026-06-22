@@ -1,6 +1,6 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
-import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
@@ -8,6 +8,9 @@ const refresh = Astro.cookies.get('sb-refresh-token')?.value;
 if (!token || !refresh) return Astro.redirect('/auth');
 
 const cl = obtenerClienteSuperbase();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || 0;
 const { data: sesion } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
 if (!sesion.user) return Astro.redirect('/auth');
 
@@ -89,11 +92,11 @@ if (docenteIds.length > 0) {
   if (doc) nombreDocente = `${doc.nombre.toUpperCase()} ${doc.apellidos.toUpperCase()}`;
 
   const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
-    cl.from('encuesta_estudiantil').select('score_normalizado,comentarios,prom_asistencia,prom_organizacion,prom_actitud,prom_ensenanza,prom_dominio,prom_evaluacion,prom_comunicacion,prom_gestion,prom_tecnologia,prom_satisfaccion,promedio_general').in('docente_id', docenteIds),
-    cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
-    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').in('docente_id', docenteIds).order('fecha_subida', { ascending: false }),
-    cl.from('observaciones').select('id,docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds),
-    cl.from('autodiagnosticos').select('*').in('docente_id', docenteIds).order('id', { ascending: false }).limit(1),
+    cl.from('encuesta_estudiantil').select('score_normalizado,comentarios,prom_asistencia,prom_organizacion,prom_actitud,prom_ensenanza,prom_dominio,prom_evaluacion,prom_comunicacion,prom_gestion,prom_tecnologia,prom_satisfaccion,promedio_general').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId),
+    cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
+    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('fecha_subida', { ascending: false }),
+    cl.from('observaciones').select('id,docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId),
+    cl.from('autodiagnosticos').select('*').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
     cl.from('grupos').select('asignatura_id').in('docente_id', docenteIds),
   ]);
 
@@ -144,7 +147,14 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
 <LayoutDocente titulo="Mi Evaluación — Docente">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-6">
       <div><h1 class="text-3xl font-bold text-tup">Mi Evaluación 360°</h1><p class="text-slate-500">{nombreDocente}</p></div>
+      <form method="GET" class="flex items-center gap-2">
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.clave} {c.nombre||''}</option>))}
+        </select>
+      </form>
+    </div>
       <span class="text-xs ">{cuatrimestre?.nombre || ''}</span>
     </div>
 

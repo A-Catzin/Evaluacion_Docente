@@ -1,10 +1,12 @@
 ---
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
-import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { obtenerDocentes } from '../../services/docentes';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
-const cuatrimestre = await obtenerCuatrimestreActivo();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || 0;
 const busqueda = Astro.url.searchParams.get('q') || '';
 const todos = await obtenerDocentes();
 const cliente = obtenerClienteSuperbase();
@@ -61,8 +63,14 @@ const completadosF = estadosMostrar.filter(e => e.completo);
 
 <LayoutCoordinador titulo="Dashboard — Coordinador">
   <div class="animate-flotar-entrada">
-    <h1 class="text-3xl font-bold text-tup mb-2">Panel de Coordinación</h1>
-    <p class="text-slate-500 mb-6">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'} · {totalDocs} docentes</p>
+    <div class="flex items-center justify-between mb-4">
+      <div><h1 class="text-3xl font-bold text-tup mb-2">Panel de Coordinación</h1><p class="text-slate-500">{cuatrimestreActivo?.clave || 'Sin cuatrimestre'} · {totalDocs} docentes</p></div>
+      <form method="GET" class="flex items-center gap-2">
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.clave} {c.nombre||''}</option>))}
+        </select>
+      </form>
+    </div>
 
     <!-- Buscador -->
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
