@@ -41,8 +41,8 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     for (const c of (coordData || [])) if (!coordMap.has(c.docente_id)) coordMap.set(c.docente_id, Math.round(c.score_normalizado));
     const planPorDocente = new Map<number, Map<number, number>>();
     for (const p of (planData || [])) { if (!planPorDocente.has(p.docente_id)) planPorDocente.set(p.docente_id, new Map()); if (!planPorDocente.get(p.docente_id)!.has(p.asignatura_id)) planPorDocente.get(p.docente_id)!.set(p.asignatura_id, p.puntaje_promedio); }
-    const obsPorDocente = new Map<number, Map<number, number>>();
-    for (const o of (obsData || [])) { const r2 = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v); if (r2.length === 0) continue; const prom = Math.round((r2.reduce((a,b)=>a+b,0)/(r2.length*5))*100); if (!obsPorDocente.has(o.docente_id)) obsPorDocente.set(o.docente_id, new Map()); obsPorDocente.get(o.docente_id)!.set(o.asignatura_id, prom); }
+    const obsPorDocente = new Map<number, number>();
+    for (const o of (obsData || [])) { const r2 = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v); if (r2.length === 0) continue; const prom = Math.round((r2.reduce((a,b)=>a+b,0)/(r2.length*5))*100); if (!obsPorDocente.has(o.docente_id)) obsPorDocente.set(o.docente_id, prom); }
     const diagMap = new Map<number, number>();
     for (const d of (diagData || [])) if (!diagMap.has(d.docente_id)) diagMap.set(d.docente_id, Math.round((d.puntaje_total/120)*100));
 
@@ -54,11 +54,11 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     const header = 'Nombre,Apellidos,Email,EE,Coordinación,Planeación,Observación,Autodiagnóstico,Final,Categoría,Instrumentos';
     const rows: string[] = [];
     for (const d of docs) {
-      const eeMap = eePorDocente.get(d.id); const obsMap2 = obsPorDocente.get(d.id); const planMap2 = planPorDocente.get(d.id);
+      const eeMap = eePorDocente.get(d.id); const planMap2 = planPorDocente.get(d.id);
       const materias = matPorDocente.get(d.id);
-      let sumEst=0,sumObs2=0,sumPlan2=0,count=0;
-      if (materias) for (const asigId of materias) { const est=eeMap?.get(asigId);const obs=obsMap2?.get(asigId);const plan=planMap2?.get(asigId);if(est||obs||plan)count++;if(est)sumEst+=est;if(obs)sumObs2+=obs;if(plan)sumPlan2+=plan; }
-      const promEst=count>0?Math.round(sumEst/count):0;const promObs=count>0?Math.round(sumObs2/count):0;const promPlan=count>0?Math.round(sumPlan2/count):0;
+      let sumEst=0,sumPlan2=0,count=0;
+      if (materias) for (const asigId of materias) { const est=eeMap?.get(asigId);const plan=planMap2?.get(asigId);if(est||plan)count++;if(est)sumEst+=est;if(plan)sumPlan2+=plan; }
+      const promEst=count>0?Math.round(sumEst/count):0;const promObs=obsPorDocente.get(d.id)||0;const promPlan=count>0?Math.round(sumPlan2/count):0;
       const promCoord=coordMap.get(d.id)||0;const promAuto=diagMap.get(d.id)||0;
       let final360=0;const pesos=[0.35,0.20,0.15,0.25,0.05];const disp=[promEst,promCoord,promPlan,promObs,promAuto];
       for(let i=0;i<5;i++)if(disp[i])final360+=disp[i]*pesos[i];
