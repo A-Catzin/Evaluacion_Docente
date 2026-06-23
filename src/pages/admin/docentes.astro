@@ -2,11 +2,22 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../services/docentes';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const cliente = obtenerClienteSuperbase();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+if (Astro.url.searchParams.has('cuatrimestre')) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
+}
+const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
+
 const todos = await obtenerDocentes();
-const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('encuesta_estudiantil').select('docente_id').limit(10000), cliente.from('autodiagnosticos').select('docente_id').limit(10000), cliente.from('observaciones').select('docente_id').limit(10000), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000), cliente.from('planeaciones').select('docente_id').limit(10000)]);
+const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('encuesta_estudiantil').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('autodiagnosticos').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('observaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('planeaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId)]);
 const docsEvaluados = new Set([...(eeIds||[]),...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
 const docentes = todos.filter(d => docsEvaluados.has(d.id));
 const docentesFiltrados = busqueda
@@ -102,7 +113,14 @@ const filas = docentesFiltrados.map(d => {
 
 <LayoutAdmin titulo="Docentes — Admin">
   <div class="animate-flotar-entrada">
-    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm ">{filas.length} docentes</span></div>
+    <div class="flex items-center justify-between mb-6">
+      <div><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm text-slate-400">{filas.length} docentes · {cuatrimestreSel?.clave || ''}</span></div>
+      <form method="GET" class="flex items-center gap-2">
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
+        </select>
+      </form>
+    </div>
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
