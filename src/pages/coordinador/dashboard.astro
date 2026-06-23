@@ -7,6 +7,9 @@ import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || 0;
+if (Astro.url.searchParams.has('cuatrimestre')) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
+}
 const busqueda = Astro.url.searchParams.get('q') || '';
 const todos = await obtenerDocentes();
 const cliente = obtenerClienteSuperbase();

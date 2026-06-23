@@ -23,7 +23,8 @@ if (!entidadId) return Astro.redirect('/docente/dashboard');
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
 const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
 // Materias asignadas al docente via grupos
 const { data: gruposDocente } = await cl.from('grupos').select('id,clave,asignatura_id,modalidad').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId);
