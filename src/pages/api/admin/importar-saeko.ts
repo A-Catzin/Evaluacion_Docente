@@ -12,6 +12,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const { data: u } = await cl.from('usuarios').select('rol').eq('id', s.user.id).maybeSingle();
     if (!u || u.rol !== 'superadmin') return new Response(JSON.stringify({ error: 'Solo superadmin' }), { status: 403 });
 
+    // Obtener cuatrimestre activo o seleccionado
+    const cCookie = cookies.get('cuatrimestre_sel')?.value;
+    let cuatrimestreId = 0;
+    if (cCookie) { cuatrimestreId = parseInt(cCookie) || 0; }
+    if (!cuatrimestreId) {
+      const { data: activo } = await cl.from('cuatrimestres').select('id').eq('activo', true).maybeSingle();
+      if (activo) cuatrimestreId = activo.id;
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     if (!file) return new Response(JSON.stringify({ error: 'Archivo requerido' }), { status: 400 });
@@ -136,7 +145,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const docenteId = emailToId.get(val.docente_email);
       const asignaturaId = claveToId.get(val.clave_asig);
       if (!docenteId || !asignaturaId) continue;
-      gruposArr.push({ clave: clave_grupo, docente_id: docenteId, asignatura_id: asignaturaId, modalidad, turno_grupo: turno });
+      gruposArr.push({ clave: clave_grupo, docente_id: docenteId, asignatura_id: asignaturaId, modalidad, turno_grupo: turno, cuatrimestre_id: cuatrimestreId });
     }
     console.log('[Importar] Grupos a crear:', gruposArr.length, 'ejemplo:', JSON.stringify(gruposArr[0]));
 
@@ -186,7 +195,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       if (!docenteId || !asignaturaId) continue;
       const t = g.t;
       inserts.push({
-        docente_id: docenteId, asignatura_id: asignaturaId, ciclo: g.ciclo,
+        docente_id: docenteId, asignatura_id: asignaturaId, ciclo: g.ciclo, cuatrimestre_id: cuatrimestreId,
         total_respuestas: t,
         prom_asistencia: +(g.sAsi/t).toFixed(2), prom_organizacion: +(g.sOrg/t).toFixed(2),
         prom_actitud: +(g.sAct/t).toFixed(2), prom_ensenanza: +(g.sEns/t).toFixed(2),
