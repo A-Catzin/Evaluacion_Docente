@@ -8,7 +8,8 @@ const busqueda = Astro.url.searchParams.get('q') || '';
 const cuatrimestre = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const idSeleccionado = Astro.url.searchParams.get('cuatrimestre') || cuatrimestre?.id?.toString() || '';
-const cuatrimestreId = parseInt(idSeleccionado) || cuatrimestre?.id || 0;
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(idSeleccionado) || parseInt(cuatrimestreIdCookie||'') || cuatrimestre?.id || 0;
 // Persistir en cookie
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
