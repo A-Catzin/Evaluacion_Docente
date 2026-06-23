@@ -8,13 +8,18 @@ const busqueda = Astro.url.searchParams.get('q') || '';
 const cuatrimestre = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const idSeleccionado = Astro.url.searchParams.get('cuatrimestre') || cuatrimestre?.id?.toString() || '';
+const cuatrimestreId = parseInt(idSeleccionado) || cuatrimestre?.id || 0;
+// Persistir en cookie
+if (Astro.url.searchParams.has('cuatrimestre')) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
+}
 const cliente = obtenerClienteSuperbase();
 
 // Usuarios pendientes de aprobacion
 const { count: pendientes } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
 
 const todos = await obtenerDocentes();
-const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('encuesta_estudiantil').select('docente_id').limit(10000), cliente.from('autodiagnosticos').select('docente_id').limit(10000), cliente.from('observaciones').select('docente_id').limit(10000), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000), cliente.from('planeaciones').select('docente_id').limit(10000)]);
+const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('encuesta_estudiantil').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('autodiagnosticos').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('observaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('planeaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId)]);
 const docsEvaluados = new Set([...(eeIds||[]),...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
 const docentes = todos.filter(d => docsEvaluados.has(d.id) && d.visible_dashboard !== false);
 
@@ -132,9 +137,9 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
 <LayoutAdmin titulo="Dashboard — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
-      <div><h1 class="text-3xl font-bold text-tup">Dashboard Administrativo</h1><p class="text-slate-500">{cuatrimestreSel?.nombre || 'Sin cuatrimestre activo'}</p></div>
+      <div><h1 class="text-3xl font-bold text-tup">Dashboard Administrativo</h1><p class="text-slate-500">{cuatrimestreSel?.clave || 'Sin cuatrimestre activo'}</p></div>
       <form method="GET" class="flex items-center gap-2">
-        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id.toString()===idSeleccionado}>{c.nombre}</option>))}</select>
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id.toString()===idSeleccionado}>{c.clave}</option>))}</select>
       </form>
     </div>
 
