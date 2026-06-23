@@ -19,10 +19,10 @@ const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, {
 const docsEvaluados = new Set([...(eeIds||[]),...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
 const docentes = todos.filter(d => docsEvaluados.has(d.id));
 
-// Obtener observaciones, planeaciones y evaluaciones de coordinación
-const { data: obsData } = await cliente.from('observaciones').select('docente_id');
-const { data: planData } = await cliente.from('planeaciones').select('docente_id,estado');
-const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('docente_id');
+// Obtener observaciones, planeaciones y evaluaciones de coordinación para este cuatrimestre
+const { data: obsData } = await cliente.from('observaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId);
+const { data: planData } = await cliente.from('planeaciones').select('docente_id,estado').eq('cuatrimestre_id', cuatrimestreId);
+const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('docente_id').eq('cuatrimestre_id', cuatrimestreId);
 
 const obsSet = new Set((obsData || []).map(o => o.docente_id));
 const planPendiente = new Set((planData || []).filter(p => p.estado === 'Pendiente').map(p => p.docente_id));
