@@ -22,7 +22,7 @@ const { count: pendientes } = await cliente.from('usuarios').select('*', { count
 const todos = await obtenerDocentes();
 const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('encuesta_estudiantil').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('autodiagnosticos').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('observaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('planeaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId)]);
 const docsEvaluados = new Set([...(eeIds||[]),...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
-const docentes = todos.filter(d => docsEvaluados.has(d.id) && d.visible_dashboard !== false);
+const docentes = todos.filter(d => docsEvaluados.has(d.id));
 
 const ids = docentes.map(d => d.id);
 
