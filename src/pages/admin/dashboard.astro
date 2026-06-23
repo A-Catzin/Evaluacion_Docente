@@ -26,11 +26,11 @@ const docentes = todos.filter(d => docsEvaluados.has(d.id) && d.visible_dashboar
 const ids = docentes.map(d => d.id);
 
 const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] = await Promise.all([
-  cliente.from('encuesta_estudiantil').select('docente_id,asignatura_id,score_normalizado').in('docente_id', ids),
-  cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).order('id', { ascending: false }),
-  cliente.from('planeaciones').select('docente_id,asignatura_id,puntaje_promedio').in('docente_id', ids).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false }),
-  cliente.from('observaciones').select('docente_id,asignatura_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids),
-  cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).order('id', { ascending: false }),
+  cliente.from('encuesta_estudiantil').select('docente_id,asignatura_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId),
+  cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
+  cliente.from('planeaciones').select('docente_id,asignatura_id,puntaje_promedio').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false }),
+  cliente.from('observaciones').select('docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId),
+  cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
 ]);
 
 const eePorDocente = new Map<number, Map<number, number>>();
@@ -55,7 +55,7 @@ for (const o of (obsData || [])) {
 const diagMap = new Map<number, number>();
 for (const d of (diagData || [])) if (!diagMap.has(d.docente_id)) diagMap.set(d.docente_id, Math.round((d.puntaje_total/120)*100));
 
-const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id').in('docente_id', ids);
+const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId);
 const matPorDocente = new Map<number, Set<number>>();
 for (const g of (gruposData || [])) {
   if (!matPorDocente.has(g.docente_id)) matPorDocente.set(g.docente_id, new Set());

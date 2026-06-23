@@ -28,9 +28,9 @@ const ids = docentesFiltrados.map(d => d.id);
 
 // Batch queries — generales
 const [{ data: coordData }, { data: diagData }, { data: eeData }] = await Promise.all([
-  cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).order('id', { ascending: false }),
-  cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).order('id', { ascending: false }),
-  cliente.from('encuesta_estudiantil').select('docente_id,asignatura_id,score_normalizado').in('docente_id', ids).order('id', { ascending: false }),
+  cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
+  cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
+  cliente.from('encuesta_estudiantil').select('docente_id,asignatura_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
 ]);
 
 const coordMap = new Map(); for (const c of (coordData || [])) if (!coordMap.has(c.docente_id)) coordMap.set(c.docente_id, c);
@@ -44,7 +44,7 @@ for (const e of (eeData || [])) {
 }
 
 // Observaciones por docente+asignatura
-const { data: obsData } = await cliente.from('observaciones').select('docente_id,asignatura_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids);
+const { data: obsData } = await cliente.from('observaciones').select('docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId);
 // Observaciones por docente (general, no por materia)
 const obsPorDocente = new Map<number, number>();
 for (const o of (obsData || [])) {
@@ -55,7 +55,7 @@ for (const o of (obsData || [])) {
 }
 
 // Grupos deduplicados por docente+asignatura+clave (colapsa inserts repetidos, preserva grupos distintos)
-const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id,modalidad,clave').in('docente_id', ids);
+const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id,modalidad,clave').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId);
 const grupoMap = new Map<number, { asignatura_id: number; modalidad: string; clave_grupo: string }[]>();
 const seenGrupos = new Set<string>();
 for (const g of (gruposData || [])) {
@@ -69,7 +69,7 @@ const { data: asigData } = await cliente.from('asignaturas').select('id,clave,no
 const asigMap = new Map<number, {clave:string;nombre:string}>(); for (const a of (asigData || [])) asigMap.set(a.id, a);
 
 // Planeaciones por docente+asignatura
-const { data: planData } = await cliente.from('planeaciones').select('docente_id,asignatura_id,puntaje_promedio').in('docente_id', ids).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false });
+const { data: planData } = await cliente.from('planeaciones').select('docente_id,asignatura_id,puntaje_promedio').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false });
 const planPorDocente = new Map<number, Map<number, number>>();
 for (const p of (planData || [])) {
   if (!planPorDocente.has(p.docente_id)) planPorDocente.set(p.docente_id, new Map());
