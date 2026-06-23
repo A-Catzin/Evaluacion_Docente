@@ -138,7 +138,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
 <LayoutAdmin titulo="Dashboard — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
-      <div><h1 class="text-3xl font-bold text-tup">Dashboard Administrativo</h1><p class="text-slate-500">{cuatrimestreSel?.clave || 'Sin cuatrimestre'} (ID:{cuatrimestreId}, docs:{docentes.length})</p></div>
+      <div><h1 class="text-3xl font-bold text-tup">Dashboard Administrativo</h1><p class="text-slate-500">{cuatrimestreSel?.clave || 'Sin cuatrimestre activo'}</p></div>
       <form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id.toString()===idSeleccionado}>{c.clave}</option>))}</select>
       </form>
