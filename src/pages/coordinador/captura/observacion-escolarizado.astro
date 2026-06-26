@@ -13,6 +13,7 @@ const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 const campusList = await obtenerCampus();
 const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
+const cuatrimestreClave = cuatrimestreActivo?.clave || '26-2';
 
 // Cargar grupos y asignaturas para selector dinamico
 const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreActivo?.id);
@@ -58,10 +59,7 @@ if (docenteIdParam) {
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Ciclo *</label>
-            <select id="ciclo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
-              <option value="">Seleccionar...</option>
-              {CICLOS.map(c => (<option value={c}>{c}</option>))}
-            </select>
+            <input type="text" id="ciclo" readonly value={cuatrimestreClave} class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600" />
           </div>
           <div class="sm:col-span-2">
             <label class="block text-sm font-medium text-slate-700 mb-1">Campus *</label>

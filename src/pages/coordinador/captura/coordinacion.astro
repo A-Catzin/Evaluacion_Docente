@@ -15,6 +15,7 @@ const docentes = todos.filter(d => evalsSet.has(d.id));
 const cuatrimestre = await obtenerCuatrimestreActivo();
 const campusList = await obtenerCampus();
 const CICLOS = ['26-2','26-3'];
+const cuatrimestreClave = cuatrimestreActivo?.clave || '26-2';
 const CATEGORIAS = [
   {id:'a',titulo:'A. Cumplimiento Académico',items:['Cumplimiento del programa, planeación y avance académico.','Organización y conducción de sesiones (presenciales, virtuales o ejecutivas).','Uso y disponibilidad de materiales didácticos o recursos en plataforma.']},
   {id:'b',titulo:'B. Gestión y Organización',items:['Entrega de calificaciones en tiempo y forma.','Puntualidad, asistencia y cumplimiento administrativo.','Uso adecuado de plataformas institucionales (Moodle, Saeko, sistemas).']},
@@ -45,10 +46,7 @@ const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docente
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Ciclo *</label>
-            <select id="ciclo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
-              <option value="">Seleccionar...</option>
-              {CICLOS.map(c => (<option value={c}>{c}</option>))}
-            </select>
+            <input type="text" id="ciclo" readonly value={cuatrimestreClave} class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600" />
           </div>
           <div class="sm:col-span-2">
             <label class="block text-sm font-medium text-slate-700 mb-2">Campus *</label>
