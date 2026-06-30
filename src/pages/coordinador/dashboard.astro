@@ -67,7 +67,7 @@ const completadosF = estadosMostrar.filter(e => e.completo);
 <LayoutCoordinador titulo="Dashboard — Coordinador">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-4">
-      <div><h1 class="text-3xl font-bold text-tup mb-2">Panel de Coordinación</h1><p class="text-slate-500">{cuatrimestreActivo?.clave || 'Sin cuatrimestre'} · {totalDocs} docentes</p></div>
+      <div><h1 class="text-3xl font-bold text-tup mb-2">Panel de Coordinación</h1></div>
       <form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
           {cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.clave} {c.nombre||''}</option>))}
