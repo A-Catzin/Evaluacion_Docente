@@ -3,9 +3,14 @@ import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import { obtenerDocentes } from '../../../services/docentes';
 import { obtenerCampus } from '../../../services/catalogos';
 import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
-import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
+const cuatrimestreClave = cuatrimestre?.clave || '26-2';
 
 const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();
@@ -13,10 +18,9 @@ const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('do
 const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 const campusList = await obtenerCampus();
-const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreActivo?.id);
+const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreId);
 const { data: obsAsignaturas } = await cliente.from('asignaturas').select('id,nombre');
 const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
-const cuatrimestreClave = cuatrimestreActivo?.clave || '26-2';
 const docenteIdParam = Astro.url.searchParams.get('docente_id');
 const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docenteIdParam)) : null;
 
@@ -62,7 +66,7 @@ const SECCIONES = [
   </div>
 </LayoutCoordinador>
 
-<script is:inline define:vars={{ cuatrimestreId: cuatrimestreActivo?.id, obsGruposJson: JSON.stringify(obsGrupos||[]), obsAsigsJson: JSON.stringify(obsAsignaturas||[]) }}>
+<script is:inline define:vars={{ cuatrimestreId: cuatrimestre?.id, obsGruposJson: JSON.stringify(obsGrupos||[]), obsAsigsJson: JSON.stringify(obsAsignaturas||[]) }}>
   var gruposObs = JSON.parse(obsGruposJson);
   var asigsObs = JSON.parse(obsAsigsJson);
   function actualizarAsignaturas() {
