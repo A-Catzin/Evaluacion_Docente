@@ -1,18 +1,19 @@
 ---
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import { obtenerDocentes } from '../../../services/docentes';
-import { obtenerCuatrimestreActivo, obtenerCampus } from '../../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerCampus, obtenerCuatrimestres } from '../../../services/catalogos';
 import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
-import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-
-const cliente = obtenerClienteSuperbase();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
+const cuatrimestreClave = cuatrimestre?.clave || '26-2';
 const todos = await obtenerDocentes();
 const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
-const cuatrimestre = await obtenerCuatrimestreActivo();
 const campusList = await obtenerCampus();
 const CICLOS = ['26-2','26-3'];
 const cuatrimestreClave = cuatrimestreActivo?.clave || '26-2';
