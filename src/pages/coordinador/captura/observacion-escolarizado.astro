@@ -18,7 +18,6 @@ const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 const campusList = await obtenerCampus();
 const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
-const cuatrimestreClave = cuatrimestreActivo?.clave || '26-2';
 
 // Cargar grupos y asignaturas para selector dinamico
 const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreId);
