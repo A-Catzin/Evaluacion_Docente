@@ -90,7 +90,7 @@ const SECCIONES = [
   function filtrarDocentes(q){var sel=document.getElementById('docente_id');var term=(q||'').toLowerCase();for(var i=1;i<sel.options.length;i++){sel.options[i].style.display=!term||sel.options[i].text.toLowerCase().includes(term)?'':'none'}}
   document.getElementById('form-obs').addEventListener('submit',async function(e){
     e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Enviando...';
-    var data={docente_id:parseInt(document.getElementById('docente_id').value),asignatura_id:parseInt(document.getElementById('asignatura_id').value),grupo:document.getElementById('grupo').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value};
+    var data={docente_id:parseInt(document.getElementById('docente_id').value),asignatura_id:parseInt(document.getElementById('asignatura_id').value),grupo:document.getElementById('grupo').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value,cuatrimestre_id:cuatrimestreId};
     if(!data.docente_id||!data.asignatura_id||!data.grupo||!data.ciclo||!data.campus){toast('Completa todos los campos',true);btn.disabled=false;btn.textContent='Enviar Observación Virtual';return}
     var prefs=['cco','cme','ccom','cso','cge','cno'];var counts=[6,4,4,2,2,1];
     prefs.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb&&rb.value!=='N/A')data[p+i]=parseInt(rb.value)}});
