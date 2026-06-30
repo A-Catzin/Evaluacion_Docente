@@ -16,7 +16,6 @@ const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 const campusList = await obtenerCampus();
 const CICLOS = ['26-2','26-3'];
-const cuatrimestreClave = cuatrimestreActivo?.clave || '26-2';
 const CATEGORIAS = [
   {id:'a',titulo:'A. Cumplimiento Académico',items:['Cumplimiento del programa, planeación y avance académico.','Organización y conducción de sesiones (presenciales, virtuales o ejecutivas).','Uso y disponibilidad de materiales didácticos o recursos en plataforma.']},
   {id:'b',titulo:'B. Gestión y Organización',items:['Entrega de calificaciones en tiempo y forma.','Puntualidad, asistencia y cumplimiento administrativo.','Uso adecuado de plataformas institucionales (Moodle, Saeko, sistemas).']},
