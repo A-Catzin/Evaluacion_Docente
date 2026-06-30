@@ -1,11 +1,16 @@
 ---
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import { obtenerDocentes } from '../../../services/docentes';
-import { obtenerCampus } from '../../../services/catalogos';
-import { obtenerClienteSuperbase, obtenerClienteAdmin } from '../../../lib/supabaseClient';
-import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
+import { obtenerCampus, obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
+import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
+const cuatrimestreClave = cuatrimestre?.clave || '26-2';
+
 const cliente = obtenerClienteSuperbase();
 const todos = await obtenerDocentes();
 const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
@@ -16,7 +21,7 @@ const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
 const cuatrimestreClave = cuatrimestreActivo?.clave || '26-2';
 
 // Cargar grupos y asignaturas para selector dinamico
-const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreActivo?.id);
+const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreId);
 const { data: obsAsignaturas } = await cliente.from('asignaturas').select('id,nombre');
 
 // Precargar docente si viene de una tarjeta del dashboard
@@ -117,7 +122,7 @@ if (docenteIdParam) {
   </div>
 </LayoutCoordinador>
 
-<script is:inline define:vars={{ obsGruposJson: JSON.stringify(obsGrupos||[]), obsAsigsJson: JSON.stringify(obsAsignaturas||[]), cuatrimestreId: cuatrimestreActivo?.id }}>
+<script is:inline define:vars={{ obsGruposJson: JSON.stringify(obsGrupos||[]), obsAsigsJson: JSON.stringify(obsAsignaturas||[]), cuatrimestreId: cuatrimestre?.id }}>
   var gruposObs = JSON.parse(obsGruposJson);
   var asigsObs = JSON.parse(obsAsigsJson);
   
