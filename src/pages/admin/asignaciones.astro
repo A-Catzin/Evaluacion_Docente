@@ -1,0 +1,111 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { obtenerDocentes } from '../../services/docentes';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+
+const cliente = obtenerClienteSuperbase();
+const todos = await obtenerDocentes();
+
+// Evaluadores (coordinadores + observadores)
+const { data: evaluadores } = await cliente.from('usuarios').select('id,email,rol').in('rol', ['coordinador','observador']).order('email');
+
+// Docentes con evaluaciones
+const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
+const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
+const docentes = todos.filter(d => evalsSet.has(d.id));
+
+// Cargar asignaciones existentes para el primer evaluador o el seleccionado
+const evaluadorSel = Astro.url.searchParams.get('evaluador') || '';
+let asignados: Set<number> = new Set();
+if (evaluadorSel) {
+  const { data: asigs } = await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', evaluadorSel);
+  asignados = new Set((asigs||[]).map(a=>a.docente_id));
+}
+---
+
+<LayoutAdmin titulo="Asignaciones — Admin">
+  <div class="animate-flotar-entrada">
+    <h1 class="text-3xl font-bold text-tup mb-6">Asignación de Observaciones</h1>
+
+    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+      <form method="GET" class="flex gap-3 items-center">
+        <label class="text-sm font-medium text-slate-700">Evaluador:</label>
+        <select name="evaluador" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm flex-1" onchange="this.form.submit()">
+          <option value="">Seleccionar coordinador/observador...</option>
+          {evaluadores?.map(e => (<option value={e.id} selected={evaluadorSel === e.id}>{e.email} ({e.rol})</option>))}
+        </select>
+      </form>
+    </div>
+
+    {evaluadorSel ? (
+      <>
+        <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-4">
+          <input type="text" id="buscar-docente" placeholder="🔍 Buscar docente..." class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" oninput="filtrarDocs()" />
+        </div>
+        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-6">
+          <div class="px-6 py-3 border-b flex items-center justify-between">
+            <span class="text-sm text-slate-500"><span id="count-sel">0</span> de {docentes.length} seleccionados</span>
+            <div class="flex gap-2">
+              <button id="btn-select-all" class="text-xs text-tup hover:underline">Seleccionar todos</button>
+              <button id="btn-deselect-all" class="text-xs text-red-500 hover:underline">Desvincular todos</button>
+            </div>
+          </div>
+          <div class="max-h-[60vh] overflow-y-auto p-4 space-y-1" id="lista-docs">
+            {docentes.map(d => (
+              <label class="docente-item flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                <input type="checkbox" name="docente" value={d.id} class="accent-tup" checked={asignados.has(d.id)} onchange="updateCount()" />
+                <span class="text-sm">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</span>
+                <span class="text-xs text-slate-400 ml-auto">{d.email}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <button id="btn-guardar" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90">Guardar Asignaciones</button>
+      </>
+    ) : (
+      <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">Selecciona un evaluador para ver sus docentes asignados.</div>
+    )}
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
+</LayoutAdmin>
+
+<script is:inline>
+  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},3000)}
+
+  function updateCount() {
+    var c = document.querySelectorAll('input[name="docente"]:checked').length;
+    document.getElementById('count-sel').textContent = c;
+  }
+  updateCount();
+
+  document.getElementById('btn-select-all').addEventListener('click', function(){
+    document.querySelectorAll('input[name="docente"]').forEach(function(cb){ cb.checked = true; });
+    updateCount();
+  });
+  document.getElementById('btn-deselect-all').addEventListener('click', function(){
+    document.querySelectorAll('input[name="docente"]').forEach(function(cb){ cb.checked = false; });
+    updateCount();
+  });
+
+  function filtrarDocs() {
+    var q = (document.getElementById('buscar-docente').value || '').toLowerCase();
+    document.querySelectorAll('.docente-item').forEach(function(item){
+      var txt = item.textContent.toLowerCase();
+      item.style.display = !q || txt.includes(q) ? '' : 'none';
+    });
+  }
+
+  document.getElementById('btn-guardar').addEventListener('click', async function(){
+    var ids = Array.from(document.querySelectorAll('input[name="docente"]:checked')).map(function(cb){ return parseInt(cb.value); });
+    this.disabled = true; this.textContent = 'Guardando...';
+    try {
+      var res = await fetch('/api/admin/asignar-docentes', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ evaluador_id: '{evaluadorSel}', docente_ids: ids })
+      });
+      if (res.ok) { var d = await res.json(); toast('Guardado: ' + d.count + ' docentes asignados', false); }
+      else { var j = await res.json(); toast(j.error||'Error', true); }
+    } catch(e) { toast('Error de conexión', true); }
+    this.disabled = false; this.textContent = 'Guardar Asignaciones';
+  });
+</script>

@@ -4,12 +4,26 @@ import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
 
 const cliente = obtenerClienteSuperbase();
 
+// Obtener usuario actual y sus docentes asignados
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+let userId = '';
+let docentesAsignados = new Set<number>();
+if (token && refresh) {
+  const { data: s } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+  if (s.user) {
+    userId = s.user.id;
+    const { data: asigs } = await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', userId);
+    docentesAsignados = new Set((asigs||[]).map(a=>a.docente_id));
+  }
+}
+
 // Docentes con evaluaciones (para observación)
 const { data: docs } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const docsEvaluados = new Set((docs || []).map(e => e.docente_id));
 
 const { data: docentes } = await cliente.from('docentes').select('id,nombre,apellidos,email,campus,modalidad,visible_dashboard').eq('activo', true).order('apellidos');
-const lista = (docentes || []).filter(d => docsEvaluados.has(d.id) && d.visible_dashboard !== false);
+const lista = (docentes || []).filter(d => docsEvaluados.has(d.id) && d.visible_dashboard !== false && docentesAsignados.has(d.id));
 
 const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id,modalidad,clave').in('docente_id', lista.map(d => d.id));
 const matPorDocente = new Map<number, number>();

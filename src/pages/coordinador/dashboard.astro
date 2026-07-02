@@ -14,10 +14,26 @@ const busqueda = Astro.url.searchParams.get('q') || '';
 const todos = await obtenerDocentes();
 const cliente = obtenerClienteSuperbase();
 
+// Obtener usuario actual para filtrar docentes asignados
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+let userId = '';
+if (token && refresh) {
+  const { data: s } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+  if (s.user) userId = s.user.id;
+}
+
+// Docentes asignados al coordinador/observador
+let docentesAsignados = new Set<number>();
+if (userId) {
+  const { data: asigs } = await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', userId);
+  docentesAsignados = new Set((asigs||[]).map(a=>a.docente_id));
+}
+
 // Filtrar solo docentes con evaluaciones (mismo filtro que /admin/docentes)
 const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('encuesta_estudiantil').select('docente_id').limit(10000), cliente.from('autodiagnosticos').select('docente_id').limit(10000), cliente.from('observaciones').select('docente_id').limit(10000), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000), cliente.from('planeaciones').select('docente_id').limit(10000)]);
 const docsEvaluados = new Set([...(eeIds||[]),...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
-const docentes = todos.filter(d => docsEvaluados.has(d.id));
+const docentes = todos.filter(d => docsEvaluados.has(d.id) && docentesAsignados.has(d.id));
 
 // Obtener observaciones, planeaciones y evaluaciones de coordinación para este cuatrimestre
 const { data: obsData } = await cliente.from('observaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId);
