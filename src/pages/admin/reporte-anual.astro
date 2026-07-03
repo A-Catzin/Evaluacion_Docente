@@ -55,7 +55,7 @@ function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60
           <option value="">Seleccionar docente...</option>
           {docentes.map(d => (<option value={d.id} selected={d.id===docenteSel}>{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()} — {d.email}</option>))}
         </select>
-        {docenteSel > 0 && <a href={`/api/admin/historial-docente?docente_id=${docenteSel}`} class="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-medium">📥 Descargar CSV</a>}
+        {docenteSel > 0 && <a href={`/api/admin/historial-docente?docente_id=${docenteSel}&format=csv`} class="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-medium">📥 Descargar CSV</a>}
       </form>
     </div>
 

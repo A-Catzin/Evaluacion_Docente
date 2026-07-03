@@ -34,5 +34,13 @@ export const GET: APIRoute = async ({ url }) => {
     if (inst > 0) historial.push({ clave: c.clave, ee: promEst, coord: promCoord, plan: promPlan, obs: promObs, auto: promAuto, final: Math.round(fin), cat, inst });
   }
 
+  const format = url.searchParams.get('format') || 'json';
+  if (format === 'csv') {
+    const header = 'Cuatrimestre,EE,Coordinación,Planeación,Observación,Autodiagnóstico,Final,Categoría,Instrumentos';
+    const rows = historial.map(h => `${h.clave},${h.ee},${h.coord},${h.plan},${h.obs},${h.auto},${h.final},"${h.cat}",${h.inst}`);
+    const csv = [header, ...rows].join('\n');
+    return new Response(csv, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="reporte_anual.csv"' } });
+  }
+
   return new Response(JSON.stringify(historial), { headers: { 'Content-Type': 'application/json' } });
 };
