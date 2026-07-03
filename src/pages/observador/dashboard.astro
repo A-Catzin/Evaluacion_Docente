@@ -1,8 +1,18 @@
 ---
 import LayoutObservador from '../../layouts/LayoutObservador.astro';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 
 const cliente = obtenerClienteSuperbase();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+if (Astro.url.searchParams.has('cuatrimestre')) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
+}
+const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
 
 // Obtener usuario actual y sus docentes asignados
 const token = Astro.cookies.get('sb-access-token')?.value;
@@ -37,7 +47,12 @@ for (const g of (gruposData || [])) {
 <LayoutObservador titulo="Dashboard — Observador">
   <div class="max-w-5xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-      <div><h1 class="text-3xl font-bold text-tup">Panel de Observación</h1><p class="text-slate-500">{lista.length} docentes disponibles para observar</p></div>
+      <div><h1 class="text-3xl font-bold text-tup">Panel de Observación</h1><p class="text-slate-500">{lista.length} docentes disponibles · {cuatrimestreSel?.clave||''}</p></div>
+      <form method="GET" class="flex items-center gap-2">
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
+        </select>
+      </form>
     </div>
 
     {lista.length === 0 ? (

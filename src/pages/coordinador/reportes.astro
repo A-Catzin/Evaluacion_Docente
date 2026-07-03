@@ -1,6 +1,98 @@
 ---
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
+import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+
+const cliente = obtenerClienteSuperbase();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
+
+// Obtener docentes asignados al coordinador
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+let userId = '';
+if (token && refresh) {
+  const { data: s } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+  if (s.user) userId = s.user.id;
+}
+const { data: asigs } = userId ? await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', userId).eq('cuatrimestre_id', cuatrimestreId) : { data: [] };
+const asigIds = new Set((asigs||[]).map(a=>a.docente_id));
+
+const { data: docentes } = await cliente.from('docentes').select('id,nombre,apellidos,email').in('id', [...asigIds]).order('apellidos');
+const ids = (docentes||[]).map(d=>d.id);
+
+// Queries de scores
+const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] = ids.length > 0 ? await Promise.all([
+  cliente.from('encuesta_estudiantil').select('docente_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId),
+  cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id',{ascending:false}),
+  cliente.from('planeaciones').select('docente_id,puntaje_promedio').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).eq('estado','Aprobado'),
+  cliente.from('observaciones').select('docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId),
+  cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id',{ascending:false}),
+]) : [{data:[]},{data:[]},{data:[]},{data:[]},{data:[]}];
+
+const eeMap = new Map(); for(const e of(eeData||[])){const s=(eeMap.get(e.docente_id)||0)+e.score_normalizado;eeMap.set(e.docente_id,s)}
+const coordMap = new Map(); for(const c of(coordData||[]))if(!coordMap.has(c.docente_id))coordMap.set(c.docente_id,Math.round(c.score_normalizado));
+const planMap = new Map(); for(const p of(planData||[])){const s=(planMap.get(p.docente_id)||0)+p.puntaje_promedio;planMap.set(p.docente_id,s)}
+const obsMap = new Map<number,number>(); for(const o of(obsData||[])){const r=[o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);if(r.length)obsMap.set(o.docente_id,Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100))}
+const diagMap = new Map(); for(const d of(diagData||[]))if(!diagMap.has(d.docente_id))diagMap.set(d.docente_id,Math.round((d.puntaje_total/120)*100));
+
+function fmt(n:any){return n!=null?Math.round(n).toString():'—'}
+function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60?'text-amber-600':'text-red-600'}
 ---
-<LayoutCoordinador titulo="Reportes">
-  <div class="animate-flotar-entrada"><h1 class="text-3xl font-bold text-tup mb-6">Reportes</h1><div class="bg-white rounded-2xl p-8 shadow-tarjeta text-center "><p>En desarrollo</p></div></div>
+
+<LayoutCoordinador titulo="Reportes — Coordinador">
+  <div class="animate-flotar-entrada max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <div><h1 class="text-3xl font-bold text-tup">Reportes de Desempeño</h1><p class="text-slate-500">{(docentes||[]).length} docentes asignados · {cuatrimestreSel?.clave||''}</p></div>
+      <form method="GET" class="flex items-center gap-2">
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
+        </select>
+        <a href={`/api/admin/reporte-cuatrimestre?cuatrimestre_id=${cuatrimestreId}`} class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-medium">📥 Descargar CSV</a>
+      </form>
+    </div>
+
+    {(docentes||[]).length === 0 ? (
+      <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No tienes docentes asignados en este cuatrimestre.</div>
+    ) : (
+      <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 border-b">
+              <th class="text-left px-3 py-3 text-xs uppercase">Docente</th>
+              <th class="text-center px-2 py-3 text-xs uppercase">EE</th>
+              <th class="text-center px-2 py-3 text-xs uppercase">Coord</th>
+              <th class="text-center px-2 py-3 text-xs uppercase">Plan</th>
+              <th class="text-center px-2 py-3 text-xs uppercase">Obs</th>
+              <th class="text-center px-2 py-3 text-xs uppercase">Auto</th>
+              <th class="text-center px-2 py-3 text-xs uppercase">Final</th>
+              <th class="text-center px-2 py-3 text-xs uppercase">Cat</th>
+            </tr></thead>
+            <tbody class="divide-y">{(docentes||[]).map(d => {
+              const promEst = eeMap.get(d.id)||0; const promCoord=coordMap.get(d.id)||0;
+              const promPlan=planMap.get(d.id)||0; const promObs=obsMap.get(d.id)||0; const promAuto=diagMap.get(d.id)||0;
+              const disp=[promEst,promCoord,promPlan,promObs,promAuto]; const pesos=[0.35,0.20,0.15,0.25,0.05];
+              let fin=0;for(let i=0;i<5;i++)if(disp[i])fin+=disp[i]*pesos[i];
+              const inst=disp.filter(v=>v>0).length;
+              const cat=inst===5?(fin>=90?'Sobresaliente':fin>=80?'Distinguido':fin>=70?'Bueno':fin>=60?'Aprobado':fin>=50?'A mejorar':'Insuficiente'):fin>0?'Parcial':'No iniciado';
+              return <tr class="hover:bg-slate-50">
+                <td class="px-3 py-2"><p class="font-medium text-xs">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</p><p class="text-[10px] text-slate-400">{d.email}</p></td>
+                <td class={"px-2 py-2 text-center font-medium "+colorN(promEst)}>{fmt(promEst)}</td>
+                <td class={"px-2 py-2 text-center font-medium "+colorN(promCoord)}>{fmt(promCoord)}</td>
+                <td class={"px-2 py-2 text-center font-medium "+colorN(promPlan)}>{fmt(promPlan)}</td>
+                <td class={"px-2 py-2 text-center font-medium "+colorN(promObs)}>{fmt(promObs)}</td>
+                <td class={"px-2 py-2 text-center font-medium "+colorN(promAuto)}>{fmt(promAuto)}</td>
+                <td class={"px-2 py-2 text-center font-bold "+colorN(Math.round(fin))}>{Math.round(fin)||'—'}</td>
+                <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{cat}</span></td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+      </div>
+    )}
+  </div>
 </LayoutCoordinador>
