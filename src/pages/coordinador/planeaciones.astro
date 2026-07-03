@@ -7,7 +7,8 @@ const cliente = obtenerClienteSuperbase();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdCookie || Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
