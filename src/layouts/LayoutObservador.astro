@@ -7,15 +7,21 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
 ---
 <BaseLayout titulo={titulo}>
   <div class="min-h-screen">
-    <header class="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-slate-200 dark:border-gray-800 px-6 h-14 flex items-center justify-between">
-      <div class="flex items-center gap-6">
-        <a href={`/observador/dashboard${qs}`} class="font-semibold text-tup dark:text-blue-300">SED-360 · Observador</a>
-        <nav class="flex gap-1">
-          <a href={`/observador/dashboard${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 dark:text-gray-300 hover:bg-tup/5 dark:hover:bg-gray-800">Dashboard</a>
+    <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/50 px-4 sm:px-6 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <button id="nav-toggle" class="sm:hidden text-slate-600 p-1" onclick="document.getElementById('nav-menu').classList.toggle('hidden')">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <a href={`/observador/dashboard${qs}`} class="font-semibold text-tup text-sm sm:text-base">SED-360 · Observador {cuatrimestreSel && <span class="text-[10px] bg-tup text-white px-2 py-0.5 rounded-full ml-1">{cuatrimestreSel}</span>}</a>
+        <nav class="hidden sm:flex gap-1">
+          <a href={`/observador/dashboard${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Dashboard</a>
         </nav>
       </div>
-      <a href="/api/auth/signout" class="text-xs text-slate-400 dark:text-gray-500 hover:text-red-500">Salir</a>
+      <a href="/api/auth/signout" class="text-xs text-slate-400 hover:text-red-500">Salir</a>
     </header>
-    <main class="p-6 max-w-5xl mx-auto"><slot /></main>
+    <nav id="nav-menu" class="sm:hidden hidden bg-white border-b border-slate-200 px-4 py-2 space-y-1">
+      <a href={`/observador/dashboard${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📊 Dashboard</a>
+    </nav>
+    <main class="p-4 sm:p-6 max-w-5xl mx-auto"><slot /></main>
   </div>
 </BaseLayout>

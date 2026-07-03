@@ -6,75 +6,50 @@ const cuatrimestreSel = Astro.cookies.get('cuatrimestre_sel')?.value;
 const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
 
 const grupos = [
-  {
-    nombre: 'Académico', icono: '🎓',
-    items: ['ofertas','asignaturas','cuatrimestres','campus','turnos'],
-    labels: ['Ofertas Académicas','Asignaturas','Cuatrimestres','Campus','Turnos'],
-    icons: ['🎓','📚','📅','🏫','🕐']
-  },
-  {
-    nombre: 'Personal', icono: '👥',
-    items: ['docentes','coordinadores','usuarios','asignaciones'],
-    labels: ['Docentes','Coordinadores','Usuarios','Asignaciones'],
-    icons: ['👨‍🏫','📊','👥','🔗']
-  },
-  {
-    nombre: 'Configuración', icono: '⚙️',
-    items: ['instrumentos','roles'],
-    labels: ['Instrumentos','Roles'],
-    icons: ['📋','🔑']
-  }
+  { nombre: 'Académico', icono: '🎓', items: ['ofertas','asignaturas','cuatrimestres','campus','turnos'], labels: ['Ofertas Académicas','Asignaturas','Cuatrimestres','Campus','Turnos'], icons: ['🎓','📚','📅','🏫','🕐'] },
+  { nombre: 'Personal', icono: '👥', items: ['docentes','coordinadores','usuarios','asignaciones'], labels: ['Docentes','Coordinadores','Usuarios','Asignaciones'], icons: ['👨‍🏫','📊','👥','🔗'] },
+  { nombre: 'Configuración', icono: '⚙️', items: ['instrumentos','roles'], labels: ['Instrumentos','Roles'], icons: ['📋','🔑'] }
 ];
 ---
 
 <BaseLayout titulo={titulo}>
+  <!-- Barra superior móvil -->
+  <div class="lg:hidden sticky top-0 z-50 bg-white border-b border-slate-200 px-4 h-14 flex items-center justify-between">
+    <button id="menu-toggle" class="text-slate-600 p-2" onclick="document.getElementById('sidebar').classList.toggle('translate-x-0');document.getElementById('overlay').classList.toggle('hidden');">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <span class="font-semibold text-tup text-sm">SED-360</span>
+    <div class="w-6"></div>
+  </div>
+
+  <!-- Overlay oscuro (móvil) -->
+  <div id="overlay" class="hidden fixed inset-0 z-40 bg-black/50 lg:hidden" onclick="document.getElementById('sidebar').classList.remove('translate-x-0');this.classList.add('hidden');"></div>
+
   <div class="flex min-h-screen">
-    <aside class="w-64 bg-white border-r border-slate-200 flex-shrink-0 hidden lg:flex flex-col">
-      <div class="p-6 border-b border-slate-100">
+    <!-- Sidebar: móvil (slide-in) + desktop (fixed) -->
+    <aside id="sidebar" class="w-64 bg-white border-r border-slate-200 flex-shrink-0 flex flex-col fixed lg:static inset-y-0 left-0 z-50 -translate-x-full lg:translate-x-0 transition-transform duration-300">
+      <div class="p-6 border-b border-slate-100 flex items-center justify-between">
         <a href="/admin/dashboard" class="flex flex-col items-center gap-2">
-          <img src="/logo-tup.png" alt="TUP" class="w-40 h-40 object-contain" />
+          <img src="/logo-tup.png" alt="TUP" class="w-20 h-20 lg:w-40 lg:h-40 object-contain" />
           <span class="font-semibold text-tup text-sm">SED-360</span>
         </a>
+        <button class="lg:hidden text-slate-400" onclick="document.getElementById('sidebar').classList.remove('translate-x-0');document.getElementById('overlay').classList.add('hidden');">✕</button>
       </div>
 
       <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
-        <!-- Dashboard (siempre visible) -->
-        <a href={`/admin/dashboard${qs}`} class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          📊 Dashboard
-        </a>
-
-        <!-- Importar (siempre visible) -->
-        <a href="/admin/importar" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">
-          📤 Importar CSV
-        </a>
-
-        <!-- Grupos colapsables -->
-        {grupos.map(g => (
-          <div>
-            <button type="button" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')">
-              <span>{g.icono} {g.nombre}</span>
-              <svg class="w-3.5 h-3.5 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div class="space-y-0.5 ml-3 mt-1">
-              {g.items.map((item, i) => (
-                <a href={`/admin/${item}`} class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-tup/5 hover:text-tup transition-colors">
-                  <span class="text-xs">{g.icons[i]}</span> {g.labels[i]}
-                </a>
-              ))}
-            </div>
-          </div>
-        ))}
+        <a href={`/admin/dashboard${qs}`} class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">📊 Dashboard</a>
+        <a href="/admin/importar" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">📤 Importar CSV</a>
+        {grupos.map(g => (<div>
+          <button type="button" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')">
+            <span>{g.icono} {g.nombre}</span>
+            <svg class="w-3.5 h-3.5 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="space-y-0.5 ml-3 mt-1">{g.items.map((item,i) => (<a href={`/admin/${item}`} class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-tup/5 hover:text-tup transition-colors"><span class="text-xs">{g.icons[i]}</span> {g.labels[i]}</a>))}</div>
+        </div>))}
       </nav>
-
-      <div class="p-4 border-t border-slate-100">
-        <a href="/api/auth/signout" class="flex items-center gap-2 text-xs text-slate-400 hover:text-red-500 transition-colors">
-          🚪 Cerrar Sesión
-        </a>
-      </div>
+      <div class="p-4 border-t border-slate-100"><a href="/api/auth/signout" class="flex items-center gap-2 text-xs text-slate-400 hover:text-red-500 transition-colors">🚪 Cerrar Sesión</a></div>
     </aside>
 
-    <main class="flex-1 p-6 lg:p-8 overflow-auto">
-      <slot />
-    </main>
+    <main class="flex-1 p-6 lg:p-8 overflow-auto"><slot /></main>
   </div>
 </BaseLayout>
