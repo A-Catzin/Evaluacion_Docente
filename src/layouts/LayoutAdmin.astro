@@ -7,7 +7,9 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
 
 const grupos = [
   { nombre: 'Académico', icono: '🎓', items: ['ofertas','asignaturas','cuatrimestres','campus','turnos'], labels: ['Ofertas Académicas','Asignaturas','Cuatrimestres','Campus','Turnos'], icons: ['🎓','📚','📅','🏫','🕐'] },
-  { nombre: 'Personal', icono: '👥', items: ['docentes','coordinadores','usuarios','asignaciones'], labels: ['Docentes','Coordinadores','Usuarios','Asignaciones'], icons: ['👨‍🏫','📊','👥','🔗'] },
+  { nombre: 'Personal', icono: '👥',     items: ['docentes','coordinadores','usuarios','asignaciones','reporte-anual'],
+    labels: ['Docentes','Coordinadores','Usuarios','Asignaciones','Reporte Anual'],
+    icons: ['👨‍🏫','📊','👥','🔗','📈'] },
   { nombre: 'Configuración', icono: '⚙️', items: ['instrumentos','roles'], labels: ['Instrumentos','Roles'], icons: ['📋','🔑'] }
 ];
 ---
