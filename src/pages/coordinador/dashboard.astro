@@ -154,7 +154,7 @@ const completadosF = estadosMostrar.filter(e => e.completo);
                   <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ CA</span>
                 )}
                 {e.observacion === 'pendiente' ? (
-                  <a href={`/coordinador/captura/observacion${e.docente.modalidad.includes('Virtual') ? '-virtual' : e.docente.modalidad.includes('Ejecutivo') ? '-ejecutivo' : ''}?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
+                  <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
                 ) : (
                   <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Obs.</span>
                 )}
