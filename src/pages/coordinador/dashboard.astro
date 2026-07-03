@@ -26,7 +26,7 @@ if (token && refresh) {
 // Docentes asignados al coordinador/observador
 let docentesAsignados = new Set<number>();
 if (userId) {
-  const { data: asigs } = await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', userId);
+  const { data: asigs } = await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', userId).eq('cuatrimestre_id', cuatrimestreId);
   docentesAsignados = new Set((asigs||[]).map(a=>a.docente_id));
 }
 

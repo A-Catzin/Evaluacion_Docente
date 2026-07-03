@@ -2,8 +2,14 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../services/docentes';
 import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 
 const cliente = obtenerClienteSuperbase();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
 const todos = await obtenerDocentes();
 
 // Evaluadores (coordinadores + observadores)
@@ -18,7 +24,7 @@ const docentes = todos.filter(d => evalsSet.has(d.id));
 const evaluadorSel = Astro.url.searchParams.get('evaluador') || '';
 let asignados: Set<number> = new Set();
 if (evaluadorSel) {
-  const { data: asigs } = await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', evaluadorSel);
+  const { data: asigs } = await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', evaluadorSel).eq('cuatrimestre_id', cuatrimestreId);
   asignados = new Set((asigs||[]).map(a=>a.docente_id));
 }
 ---
@@ -33,6 +39,10 @@ if (evaluadorSel) {
         <select name="evaluador" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm flex-1" onchange="this.form.submit()">
           <option value="">Seleccionar coordinador/observador...</option>
           {evaluadores?.map(e => (<option value={e.id} selected={evaluadorSel === e.id}>{e.email} ({e.rol})</option>))}
+        </select>
+        <label class="text-sm font-medium text-slate-700 ml-2">Cuatrimestre:</label>
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
         </select>
       </form>
     </div>
@@ -101,7 +111,7 @@ if (evaluadorSel) {
     try {
       var res = await fetch('/api/admin/asignar-docentes', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ evaluador_id: '{evaluadorSel}', docente_ids: ids })
+        body: JSON.stringify({ evaluador_id: '{evaluadorSel}', docente_ids: ids, cuatrimestre_id: {cuatrimestreId} })
       });
       if (res.ok) { var d = await res.json(); toast('Guardado: ' + d.count + ' docentes asignados', false); }
       else { var j = await res.json(); toast(j.error||'Error', true); }
