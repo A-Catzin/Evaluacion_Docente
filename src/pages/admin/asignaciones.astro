@@ -92,9 +92,18 @@ if (evaluadorSel) {
     document.querySelectorAll('input[name="docente"]').forEach(function(cb){ cb.checked = true; });
     updateCount();
   });
-  document.getElementById('btn-deselect-all').addEventListener('click', function(){
-    document.querySelectorAll('input[name="docente"]').forEach(function(cb){ cb.checked = false; });
-    updateCount();
+  document.getElementById('btn-deselect-all').addEventListener('click', async function(){
+    if (!confirm('¿Desvincular TODOS los docentes de este evaluador en este cuatrimestre?')) return;
+    this.disabled = true; this.textContent = 'Desvinculando...';
+    try {
+      var res = await fetch('/api/admin/asignar-docentes', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ evaluador_id: evaluadorSel, docente_ids: [], cuatrimestre_id: cuatrimestreId })
+      });
+      if (res.ok) { toast('Todos los docentes desvinculados', false); document.querySelectorAll('input[name="docente"]').forEach(function(cb){ cb.checked = false; }); updateCount(); }
+      else { var j = await res.json(); toast(j.error||'Error', true); }
+    } catch(e) { toast('Error de conexión', true); }
+    this.disabled = false; this.textContent = 'Desvincular todos';
   });
 
   function filtrarDocs() {
