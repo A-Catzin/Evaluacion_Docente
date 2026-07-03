@@ -79,7 +79,7 @@ if (evaluadorSel) {
   </div>
 </LayoutAdmin>
 
-<script is:inline>
+<script is:inline define:vars={{ evaluadorSel, cuatrimestreId }}>
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},3000)}
 
   function updateCount() {
@@ -111,7 +111,7 @@ if (evaluadorSel) {
     try {
       var res = await fetch('/api/admin/asignar-docentes', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ evaluador_id: '{evaluadorSel}', docente_ids: ids, cuatrimestre_id: {cuatrimestreId} })
+        body: JSON.stringify({ evaluador_id: evaluadorSel, docente_ids: ids, cuatrimestre_id: cuatrimestreId })
       });
       if (res.ok) { var d = await res.json(); toast('Guardado: ' + d.count + ' docentes asignados', false); }
       else { var j = await res.json(); toast(j.error||'Error', true); }
