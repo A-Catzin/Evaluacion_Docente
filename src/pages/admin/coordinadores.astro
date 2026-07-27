@@ -1,8 +1,8 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { db } from '../../lib/db';
 
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 const { data: coordinadores } = await cliente.from('usuarios').select('id,email,rol,entidad_id').eq('rol', 'coordinador');
 
 interface CoordinadorInfo {

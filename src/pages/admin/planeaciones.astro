@@ -1,0 +1,76 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { db } from '../../lib/db';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+
+const cliente = db();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+if (Astro.url.searchParams.has('cuatrimestre')) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
+}
+const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
+
+const { data: raw } = await cliente.from('planeaciones').select('*, docentes(nombre,apellidos,email), asignaturas(nombre), cuatrimestres(clave)').eq('cuatrimestre_id', cuatrimestreId).order('fecha_subida', { ascending: false });
+
+interface Item { id: number; docente: string; email: string; asignatura: string; grupo: string; estado: string; puntaje: number|null; url: string; cuatrimestre: string; evaluacionDetalle: Record<string,{score:string}> | null; }
+const items: Item[] = [];
+for (const p of (raw || [])) {
+  const doc = (p as any).docentes as {nombre?:string;apellidos?:string;email?:string} | null;
+  const asig = (p as any).asignaturas as {nombre?:string} | null;
+  const cuatri = (p as any).cuatrimestres as {clave?:string} | null;
+  const pdfUrl = (p as any).url_pdf as string;
+  let urlFirmada = pdfUrl;
+  try {
+    const { obtenerUrlFirmadaDesdeUrlAlmacenada } = await import('../../lib/storage');
+    const signed = await obtenerUrlFirmadaDesdeUrlAlmacenada(pdfUrl, 'planeaciones', 3600);
+    if (signed !== pdfUrl) urlFirmada = signed;
+  } catch {}
+  items.push({
+    id: (p as any).id as number,
+    docente: doc ? doc.nombre+' '+doc.apellidos : '',
+    email: doc?.email || '',
+    asignatura: asig?.nombre || String((p as any).asignatura_id),
+    grupo: (p as any).grupo as string,
+    estado: (p as any).estado as string,
+    puntaje: (p as any).puntaje_promedio as number|null,
+    url: urlFirmada,
+    cuatrimestre: cuatri?.clave || '',
+    evaluacionDetalle: ((p as any).evaluacion_detalle as Record<string,{score:string}> | null) || null
+  });
+}
+const pendientes = items.filter(i => i.estado === 'Pendiente');
+const evaluadas = items.filter(i => i.estado !== 'Pendiente');
+---
+
+<LayoutAdmin titulo="Planeaciones — Admin">
+  <div class="animate-flotar-entrada max-w-5xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-3xl font-bold text-tup">Evaluación de Planeaciones (Admin)</h1>
+      <form method="GET" class="flex items-center gap-2">
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
+        </select>
+      </form>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-8">
+      <div class="px-6 py-4 border-b bg-amber-50"><h2 class="font-semibold text-amber-800">Pendientes de Evaluar ({pendientes.length})</h2></div>
+      {pendientes.length === 0 ? (<div class="p-8 text-center text-slate-400">No hay planeaciones pendientes.</div>) : (
+        <table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-left px-3 py-3 text-xs uppercase">Docente</th><th class="text-left px-3 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-3 py-3 text-xs uppercase">Grupo</th><th class="text-center px-3 py-3 text-xs uppercase">Cuatri</th><th class="text-left px-3 py-3 text-xs uppercase">PDF</th><th class="text-right px-3 py-3 text-xs uppercase">Acción</th></tr></thead>
+        <tbody class="divide-y">{pendientes.map(p => (<tr class="hover:bg-slate-50"><td class="px-3 py-3"><p class="font-medium text-xs">{p.docente}</p><p class="text-[10px] text-slate-400">{p.email}</p></td><td class="px-3 py-3 text-xs">{p.asignatura}</td><td class="px-3 py-3 text-xs">{p.grupo}</td><td class="px-3 py-3 text-center"><span class="text-xs bg-slate-100 px-2 py-0.5 rounded">{p.cuatrimestre}</span></td><td class="px-3 py-3"><a href={p.url} target="_blank" class="text-tup text-xs hover:underline">Ver PDF</a></td><td class="px-3 py-3 text-right"><a href={`/admin/planeaciones/evaluar/${p.id}`} class="px-3 py-1.5 rounded-lg bg-tup text-white text-xs font-medium">Evaluar</a></td></tr>))}</tbody></table>
+      )}
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      <div class="px-6 py-4 border-b"><h2 class="font-semibold text-slate-700">Evaluadas ({evaluadas.length})</h2></div>
+      {evaluadas.length === 0 ? (<div class="p-8 text-center text-slate-400">No hay planeaciones evaluadas.</div>) : (
+        <table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-left px-3 py-3 text-xs uppercase">Docente</th><th class="text-left px-3 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-3 py-3 text-xs uppercase">Grupo</th><th class="text-center px-3 py-3 text-xs uppercase">Cuatri</th><th class="text-center px-3 py-3 text-xs uppercase">Estado</th><th class="text-center px-3 py-3 text-xs uppercase">Puntaje</th><th class="text-center px-3 py-3 text-xs uppercase">Acción</th></tr></thead>
+        <tbody class="divide-y">{evaluadas.map(p => (<tr class="hover:bg-slate-50"><td class="px-3 py-3"><p class="font-medium text-xs">{p.docente}</p><p class="text-[10px] text-slate-400">{p.email}</p></td><td class="px-3 py-3 text-xs">{p.asignatura}</td><td class="px-3 py-3 text-xs">{p.grupo}</td><td class="px-3 py-3 text-center"><span class="text-xs bg-slate-100 px-2 py-0.5 rounded">{p.cuatrimestre}</span></td><td class="px-3 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${p.estado==='Aprobado'?'bg-emerald-50 text-emerald-700':'bg-red-50 text-red-700'}`}>{p.estado}</span></td><td class="px-3 py-3 text-center font-bold">{(()=>{if(!p.puntaje)return'—';const d=p.evaluacionDetalle||{};let sum=0,count=0;for(const k in d){const s=d[k]?.score;if(s==='na'||s==null)continue;sum+=parseInt(s);count++}const max=count*2;return count>0?Math.round(p.puntaje)+'% ('+sum+'/'+max+')':Math.round(p.puntaje)+'%';})()}</td><td class="px-3 py-3 text-center"><a href={`/admin/planeaciones/evaluar/${p.id}`} class="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-medium">Reevaluar</a></td></tr>))}</tbody></table>
+      )}
+    </div>
+  </div>
+</LayoutAdmin>

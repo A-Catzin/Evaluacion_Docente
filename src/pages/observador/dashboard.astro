@@ -1,9 +1,9 @@
 ---
 import LayoutObservador from '../../layouts/LayoutObservador.astro';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;

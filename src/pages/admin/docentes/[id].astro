@@ -1,0 +1,135 @@
+---
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import { obtenerDocente } from '../../../services/docentes';
+import { obtenerCuatrimestres } from '../../../services/catalogos';
+import { db } from '../../../lib/db';
+import { fetchCuatrimestreScores, calcFinalScore, getCategory } from '../../../services/scoring';
+
+const { id } = Astro.params;
+const docenteId = parseInt(id || '');
+if (!docenteId) return Astro.redirect('/admin/docentes');
+
+const cliente = db();
+const docente = await obtenerDocente(docenteId);
+if (!docente) return Astro.redirect('/admin/docentes');
+
+const cuatrimestres = (await obtenerCuatrimestres()).sort((a, b) => a.id - b.id);
+
+const historial: { clave: string; final: number; cat: string; inst: number; ee: number; coord: number; plan: number; obs: number; auto: number }[] = [];
+let sumFinals = 0;
+let bestCycle = { clave: '', final: 0 };
+
+for (const c of cuatrimestres) {
+  const scores = await fetchCuatrimestreScores(cliente, docenteId, c.id);
+  const { final, instrumentCount, category } = calcFinalScore(scores);
+  if (instrumentCount > 0) {
+    historial.push({ clave: c.clave, final, cat: category, inst: instrumentCount, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto });
+    sumFinals += final;
+    if (final > bestCycle.final) bestCycle = { clave: c.clave, final };
+  }
+}
+
+const cyclesEvaluated = historial.length;
+const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluated) : 0;
+const currentCategory = historicalAvg > 0 ? getCategory(historicalAvg, cyclesEvaluated > 0 ? 5 : 0) : '—';
+
+function fmt(n: number | null | undefined): string { return n != null && n > 0 ? Math.round(n).toString() : '—'; }
+function colorN(n: number | null | undefined): string { if (!n) return 'text-slate-400'; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
+function badgeCat(cat: string): string {
+  if (cat === 'Sobresaliente') return 'bg-emerald-100 text-emerald-700';
+  if (cat === 'Distinguido') return 'bg-blue-100 text-blue-700';
+  if (cat === 'Bueno') return 'bg-purple-100 text-purple-700';
+  if (cat === 'Aprobado') return 'bg-amber-100 text-amber-700';
+  if (cat === 'A mejorar') return 'bg-orange-100 text-orange-700';
+  if (cat === 'Parcial') return 'bg-slate-100 text-slate-600';
+  return 'bg-red-100 text-red-700';
+}
+---
+
+<LayoutAdmin titulo={`Histórico — ${docente.nombre} ${docente.apellidos}`}>
+  <div class="animate-flotar-entrada max-w-5xl mx-auto">
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-2 text-sm text-slate-400 mb-6">
+      <a href="/admin/docentes" class="hover:text-tup">Docentes</a>
+      <span>/</span>
+      <a href="/admin/reporte-anual?modo=individual&docente_id={docenteId}" class="hover:text-tup">Reporte Anual</a>
+      <span>/</span>
+      <span class="text-slate-600 font-medium">Histórico</span>
+    </div>
+
+    <!-- Teacher header -->
+    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
+      <div class="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-tup">{docente.nombre.toUpperCase()} {docente.apellidos.toUpperCase()}</h1>
+          <p class="text-sm text-slate-400 mt-1">{docente.email}</p>
+          <p class="text-xs text-slate-300 mt-0.5">{docente.campus || 'Sin campus'} · {docente.modalidad || 'Sin modalidad'}</p>
+        </div>
+        <div class="flex gap-2">
+          <a href="/admin/reporte-anual?modo=individual&docente_id={docenteId}" class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">📊 Reporte Anual</a>
+          <a href={`/api/admin/historial-docente?docente_id=${docenteId}&format=csv`} class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium">⬇ CSV</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
+        <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Promedio histórico</p>
+        <p class={`text-3xl font-bold ${colorN(historicalAvg)}`}>{historicalAvg > 0 ? historicalAvg : '—'}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
+        <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Ciclos evaluados</p>
+        <p class="text-3xl font-bold text-tup">{cyclesEvaluated}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
+        <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Mejor ciclo</p>
+        <p class="text-2xl font-bold text-tup">{bestCycle.clave || '—'}</p>
+        <p class={`text-lg font-semibold ${colorN(bestCycle.final)}`}>{bestCycle.final > 0 ? bestCycle.final : '—'}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
+        <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Categoría actual</p>
+        <p class="text-xl font-bold text-tup">{currentCategory}</p>
+      </div>
+    </div>
+
+    <!-- Report cards / fichas -->
+    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100">
+        <h2 class="text-lg font-bold text-tup">Fichas por cuatrimestre</h2>
+      </div>
+      {historial.length === 0 ? (
+        <div class="p-12 text-center text-slate-400">No hay datos de evaluación para este docente.</div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead><tr class="bg-slate-50 border-b">
+            <th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Cuatrimestre</th>
+            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">EE (35%)</th>
+            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Coord (20%)</th>
+            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Plan (15%)</th>
+            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Obs (25%)</th>
+            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Auto (5%)</th>
+            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Final</th>
+            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Categoría</th>
+            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Instr.</th>
+          </tr></thead>
+          <tbody class="divide-y">
+            {historial.map(h => (
+              <tr class="hover:bg-slate-50">
+                <td class="px-4 py-3 font-medium text-slate-700">{h.clave}</td>
+                <td class={`px-3 py-3 text-center font-medium ${colorN(h.ee)}`}>{fmt(h.ee)}</td>
+                <td class={`px-3 py-3 text-center font-medium ${colorN(h.coord)}`}>{fmt(h.coord)}</td>
+                <td class={`px-3 py-3 text-center font-medium ${colorN(h.plan)}`}>{fmt(h.plan)}</td>
+                <td class={`px-3 py-3 text-center font-medium ${colorN(h.obs)}`}>{fmt(h.obs)}</td>
+                <td class={`px-3 py-3 text-center font-medium ${colorN(h.auto)}`}>{fmt(h.auto)}</td>
+                <td class={`px-3 py-3 text-center font-bold ${colorN(h.final)}`}>{h.final}</td>
+                <td class="px-3 py-3 text-center"><span class={`px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeCat(h.cat)}`}>{h.cat}</span></td>
+                <td class="px-3 py-3 text-center text-xs text-slate-400">{h.inst}/5</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</LayoutAdmin>

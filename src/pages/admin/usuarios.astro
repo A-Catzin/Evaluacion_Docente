@@ -1,11 +1,11 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { db } from '../../lib/db';
 import type { RolUsuario } from '../../types/supabase';
 
 const rolFiltro = (Astro.url.searchParams.get('rol') as RolUsuario) || undefined;
 const busqueda = Astro.url.searchParams.get('q') || '';
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 
 interface FilaUsuario {
   id: string; email: string; rol: string;
@@ -128,6 +128,18 @@ const conteos: Record<string, number> = { superadmin: totalAdmin || 0, coordinad
 function formatear(n: number | undefined): string {
   return n !== undefined && n !== null ? Math.round(n).toString() : '—';
 }
+
+// Paginación
+const page = parseInt(Astro.url.searchParams.get('page')||'1');
+const limit = 20;
+const totalFilas = filas.length;
+const totalPages = Math.ceil(totalFilas / limit);
+const filasPag = filas.slice((page - 1) * limit, page * limit);
+function buildPageUrl(p:number) {
+  const params = new URLSearchParams(Astro.url.searchParams.toString());
+  params.set('page', String(p));
+  return `?${params.toString()}`;
+}
 ---
 
 <LayoutAdmin titulo="Usuarios — Admin">
@@ -135,7 +147,7 @@ function formatear(n: number | undefined): string {
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Gestión de Usuarios</h1>
       <button id="btn-agregar" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700">+ Agregar Usuario</button>
-      <span class="text-sm ">{filas.length} usuarios</span>
+      <span class="text-sm ">{totalFilas} usuarios</span>
     </div>
 
     {!rolFiltro && !busqueda && (
@@ -165,7 +177,7 @@ function formatear(n: number | undefined): string {
 
     {errorMsg && (<div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm mb-6">{errorMsg}</div>)}
 
-    {filas.length === 0 ? (
+    {filasPag.length === 0 ? (
       <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No se encontraron usuarios.</div>
     ) : (
       <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
@@ -182,7 +194,7 @@ function formatear(n: number | undefined): string {
                 <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Modalidad</th>
                 <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Materias</th>
               </tr></thead>
-              <tbody class="divide-y">{filas.map(f => {
+              <tbody class="divide-y">{filasPag.map(f => {
                 const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
                 return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{f.nombre}</td><td class="px-3 py-2 text-center">{paterno}</td><td class="px-3 py-2 text-center">{materno || '—'}</td><td class="px-3 py-2 text-center text-xs">{f.email}</td><td class="px-3 py-2 text-center">{f.campus}</td><td class="px-3 py-2 text-center">{f.turno}</td><td class="px-3 py-2 text-center">{f.modalidad || '—'}</td><td class="px-3 py-2 text-center text-xs">{f.materias}</td></tr>);
               })}</tbody>
@@ -196,7 +208,7 @@ function formatear(n: number | undefined): string {
                 <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Email</th>
                 <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Rol</th>
               </tr></thead>
-              <tbody class="divide-y">{filas.map(f => (
+              <tbody class="divide-y">{filasPag.map(f => (
                 <tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{f.nombre}</td><td class="px-3 py-2 text-center text-xs">{f.email}</td><td class="px-3 py-2 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>
               ))}</tbody>
             </table>
@@ -205,21 +217,28 @@ function formatear(n: number | undefined): string {
           {rolFiltro === 'superadmin' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th></tr></thead>
-              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td></tr>))}</tbody>
+              <tbody class="divide-y">{filasPag.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td></tr>))}</tbody>
             </table>
           )}
 
           {rolFiltro === 'observador' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Rol</th></tr></thead>
-              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
+              <tbody class="divide-y">{filasPag.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
             </table>
           )}
           {rolFiltro === 'pendiente' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Rol Solicitado</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Acción</th></tr></thead>
-              <tbody class="divide-y">{filas.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-slate-100">{f.rol_solicitado || '—'}</span></td><td class="px-4 py-3 text-center"><a href={`/admin/roles?q=${f.email}`} class="text-xs text-tup hover:underline">Asignar Rol</a></td></tr>))}</tbody>
+              <tbody class="divide-y">{filasPag.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-slate-100">{f.rol_solicitado || '—'}</span></td><td class="px-4 py-3 text-center"><a href={`/admin/roles?q=${f.email}`} class="text-xs text-tup hover:underline">Asignar Rol</a></td></tr>))}</tbody>
             </table>
+          )}
+          {totalPages > 1 && (
+            <div class="flex items-center justify-center gap-3 pt-4">
+              {page > 1 && <a href={buildPageUrl(page-1)} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">← Anterior</a>}
+              <span class="text-sm text-slate-400">Página {page} de {totalPages}</span>
+              {page < totalPages && <a href={buildPageUrl(page+1)} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Siguiente →</a>}
+            </div>
           )}
         </div>
       </div>

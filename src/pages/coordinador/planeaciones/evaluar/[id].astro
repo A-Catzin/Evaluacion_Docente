@@ -1,20 +1,18 @@
 ---
 import LayoutCoordinador from '../../../../layouts/LayoutCoordinador.astro';
-import { obtenerClienteSuperbase } from '../../../../lib/supabaseClient';
+import { db } from '../../../../lib/db';
+import { obtenerUrlFirmadaDesdeUrlAlmacenada } from '../../../../lib/storage';
 import { obtenerPlaneacion } from '../../../../services/planeaciones';
 
 const id = parseInt(Astro.params.id || '0');
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 const plan = await obtenerPlaneacion(id);
 if (!plan) return Astro.redirect('/coordinador/planeaciones');
 
 let urlFirmada = plan.url_pdf;
 try {
-  const path = plan.url_pdf.split('/planeaciones/')[1];
-  if (path) {
-    const { data } = await cliente.storage.from('planeaciones').createSignedUrl(path, 3600);
-    if (data?.signedUrl) urlFirmada = data.signedUrl;
-  }
+  const signed = await obtenerUrlFirmadaDesdeUrlAlmacenada(plan.url_pdf, 'planeaciones', 3600);
+  if (signed !== plan.url_pdf) urlFirmada = signed;
 } catch {}
 
 const { data: docente } = await cliente.from('docentes').select('nombre,apellidos').eq('id', plan.docente_id).maybeSingle();

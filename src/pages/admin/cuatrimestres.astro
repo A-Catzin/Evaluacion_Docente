@@ -12,6 +12,7 @@ const cuatrimestres = await obtenerCuatrimestres();
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form id="form-nueva" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <input type="text" id="input-clave" placeholder="Clave (ej: 26-1)*" required class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+        <input type="text" id="input-nombre" placeholder="Nombre (opcional)" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
         <input type="month" id="input-inicio" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
         <input type="month" id="input-fin" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Agregar</button>
@@ -20,11 +21,15 @@ const cuatrimestres = await obtenerCuatrimestres();
 
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       <table class="w-full text-sm">
-        <thead><tr class="bg-slate-50 border-b"><th class="text-center px-3 py-3 text-xs uppercase">Clave</th><th class="text-center px-3 py-3 text-xs uppercase">Inicio</th><th class="text-center px-3 py-3 text-xs uppercase">Fin</th><th class="text-center px-3 py-3 text-xs uppercase">Estado</th><th class="text-center px-3 py-3 text-xs uppercase">Acciones</th></tr></thead>
+        <thead><tr class="bg-slate-50 border-b"><th class="text-center px-3 py-3 text-xs uppercase">Clave</th><th class="text-center px-3 py-3 text-xs uppercase">Nombre</th><th class="text-center px-3 py-3 text-xs uppercase">Inicio</th><th class="text-center px-3 py-3 text-xs uppercase">Fin</th><th class="text-center px-3 py-3 text-xs uppercase">Estado</th><th class="text-center px-3 py-3 text-xs uppercase">Acciones</th></tr></thead>
         <tbody class="divide-y">
           {cuatrimestres.map(c => (
             <tr class="hover:bg-slate-50">
               <td class="px-3 py-3 text-center font-mono text-xs">{c.clave}</td>
+              <td class="px-3 py-3 text-center text-xs">
+                <span class="texto-nombre">{c.nombre || '—'}</span>
+                <input type="text" class="edit-nombre hidden rounded-lg border border-slate-200 px-2 py-1 text-xs w-24" value={c.nombre || ''} />
+              </td>
               <td class="px-3 py-3 text-center text-xs">
                 <span class="texto-inicio">{c.fecha_inicio || '—'}</span>
                 <input type="month" class="edit-inicio hidden rounded-lg border border-slate-200 px-2 py-1 text-xs" value={c.fecha_inicio || ''} />
@@ -34,17 +39,31 @@ const cuatrimestres = await obtenerCuatrimestres();
                 <input type="month" class="edit-fin hidden rounded-lg border border-slate-200 px-2 py-1 text-xs" value={c.fecha_fin || ''} />
               </td>
               <td class="px-3 py-3 text-center">
-                <button class={`toggle-btn px-2 py-0.5 rounded-lg text-xs font-medium ${c.cerrado ? 'bg-slate-100 text-slate-400' : c.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`} data-id={c.id} data-activa={c.activo} data-cerrado={c.cerrado}>{c.cerrado ? 'Cerrado' : c.activo ? 'Activo' : 'Inactivo'}</button>
+                {c.cerrado ? (
+                  <span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-slate-200 text-slate-500">Cerrado</span>
+                ) : c.activo ? (
+                  <span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-emerald-100 text-emerald-700">Activo</span>
+                ) : (
+                  <span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-amber-100 text-amber-700">Inactivo</span>
+                )}
               </td>
               <td class="px-3 py-3 text-center">
-                <button class="btn-editar text-xs text-tup hover:underline mr-2" data-id={c.id}>Editar</button>
-                <button class="btn-guardar text-xs text-emerald-600 hover:underline mr-2 hidden" data-id={c.id}>Guardar</button>
-                <a href={`/api/admin/reporte-cuatrimestre?cuatrimestre_id=${c.id}`} class="text-xs text-blue-600 hover:underline mr-2">📊 Reporte</a>
-                <button class="btn-eliminar text-xs text-red-500 hover:underline" data-id={c.id}>Eliminar</button>
+                <div class="flex items-center justify-center gap-1 flex-wrap">
+                  {!c.cerrado && !c.activo && (
+                    <button class="btn-activar px-2 py-0.5 rounded-lg text-[10px] font-medium bg-emerald-50 text-emerald-600 hover:bg-emerald-100" data-id={c.id}>Activar</button>
+                  )}
+                  {c.activo && (
+                    <button class="btn-cerrar px-2 py-0.5 rounded-lg text-[10px] font-medium bg-slate-100 text-slate-500 hover:bg-slate-200" data-id={c.id}>Cerrar</button>
+                  )}
+                  <button class="btn-editar text-[10px] text-tup hover:underline" data-id={c.id}>Editar</button>
+                  <button class="btn-guardar text-[10px] text-emerald-600 hover:underline hidden" data-id={c.id}>Guardar</button>
+                  <a href={`/api/admin/reporte-cuatrimestre?cuatrimestre_id=${c.id}`} class="text-[10px] text-blue-600 hover:underline">📊 Reporte</a>
+                  <button class="btn-eliminar text-[10px] text-red-500 hover:underline" data-id={c.id}>Eliminar</button>
+                </div>
               </td>
             </tr>
           ))}
-          {cuatrimestres.length === 0 && <tr><td colspan="5" class="text-center py-12 text-slate-400">No hay cuatrimestres.</td></tr>}
+          {cuatrimestres.length === 0 && <tr><td colspan="6" class="text-center py-12 text-slate-400">No hay cuatrimestres.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -53,19 +72,25 @@ const cuatrimestres = await obtenerCuatrimestres();
 </LayoutAdmin>
 
 <script is:inline>
-  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},3000)}
+  function toast(m,e,t){var el=document.getElementById('toast');el.textContent=m;el.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');el.classList.remove('hidden');setTimeout(function(){el.classList.add('hidden')},t||3000)}
 
   document.getElementById('form-nueva').addEventListener('submit',async function(e){
     e.preventDefault(); var c=document.getElementById('input-clave').value.trim();
     if(!c)return;
-    var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',clave:c,fecha_inicio:document.getElementById('input-inicio').value||null,fecha_fin:document.getElementById('input-fin').value||null})});
+    var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',clave:c,nombre:document.getElementById('input-nombre').value.trim()||null,fecha_inicio:document.getElementById('input-inicio').value||null,fecha_fin:document.getElementById('input-fin').value||null})});
     if(res.ok){toast('Agregado',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
   });
 
-  document.querySelectorAll('.toggle-btn').forEach(function(b){b.addEventListener('click',async function(){
-    var id=parseInt(this.dataset.id); var a=this.dataset.activa==='true'; var c=this.dataset.cerrado==='true';
-    if(!c){ var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'update',id,activo:!a})});
-    if(res.ok)location.reload();else toast('Error',true);}
+  document.querySelectorAll('.btn-activar').forEach(function(b){b.addEventListener('click',async function(){
+    if(!confirm('¿Activar este cuatrimestre? Se desactivarán los demás.'))return;
+    var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'activate',id:parseInt(this.dataset.id)})});
+    if(res.ok){toast('Activado — los usuarios usarán este ciclo',false,5000);setTimeout(function(){location.reload()},800)}else{var d=await res.json();toast(d.error||'Error',true)}
+  })});
+
+  document.querySelectorAll('.btn-cerrar').forEach(function(b){b.addEventListener('click',async function(){
+    if(!confirm('¿Cerrar este cuatrimestre? Ya no podrá activarse ni usarse para nuevas evaluaciones.'))return;
+    var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'close',id:parseInt(this.dataset.id)})});
+    if(res.ok){toast('Cerrado',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
   })});
 
   document.querySelectorAll('.btn-eliminar').forEach(function(b){b.addEventListener('click',async function(){
@@ -75,12 +100,12 @@ const cuatrimestres = await obtenerCuatrimestres();
   })});
 
   document.querySelectorAll('.btn-editar').forEach(function(b){b.addEventListener('click',function(){
-    var row=this.closest('tr');row.querySelectorAll('.texto-inicio,.texto-fin').forEach(function(e){e.classList.add('hidden')});row.querySelectorAll('.edit-inicio,.edit-fin').forEach(function(e){e.classList.remove('hidden')});this.classList.add('hidden');row.querySelector('.btn-guardar').classList.remove('hidden');
+    var row=this.closest('tr');row.querySelectorAll('.texto-nombre,.texto-inicio,.texto-fin').forEach(function(e){e.classList.add('hidden')});row.querySelectorAll('.edit-nombre,.edit-inicio,.edit-fin').forEach(function(e){e.classList.remove('hidden')});this.classList.add('hidden');row.querySelector('.btn-guardar').classList.remove('hidden');
   })});
 
   document.querySelectorAll('.btn-guardar').forEach(function(b){b.addEventListener('click',async function(){
     var row=this.closest('tr');
-    var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'update',id:parseInt(this.dataset.id),fecha_inicio:row.querySelector('.edit-inicio').value||null,fecha_fin:row.querySelector('.edit-fin').value||null})});
+    var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'update',id:parseInt(this.dataset.id),nombre:row.querySelector('.edit-nombre').value||null,fecha_inicio:row.querySelector('.edit-inicio').value||null,fecha_fin:row.querySelector('.edit-fin').value||null})});
     if(res.ok){toast('Guardado',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
   })});
 </script>

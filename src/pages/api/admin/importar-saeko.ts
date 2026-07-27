@@ -1,12 +1,47 @@
 import type { APIRoute } from 'astro';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { db } from '../../../lib/db';
+
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  const len = line.length;
+
+  for (let i = 0; i < len; i++) {
+    const ch = line[i];
+    if (ch === '\r') continue;
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < len && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const t = cookies.get('sb-access-token')?.value;
   const r = cookies.get('sb-refresh-token')?.value;
   if (!t || !r) return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
   try {
-    const cl = obtenerClienteSuperbase();
+    const cl = db();
     const { data: s } = await cl.auth.setSession({ access_token: t, refresh_token: r });
     if (!s.user) return new Response(JSON.stringify({ error: 'Sesión inválida' }), { status: 401 });
     const { data: u } = await cl.from('usuarios').select('rol').eq('id', s.user.id).maybeSingle();
@@ -26,13 +61,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (!file) return new Response(JSON.stringify({ error: 'Archivo requerido' }), { status: 400 });
 
     const text = await file.text();
-    const lines = text.split('\n').filter(l => l.trim());
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return new Response(JSON.stringify({ error: 'CSV vacío' }), { status: 400 });
 
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const headers = parseCSVLine(lines[0]);
     const rows: Record<string,string>[] = [];
     for (let i = 1; i < lines.length; i++) {
-      const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+      const vals = parseCSVLine(lines[i]);
       if (vals.length < headers.length) continue;
       const row: Record<string,string> = {};
       headers.forEach((h, j) => row[h] = vals[j] || '');
@@ -135,6 +170,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       }
     }
 
+    const seenGrupos = new Set<string>();
     for (const [key, val] of grupoToDocAsig) {
       const grupo_raw = key.split('||')[0];
       const parts = grupo_raw.split(' - ');
@@ -142,6 +178,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const turno = parts[1]?.trim() || '';
       const modalidad = 'Escolarizado';
       const clave_grupo = grupo_base.replace(/\s+/g, '_').substring(0, 50);
+      const dedupKey = clave_grupo + '||' + cuatrimestreId;
+      if (seenGrupos.has(dedupKey)) continue;
+      seenGrupos.add(dedupKey);
       const docenteId = emailToId.get(val.docente_email);
       const asignaturaId = claveToId.get(val.clave_asig);
       if (!docenteId || !asignaturaId) continue;

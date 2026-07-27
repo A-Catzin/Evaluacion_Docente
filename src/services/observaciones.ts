@@ -1,10 +1,8 @@
-import { obtenerClienteSuperbase } from '../lib/supabaseClient';
+import { db } from '../lib/db';
 import type { Observacion } from '../types/supabase';
 
-const cliente = () => obtenerClienteSuperbase();
-
 export async function enviarObservacion(data: Partial<Observacion>): Promise<Observacion> {
-  const { data: result, error } = await cliente().from('observaciones').insert(data).select().single();
+  const { data: result, error } = await db().from('observaciones').insert(data).select().single();
   if (error) {
     if (error.code === '23505') throw new Error('Ya existe una observación para este docente en este ciclo');
     throw new Error('Error al guardar observación: ' + error.message);
@@ -28,7 +26,7 @@ export function calcularPromedioObservacion(obs: Observacion): number {
 }
 
 export async function obtenerObservacionesPorDocente(docenteId: number): Promise<Observacion[]> {
-  const { data, error } = await cliente().from('observaciones').select('*').eq('docente_id', docenteId).order('fecha_observacion', { ascending: false });
+  const { data, error } = await db().from('observaciones').select('*').eq('docente_id', docenteId).order('fecha_observacion', { ascending: false });
   if (error) throw new Error('Error al obtener observaciones');
   return data as Observacion[];
 }

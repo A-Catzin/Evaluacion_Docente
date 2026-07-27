@@ -1,10 +1,8 @@
 /**
  * Servicio de Autodiagnóstico Docente
  */
-import { obtenerClienteSuperbase } from '../lib/supabaseClient';
+import { db } from '../lib/db';
 import type { Autodiagnostico } from '../types/supabase';
-
-const cliente = () => obtenerClienteSuperbase();
 
 export interface DatosAutodiagnostico {
   docente_id: number;
@@ -21,7 +19,7 @@ export interface DatosAutodiagnostico {
 
 export async function enviarAutodiagnostico(data: DatosAutodiagnostico): Promise<Autodiagnostico> {
   // 1. Actualizar perfil del docente
-  const { error: errDoc } = await cliente().from('docentes').update({
+  const { error: errDoc } = await db().from('docentes').update({
     nombre: data.nombre,
     apellido_paterno: data.apellido_paterno,
     apellido_materno: data.apellido_materno,
@@ -34,7 +32,7 @@ export async function enviarAutodiagnostico(data: DatosAutodiagnostico): Promise
   if (errDoc) throw new Error('Error al actualizar perfil del docente');
 
   // 2. Insertar autodiagnóstico
-  const { data: result, error } = await cliente().from('autodiagnosticos').insert({
+  const { data: result, error } = await db().from('autodiagnosticos').insert({
     docente_id: data.docente_id,
     cuatrimestre_id: data.cuatrimestre_id,
     r1: data.reactivos[0], r2: data.reactivos[1], r3: data.reactivos[2], r4: data.reactivos[3],
@@ -56,7 +54,7 @@ export async function enviarAutodiagnostico(data: DatosAutodiagnostico): Promise
 }
 
 export async function obtenerAutodiagnostico(docenteId: number, cuatrimestreId: number): Promise<Autodiagnostico | null> {
-  const { data } = await cliente().from('autodiagnosticos').select('*')
+  const { data } = await db().from('autodiagnosticos').select('*')
     .eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).maybeSingle();
   return data as Autodiagnostico | null;
 }

@@ -2,7 +2,7 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerCuatrimestres, obtenerCuatrimestreActivo } from '../../services/catalogos';
 import { obtenerDocentes } from '../../services/docentes';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { db } from '../../lib/db';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const cuatrimestre = await obtenerCuatrimestreActivo();
@@ -14,7 +14,7 @@ const cuatrimestreId = parseInt(idSeleccionado) || parseInt(cuatrimestreIdCookie
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 
 // Usuarios pendientes de aprobacion
 const { count: pendientes } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');

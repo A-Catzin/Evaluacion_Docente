@@ -1,0 +1,63 @@
+mutation SeedAndManageData @transaction @auth(level: USER) {
+  # Insert/Upsert Users (Self-registration)
+  user_insert(data: {
+    id_expr: "auth.uid",
+    name: "John Doe",
+    email: "john@example.com",
+    address: "123 Maple St",
+    neighborhood: { id: "550e8400-e29b-41d4-a716-446655440000" }
+  })
+
+  # Insert Post
+  post_insert(data: {
+    title: "Neighborhood News",
+    content: "Event this weekend!",
+    type: "Announcement",
+    userId_expr: "auth.uid",
+    neighborhoodId: "550e8400-e29b-41d4-a716-446655440000"
+  })
+
+  # Update Post
+  post_update(key: {id: "550e8400-e29b-41d4-a716-446655440001"}, data: {
+    title: "Updated Title"
+  })
+
+  # Delete Item
+  item_delete(key: {id: "550e8400-e29b-41d4-a716-446655440002"})
+
+  # Insert Message
+  message_insert(data: {
+    senderId_expr: "auth.uid",
+    receiverId: "550e8400-e29b-41d4-a716-446655440003",
+    content: "Hello!",
+    timestamp_expr: "request.time"
+  })
+}
+
+query GetOperations @auth(level: USER) {
+  # Get Current User
+  user(key: {id_expr: "auth.uid"}) {
+    name email address
+  }
+
+  # List Posts
+  posts(where: {neighborhoodId: {eq: "550e8400-e29b-41d4-a716-446655440000"}}) {
+    title content
+  }
+
+  # List Items
+  items(where: {ownerId: {eq_expr: "auth.uid"}}) {
+    name status description
+  }
+
+  # List Messages (Sent/Received)
+  messages(where: {_or: [{senderId: {eq_expr: "auth.uid"}}, {receiverId: {eq_expr: "auth.uid"}}]}) {
+    content timestamp
+  }
+}
+
+query PublicData @auth(level: PUBLIC, insecureReason: "Listing neighborhoods is necessary for users to find their area.") {
+  neighborhoods(limit: 50) {
+    name city zipCode
+  }
+}

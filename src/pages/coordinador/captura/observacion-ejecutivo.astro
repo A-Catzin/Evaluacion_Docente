@@ -2,7 +2,7 @@
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import { obtenerDocentes } from '../../../services/docentes';
 import { obtenerCampus } from '../../../services/catalogos';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { db } from '../../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -12,7 +12,7 @@ const cuatrimestreId = parseInt(cuatrimestreIdCookie || '') || cuatrimestreActiv
 const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
 const cuatrimestreClave = cuatrimestre?.clave || '26-2';
 
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 const todos = await obtenerDocentes();
 const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
@@ -77,7 +77,7 @@ const SECCIONES = [
     var data={docente_id:parseInt(document.getElementById('docente_id').value),asignatura_id:parseInt(document.getElementById('asignatura_id').value),grupo:document.getElementById('grupo').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value,cuatrimestre_id:cuatrimestreId};
     if(!data.docente_id||!data.asignatura_id||!data.grupo||!data.ciclo||!data.campus){toast('Completa todos los campos',true);btn.disabled=false;btn.textContent='Enviar Observación Ejecutiva';return}
     var prefs=['cco','cme','ccom','cso','cge'];var counts=[4,4,4,2,3];
-    prefs.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb&&rb.value!=='N/A')data[p+i]=parseInt(rb.value)}});
+    prefs.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb)data[p+i]=rb.value==='N/A'?0:parseInt(rb.value)}});
     prefs.forEach(function(p){var obs=document.querySelector('textarea[name="obs_'+p+'"]');if(obs&&obs.value.trim())data['obs_'+p]=obs.value.trim()});
     data.comentario_evaluador=document.getElementById('com_evaluador').value.trim()||null;
     try{var res=await fetch('/api/coordinador/observacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('Observación guardada',false);setTimeout(function(){location.href='/coordinador/dashboard'},1500)}else{var j=await res.json();toast(j.error||'Error',true);btn.disabled=false;btn.textContent='Enviar Observación Ejecutiva'}}catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación Ejecutiva'}

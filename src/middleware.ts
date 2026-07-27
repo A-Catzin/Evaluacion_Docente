@@ -1,5 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { obtenerClienteSuperbase } from './lib/supabaseClient';
+import { obtenerRolUsuario } from './lib/db';
 
 const DOMINIO_PERMITIDO = '@tecplayacar.edu.mx';
 
@@ -50,10 +51,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Autorización por rol
     for (const [prefijo, roles] of Object.entries(ROLES_POR_RUTA)) {
       if (url.pathname.startsWith(prefijo)) {
-        const { data: usuario } = await cliente
-          .from('usuarios').select('rol').eq('id', data.user.id).maybeSingle();
+        const rol = await obtenerRolUsuario(data.user.id);
 
-        if (!usuario || !roles.includes(usuario.rol)) {
+        if (!rol || !roles.includes(rol)) {
           return redirect('/?error=no-autorizado');
         }
         break;

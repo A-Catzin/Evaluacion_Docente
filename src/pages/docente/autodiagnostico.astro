@@ -2,13 +2,13 @@
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres, obtenerOfertasAcademicas, obtenerCampus, obtenerTurnos } from '../../services/catalogos';
 import { obtenerAutodiagnostico } from '../../services/autodiagnostico';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { db } from '../../lib/db';
 
 const tokenAcceso = Astro.cookies.get('sb-access-token')?.value;
 const tokenRefresco = Astro.cookies.get('sb-refresh-token')?.value;
 if (!tokenAcceso || !tokenRefresco) return Astro.redirect('/auth');
 
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 const { data: sesion } = await cliente.auth.setSession({ access_token: tokenAcceso, refresh_token: tokenRefresco });
 if (!sesion.user) return Astro.redirect('/auth');
 

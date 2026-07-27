@@ -1,9 +1,9 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { db } from '../../lib/db';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 const { data: asignaturas } = await cliente.from('asignaturas').select('*').order('nombre');
 
 let items = (asignaturas || []);

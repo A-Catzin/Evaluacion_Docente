@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { db } from '../../../lib/db';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const tokenAcceso = cookies.get('sb-access-token')?.value;
@@ -7,7 +7,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   if (!tokenAcceso || !tokenRefresco) return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
 
   try {
-    const cliente = obtenerClienteSuperbase();
+    const cliente = db();
     const { data: sesion } = await cliente.auth.setSession({ access_token: tokenAcceso, refresh_token: tokenRefresco });
     if (!sesion.user) return new Response(JSON.stringify({ error: 'Sesión inválida' }), { status: 401 });
 

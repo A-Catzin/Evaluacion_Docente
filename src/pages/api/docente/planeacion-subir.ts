@@ -1,12 +1,15 @@
 import type { APIRoute } from 'astro';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { db } from '../../../lib/db';
+import { estaHabilitadoR2, subirArchivo } from '../../../lib/storage';
+
+const BUCKET_PLANEACIONES = 'planeaciones';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const t = cookies.get('sb-access-token')?.value;
   const r = cookies.get('sb-refresh-token')?.value;
   if (!t || !r) return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
   try {
-    const cl = obtenerClienteSuperbase();
+    const cl = db();
     const { data: s } = await cl.auth.setSession({ access_token: t, refresh_token: r });
     if (!s.user) return new Response(JSON.stringify({ error: 'Sesión inválida' }), { status: 401 });
     const { data: u } = await cl.from('usuarios').select('entidad_id,rol').eq('id', s.user.id).maybeSingle();
@@ -18,20 +21,28 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (file.size > 5 * 1024 * 1024) return new Response(JSON.stringify({ error: 'Máximo 5 MB. Tu archivo pesa: ' + (file.size/1024/1024).toFixed(2) + ' MB' }), { status: 400 });
     if (file.type !== 'application/pdf') return new Response(JSON.stringify({ error: 'Solo archivos PDF. Tipo recibido: ' + file.type }), { status: 400 });
 
+    const modalidad = formData.get('modalidad') as string;
+    if (modalidad !== 'Escolarizada') return new Response(JSON.stringify({ error: 'Solo se aceptan planeaciones en modalidad Escolarizada' }), { status: 400 });
+
     const path = formData.get('path') as string;
     console.log('[Planeacion Subir] Recibido:', file.name, file.size, 'bytes, path:', path);
     const buffer = await file.arrayBuffer();
 
-    // Subir a Supabase Storage
-    const { error: uploadError } = await cl.storage.from('planeaciones').upload(path, buffer, {
-      contentType: 'application/pdf', upsert: true
-    });
-    if (uploadError) {
-      console.error('[Planeacion Subir] Error storage:', uploadError);
-      return new Response(JSON.stringify({ error: 'Error al subir archivo: ' + uploadError.message }), { status: 400 });
+    let pdfUrl: string;
+    if (estaHabilitadoR2()) {
+      const { url } = await subirArchivo(BUCKET_PLANEACIONES, path, buffer, 'application/pdf');
+      pdfUrl = url;
+    } else {
+      const { error: uploadError } = await cl.storage.from('planeaciones').upload(path, buffer, {
+        contentType: 'application/pdf', upsert: true
+      });
+      if (uploadError) {
+        console.error('[Planeacion Subir] Error storage:', uploadError);
+        return new Response(JSON.stringify({ error: 'Error al subir archivo: ' + uploadError.message }), { status: 400 });
+      }
+      const { data: urlData } = cl.storage.from('planeaciones').getPublicUrl(path);
+      pdfUrl = urlData.publicUrl;
     }
-
-    const { data: urlData } = cl.storage.from('planeaciones').getPublicUrl(path);
 
     // Guardar en BD
     const asignaturaId = parseInt(formData.get('asignatura_id') as string);
@@ -47,11 +58,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       cuatrimestre_id: cuatrimestreId,
       asignatura_id: asignaturaId,
       grupo: formData.get('grupo') as string,
-      modalidad: formData.get('modalidad') as string,
+      modalidad: modalidad,
       proyecto: formData.get('proyecto') === 'true',
       laboratorio: formData.get('laboratorio') as string,
       visitas: formData.get('visitas') as string,
-      url_pdf: urlData.publicUrl,
+      url_pdf: pdfUrl,
       nombre_archivo: path.split('/').pop() || 'planeacion.pdf',
       comentario_docente: (formData.get('comentario') as string) || null,
       campus: formData.get('campus') as string,
@@ -62,6 +73,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       if (dbError.code === '23505') return new Response(JSON.stringify({ error: 'Ya subiste una planeación para esta asignatura' }), { status: 409 });
       return new Response(JSON.stringify({ error: 'Error al guardar: ' + dbError.message }), { status: 400 });
     }
+
+    // Notificar a coordinadores del docente
+    try {
+      const { notificarCoordinadoresDocente } = await import('../../../services/notificaciones');
+      await notificarCoordinadoresDocente(u.entidad_id, cuatrimestreId, 'Nueva planeación recibida', `El docente ha subido una planeación para la asignatura.`, '/coordinador/planeaciones');
+    } catch {}
 
     return new Response(JSON.stringify({ success: true }), { status: 201 });
   } catch (err) {

@@ -1,13 +1,13 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { db } from '../../lib/db';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
 if (!token || !refresh) return Astro.redirect('/auth');
 
-const cl = obtenerClienteSuperbase();
+const cl = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || 0;
@@ -56,7 +56,9 @@ const { data: preguntasAD } = await cl.from('instrumento_preguntas').select('tex
 const diagPreguntas = (preguntasAD||[]).map(p=>p.texto);
 const { data: preguntasCoord } = await cl.from('instrumento_preguntas').select('texto,seccion').eq('instrumento','coordinacion').eq('activa',true).order('orden');
 const { data: preguntasObs } = await cl.from('instrumento_preguntas').select('texto,seccion').eq('instrumento','observacion').eq('activa',true).order('orden');
-const obsSecciones = [
+type Section = { icon: string; label: string; keys: string[]; items: string[] };
+
+const obsSecciones: Section[] = [
   {icon:'🧠',label:'A. Cognitivas',keys:['cco1','cco2','cco3','cco4','cco5','cco6','cco7'],items:[]},
   {icon:'🔄',label:'B. Metacognitivas',keys:['cme1','cme2','cme3','cme4','cme5','cme6','cme7','cme8','cme9'],items:[]},
   {icon:'💬',label:'C. Comunicativas',keys:['ccom1','ccom2','ccom3','ccom4'],items:[]},
@@ -66,7 +68,7 @@ const obsSecciones = [
   {icon:'💻',label:'G. Tecno-Pedagógicas',keys:['ctepe1','ctepe2','ctepe3','ctepe4','ctepe5','ctepe6','ctepe7'],items:[]},
   {icon:'📏',label:'H. Normativa',keys:['cno1','cno2','cno3','cno4','cno5'],items:[]}
 ];
-const secObsMap = {};
+const secObsMap: Record<string, string[]> = {};
 (preguntasObs||[]).forEach(p=>{const s=p.seccion||'';if(!secObsMap[s])secObsMap[s]=[];secObsMap[s].push(p.texto);});
 // Mapear letras de seccion DB (A,B,C...) a prefijos de keys (cco,cme,ccom...)
 const obsLetraPrefijo = {A:'cco',B:'cme',C:'ccom',D:'cso',E:'cge',F:'caf',G:'ctepe',H:'cno'};
@@ -79,18 +81,19 @@ obsSecciones.forEach(s=>{
 // Cargar categorias de planeacion desde BD
 const { data: planCats } = await cl.from('instrumento_preguntas').select('*').eq('instrumento','planeacion').eq('tipo_respuesta','categoria').eq('activa',true).order('orden');
 const planeacionCats = (planCats||[]).map(c => ({ id: c.seccion, label: `${c.orden}. ${c.texto}` }));
-const coordSecciones = [
+const coordSecciones: Section[] = [
   {icon:'📋',label:'A. Cumplimiento Académico',keys:['a1','a2','a3'],items:[]},
   {icon:'📊',label:'B. Gestión y Organización',keys:['b1','b2','b3'],items:[]},
   {icon:'💬',label:'C. Desempeño Profesional y Comunicación',keys:['c1','c2','c3'],items:[]},
   {icon:'💡',label:'D. Innovación y Mejora Continua',keys:['d1','d2','d3'],items:[]},
   {icon:'🏛️',label:'E. Compromiso Institucional y Ética',keys:['e1','e2','e3'],items:[]}
 ];
-const secCoordMap = {};
+const secCoordMap: Record<string, string[]> = {};
 (preguntasCoord||[]).forEach(p=>{const s=p.seccion||'';if(!secCoordMap[s])secCoordMap[s]=[];secCoordMap[s].push(p.texto);});
 coordSecciones.forEach(s=>{s.items = secCoordMap[s.keys[0].replace(/[0-9]/g,'').toUpperCase()] || s.items;});
 const eeCategorias = ['Asistencia','Organización','Actitud','Enseñanza','Dominio','Evaluación','Comunicación','Gestión','Tecnología','Satisfacción'];
 const eeCatKeys = ['prom_asistencia','prom_organizacion','prom_actitud','prom_ensenanza','prom_dominio','prom_evaluacion','prom_comunicacion','prom_gestion','prom_tecnologia','prom_satisfaccion'];
+const planeacionScoreMap: Record<string, string> = { '2': 'Satisfactorio', '1': 'Suficiente', '0': 'Insuficiente', na: 'No aplica' };
 
 if (docenteIds.length > 0) {
   const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteIds[0]).maybeSingle();
@@ -147,6 +150,10 @@ if (docenteIds.length > 0) {
 
 function fmt(n:number|null|undefined):string{return n!=null ? Math.round(n).toString() : '—';}
 function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald-600':n>=60?'text-amber-600':'text-red-600';}
+function pctRaw(pct:number|null|undefined, raw:number|null|undefined, total:number):string {
+  if (pct == null || raw == null) return '—';
+  return `${Math.round(pct)}% (${Math.round(raw)}/${total})`;
+}
 ---
 
 <LayoutDocente titulo="Mi Evaluación — Docente">
@@ -221,7 +228,7 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
               <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
                 <div class="grid grid-cols-2 gap-4">
                   <div class="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-xl p-4 text-center"><p class="text-xs text-purple-500 uppercase font-medium">Nivel</p><p class="text-2xl font-bold text-purple-700 mt-1">{diagInfo.nivel_desempeno || '—'}</p></div>
-                  <div class="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl p-4 text-center"><p class="text-xs text-slate-500 uppercase font-medium">Puntaje</p><p class="text-2xl font-bold text-slate-700 mt-1">{Math.round((diagInfo.puntaje_total||0)/120*100)}%</p></div>
+                  <div class="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl p-4 text-center"><p class="text-xs text-slate-500 uppercase font-medium">Puntaje</p><p class="text-2xl font-bold text-slate-700 mt-1">{pctRaw((diagInfo.puntaje_total||0)/120*100, (diagInfo.puntaje_total||0)/5, 24)}</p></div>
                 </div>
                 {diagInfo.comentarios && <div class="bg-slate-50 rounded-xl p-4 border border-slate-100"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Reflexión Personal</p><p class="text-sm text-slate-600 italic">"{diagInfo.comentarios}"</p></div>}
                 <div class="bg-slate-50 rounded-xl p-4 space-y-2">
@@ -240,7 +247,7 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
               <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
                 <div class="grid grid-cols-2 gap-4">
                   <div class="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 text-center"><p class="text-xs text-blue-500 uppercase font-medium">Categoría</p><p class="text-xl font-bold text-blue-700 mt-1">{coordInfo.categoria || '—'}</p></div>
-                  <div class="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl p-4 text-center"><p class="text-xs text-slate-500 uppercase font-medium">Puntuación</p><p class="text-xl font-bold text-slate-700 mt-1">{coordInfo.puntos_obtenidos || '—'}<span class="text-sm font-normal text-slate-400">/75</span></p></div>
+                  <div class="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl p-4 text-center"><p class="text-xs text-slate-500 uppercase font-medium">Puntuación</p><p class="text-xl font-bold text-slate-700 mt-1">{pctRaw((coordInfo.puntos_obtenidos||0)/75*100, (coordInfo.puntos_obtenidos||0)/5, 15)}</p></div>
                 </div>
                 {coordInfo.comentarios && <div class="bg-slate-50 rounded-xl p-4 border border-slate-100"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Observaciones</p><p class="text-sm text-slate-600 italic">"{coordInfo.comentarios}"</p></div>}
                 {coordSecciones.map(sec => {
@@ -252,10 +259,19 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
             </details>
           )}
 
-          {obsInfo && (
+          {obsInfo && (() => {
+            let obsTotal = 0, obsScored = 0;
+            for (const sec of obsSecciones) {
+              for (const k of sec.keys) {
+                const v = obsInfo[k];
+                if (v != null && v !== 0) { obsTotal += v; obsScored++; }
+              }
+            }
+            const obsPct = obsScored > 0 ? Math.round(obsTotal / (obsScored * 5) * 100) : null;
+            return (
             <details class="bg-white rounded-2xl shadow-tarjeta group overflow-hidden" open>
               <summary class="font-semibold text-tup cursor-pointer list-none flex items-center justify-between px-5 py-4 hover:bg-slate-50">
-                <div class="flex items-center gap-3"><span class="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center text-lg">👁️</span><div><p class="text-sm">Observación de Clase</p></div></div>
+                <div class="flex items-center gap-3"><span class="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center text-lg">👁️</span><div><p class="text-sm">Observación de Clase</p><p class="text-xs text-slate-400 font-normal">{obsPct != null ? `${obsPct}% (${Math.round(obsTotal/5)}/${obsScored})` : obsScored > 0 ? `${obsScored} ítems` : 'Sin evaluar'}</p></div></div>
                 <span class="text-xs text-slate-400 group-open:hidden">▼</span><span class="text-xs text-slate-400 hidden group-open:inline">▲</span>
               </summary>
               <div class="px-5 pb-5 space-y-3 border-t border-slate-100 pt-4">
@@ -264,11 +280,12 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
                 {obsSecciones.map(sec => {
                   const pares = sec.keys.map((k,i) => ({ texto: sec.items[i], score: obsInfo[k] })).filter(p => p.score != null);
                   if (pares.length === 0) return <></>;
-                  return <div class="bg-slate-50 rounded-xl p-4"><p class="text-xs font-semibold text-slate-500 uppercase mb-2">{sec.icon} {sec.label}</p><div class="space-y-2">{pares.map(p => <div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600 flex-1">{p.texto}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(p.score>=4?"bg-emerald-100 text-emerald-700":p.score>=3?"bg-amber-100 text-amber-700":"bg-red-50 text-red-600")}>{p.score}</span></div>)}</div></div>;
+                  return <div class="bg-slate-50 rounded-xl p-4"><p class="text-xs font-semibold text-slate-500 uppercase mb-2">{sec.icon} {sec.label}</p><div class="space-y-2">{pares.map(p => <div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600 flex-1">{p.texto}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(p.score>=4?"bg-emerald-100 text-emerald-700":p.score>=3?"bg-amber-100 text-amber-700":p.score===0?"bg-slate-100 text-slate-500":"bg-red-50 text-red-600")}>{p.score===0?'N/A':p.score}</span></div>)}</div></div>;
                 })}
               </div>
             </details>
-          )}
+            );
+          })()}
 
           {planFeedback.length > 0 && (
             <details class="bg-white rounded-2xl shadow-tarjeta group overflow-hidden">
@@ -280,8 +297,8 @@ function colorN(n:number|null|undefined):string{return !n?'':n>=80?'text-emerald
                 {planFeedback.map((p,i)=>(
                   <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
                     <div class="flex items-center justify-between mb-3"><p class="text-sm font-medium text-slate-700">Evaluación #{i+1}</p><span class={"px-2.5 py-1 rounded-lg text-xs font-medium "+(p.estado==='Aprobado'?'bg-emerald-100 text-emerald-700':p.estado==='Corrección'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-700')}>{p.estado||'Pendiente'}</span></div>
-                    <div class="grid grid-cols-1 gap-3 mb-3"><div class="bg-white rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Puntaje</p><p class="text-lg font-bold text-slate-700">{p.puntaje_promedio ? Math.round(p.puntaje_promedio)+'%' : '—'}</p></div></div>
-                    {p.evaluacion_detalle && <div class="space-y-2 mt-2">{planeacionCats.map(cat => { const det = (p.evaluacion_detalle||{})[cat.id]; if (!det) return <></>; const scoreMap = {2:'Satisfactorio',1:'Suficiente',0:'Insuficiente',na:'No aplica'}; return <div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600 flex-1">{cat.label}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(det.score==='2'||det.score===2?'bg-emerald-100 text-emerald-700':det.score==='1'||det.score===1?'bg-amber-100 text-amber-700':det.score==='na'?'bg-slate-100 text-slate-500':'bg-red-50 text-red-600')}>{scoreMap[String(det.score)]||det.score}</span></div>; })}</div>}
+                    <div class="grid grid-cols-1 gap-3 mb-3"><div class="bg-white rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Puntaje</p><p class="text-lg font-bold text-slate-700">{p.puntaje_promedio ? `${Math.round(p.puntaje_promedio)}% (${Math.round((p.puntaje_promedio||0)/100*planeacionCats.length)}/${planeacionCats.length})` : '—'}</p></div></div>
+                    {p.evaluacion_detalle && <div class="space-y-2 mt-2">{planeacionCats.map(cat => { const det = (p.evaluacion_detalle||{})[cat.id]; if (!det) return <></>; return <div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600 flex-1">{cat.label}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(det.score==='2'||det.score===2?'bg-emerald-100 text-emerald-700':det.score==='1'||det.score===1?'bg-amber-100 text-amber-700':det.score==='na'?'bg-slate-100 text-slate-500':'bg-red-50 text-red-600')}>{planeacionScoreMap[String(det.score)]||det.score}</span></div>; })}</div>}
                     {p.comentario_retroalimentacion && <div class="bg-white rounded-lg p-3 border border-slate-200 mt-2"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Retroalimentación</p><p class="text-sm text-slate-600 italic">"{p.comentario_retroalimentacion}"</p></div>}
                     {p.observaciones_generales && <div class="bg-white rounded-lg p-3 border border-slate-200 mt-2"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Observaciones</p><p class="text-sm text-slate-600">{p.observaciones_generales}</p></div>}
                   </div>

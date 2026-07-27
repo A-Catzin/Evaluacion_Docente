@@ -1,10 +1,8 @@
 /**
  * Servicio de Usuarios — Gestión de roles y perfiles
  */
-import { obtenerClienteSuperbase } from '../lib/supabaseClient';
+import { db } from '../lib/db';
 import type { Usuario, RolUsuario } from '../types/supabase';
-
-const cliente = () => obtenerClienteSuperbase();
 
 export interface UsuarioConNombre extends Usuario {
   nombre_completo: string;
@@ -12,7 +10,7 @@ export interface UsuarioConNombre extends Usuario {
 }
 
 export async function obtenerUsuarios(rol?: RolUsuario): Promise<UsuarioConNombre[]> {
-  let query = cliente().from('usuarios').select('*');
+  let query = db().from('usuarios').select('*');
 
   if (rol) query = query.eq('rol', rol);
 
@@ -29,7 +27,7 @@ export async function obtenerUsuarios(rol?: RolUsuario): Promise<UsuarioConNombr
 
     if (u.entidad_id) {
       if (u.rol === 'docente') {
-        const { data: doc } = await cliente().from('docentes').select('nombre,apellidos,num_empleado').eq('id', u.entidad_id).maybeSingle();
+        const { data: doc } = await db().from('docentes').select('nombre,apellidos,num_empleado').eq('id', u.entidad_id).maybeSingle();
         if (doc) {
           nombre = `${doc.nombre} ${doc.apellidos}`;
           matricula = doc.num_empleado || '—';
@@ -44,7 +42,7 @@ export async function obtenerUsuarios(rol?: RolUsuario): Promise<UsuarioConNombr
 }
 
 export async function cambiarRolUsuario(userId: string, nuevoRol: RolUsuario): Promise<void> {
-  const { error } = await cliente().from('usuarios').update({ rol: nuevoRol }).eq('id', userId);
+  const { error } = await db().from('usuarios').update({ rol: nuevoRol }).eq('id', userId);
   if (error) throw new Error('Error al cambiar rol');
 }
 

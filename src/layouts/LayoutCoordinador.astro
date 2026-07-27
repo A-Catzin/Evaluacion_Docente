@@ -1,5 +1,6 @@
 ---
 import BaseLayout from './BaseLayout.astro';
+import NotificationBell from '../components/NotificationBell.astro';
 export interface Props { titulo?: string; }
 const { titulo = 'Coordinador — SED-360' } = Astro.props;
 const cuatrimestreSel = Astro.cookies.get('cuatrimestre_sel')?.value;
@@ -21,6 +22,8 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
           <a href={`/coordinador/reportes${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Reportes</a>
         </nav>
       </div>
+      <div class="flex items-center gap-3">
+        <NotificationBell />
       <a href="/api/auth/signout" class="text-xs text-slate-400 hover:text-red-500">Salir</a>
     </header>
     <!-- Menú móvil -->

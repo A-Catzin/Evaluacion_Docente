@@ -1,11 +1,13 @@
 ---
-import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { obtenerDocentes } from '../../services/docentes';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
-import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import { obtenerDocentes } from '../../../services/docentes';
+import { db } from '../../../lib/db';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
-const cliente = obtenerClienteSuperbase();
+const page = parseInt(Astro.url.searchParams.get('page')||'1');
+const limit = 20;
+const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
@@ -109,12 +111,22 @@ const filas = docentesFiltrados.map(d => {
   let final360 = 0; for (let i=0;i<5;i++) if (disponibles[i]) final360 += disponibles[i]*pesos[i];
   return { ...d, promObs, promCoord, promPlan, promAuto, promEst, final360: final360||null, cat360: cat360(Math.round(final360)) };
 });
+
+// Paginación
+const totalFilas = filas.length;
+const totalPages = Math.ceil(totalFilas / limit);
+const filasPag = filas.slice((page - 1) * limit, page * limit);
+function buildPageUrl(p:number) {
+  const params = new URLSearchParams(Astro.url.searchParams.toString());
+  params.set('page', String(p));
+  return `?${params.toString()}`;
+}
 ---
 
 <LayoutAdmin titulo="Docentes — Admin">
   <div class="animate-flotar-entrada">
     <div class="flex items-center justify-between mb-6">
-      <div><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm text-slate-400">{filas.length} docentes · {cuatrimestreSel?.clave || ''}</span></div>
+      <div><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm text-slate-400">{totalFilas} docentes · {cuatrimestreSel?.clave || ''}</span></div>
       <form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
           {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
@@ -129,14 +141,15 @@ const filas = docentesFiltrados.map(d => {
       </form>
     </div>
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden overflow-x-auto">
-      {filas.length === 0 ? (<div class="p-12 text-center ">No se encontraron docentes.</div>) : (
+      {filasPag.length === 0 ? (<div class="p-12 text-center ">No se encontraron docentes.</div>) : (
         <table class="w-full text-[11px] whitespace-nowrap">
           <thead><tr class="bg-slate-50 border-b">
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Nombre</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Email</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Campus</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Modalidad</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Materias</th>
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Cat. 360</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Final</th>
             <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Est.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Obs.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Coord.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Plan.</th><th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Auto.</th>
+            <th class="text-center px-2 py-2 text-xs uppercase text-slate-600">Histórico</th>
           </tr></thead>
-          <tbody class="divide-y">{filas.map(f => {
+          <tbody class="divide-y">{filasPag.map(f => {
             const grupos = grupoMap.get(f.id) || [];
             const tieneMaterias = grupos.length > 0;
             return (
@@ -159,12 +172,20 @@ const filas = docentesFiltrados.map(d => {
                 <td class="px-2 py-2 text-center {colorScore(f.promCoord)}">{fmt(f.promCoord)}</td>
                 <td class="px-2 py-2 text-center {colorScore(f.promPlan)}">{fmt(f.promPlan)}</td>
                 <td class="px-2 py-2 text-center {colorScore(f.promAuto)}">{fmt(f.promAuto)}</td>
+                <td class="px-2 py-2 text-center"><a href={`/admin/docentes/${f.id}`} class="px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20 whitespace-nowrap">📋 Histórico</a></td>
               </tr>
             );
           })}</tbody>
         </table>
       )}
-    </div>
+        {totalPages > 1 && (
+      <div class="flex items-center justify-center gap-3 mt-4 pb-4">
+        {page > 1 && <a href={buildPageUrl(page-1)} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">← Anterior</a>}
+        <span class="text-sm text-slate-400">Página {page} de {totalPages}</span>
+        {page < totalPages && <a href={buildPageUrl(page+1)} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Siguiente →</a>}
+      </div>
+    )}
+     </div>
   </div>
 
   <div id="modal-materias" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm" onclick="if(event.target===this)this.classList.add('hidden')">

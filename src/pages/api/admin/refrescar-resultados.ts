@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { db } from '../../../lib/db';
 
 /**
  * API: GET /api/admin/refrescar-resultados
@@ -22,7 +22,7 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
       return redirect('/auth');
     }
 
-    const cliente = obtenerClienteSuperbase();
+    const cliente = db();
     const { data: datosSesion, error: errorSesion } =
       await cliente.auth.setSession({
         access_token: tokenAcceso,

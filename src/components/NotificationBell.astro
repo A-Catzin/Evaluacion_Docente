@@ -1,0 +1,76 @@
+<div id="notification-bell" class="relative">
+  <button id="bell-btn" class="relative p-2 rounded-lg hover:bg-slate-100 transition-colors" onclick="toggleBell()" aria-label="Notificaciones">
+    <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+    </svg>
+    <span id="unread-badge" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center"></span>
+  </button>
+  <div id="bell-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-modal border border-slate-200 z-50 max-h-96 overflow-y-auto">
+    <div class="p-3 border-b flex items-center justify-between">
+      <span class="font-semibold text-sm text-slate-700">Notificaciones</span>
+      <button id="mark-all-read" class="text-xs text-tup hover:underline">Marcar todas leídas</button>
+    </div>
+    <div id="bell-list" class="divide-y">
+      <div class="p-4 text-center text-sm text-slate-400">Cargando...</div>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  var bellOpen = false;
+  function toggleBell() {
+    bellOpen = !bellOpen;
+    var dd = document.getElementById('bell-dropdown');
+    if (bellOpen) { dd.classList.remove('hidden'); cargarNotificaciones(); }
+    else { dd.classList.add('hidden'); }
+  }
+  document.addEventListener('click', function(e) {
+    var bell = document.getElementById('notification-bell');
+    if (bell && !bell.contains(e.target) && bellOpen) {
+      bellOpen = false;
+      document.getElementById('bell-dropdown').classList.add('hidden');
+    }
+  });
+  function cargarNotificaciones() {
+    fetch('/api/notificaciones').then(function(r){return r.json()}).then(function(d){
+      var list = document.getElementById('bell-list');
+      var badge = document.getElementById('unread-badge');
+      if (d.noLeidas > 0) {
+        badge.textContent = d.noLeidas > 99 ? '99+' : d.noLeidas;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+      if (!d.notificaciones || d.notificaciones.length === 0) {
+        list.innerHTML = '<div class="p-4 text-center text-sm text-slate-400">Sin notificaciones</div>';
+        return;
+      }
+      list.innerHTML = d.notificaciones.map(function(n){
+        var ts = new Date(n.created_at).toLocaleDateString('es-MX', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        var cls = n.leida ? 'opacity-60' : 'bg-blue-50';
+        return '<div class="p-3 hover:bg-slate-50 cursor-pointer ' + cls + '" data-id="' + n.id + '" data-url="' + (n.url||'') + '" onclick="leerNotificacion(this)"><p class="text-xs font-medium text-slate-800">' + n.titulo + '</p><p class="text-[11px] text-slate-500 mt-0.5 line-clamp-2">' + n.mensaje + '</p><p class="text-[10px] text-slate-400 mt-1">' + ts + '</p></div>';
+      }).join('');
+    }).catch(function(){ document.getElementById('bell-list').innerHTML = '<div class="p-4 text-center text-sm text-red-400">Error al cargar</div>'; });
+  }
+  function leerNotificacion(el) {
+    var id = el.dataset.id;
+    var url = el.dataset.url;
+    fetch('/api/notificaciones/' + id, {method:'POST'}).then(function(){ el.classList.add('opacity-60'); el.classList.remove('bg-blue-50'); cargarNotificaciones(); });
+    if (url) window.location.href = url;
+  }
+  document.getElementById('mark-all-read').addEventListener('click', function(e){
+    e.stopPropagation();
+    fetch('/api/notificaciones', {method:'POST'}).then(function(){
+      document.getElementById('unread-badge').classList.add('hidden');
+      cargarNotificaciones();
+    });
+  });
+  // Cargar badge al inicio
+  fetch('/api/notificaciones').then(function(r){return r.json()}).then(function(d){
+    var badge = document.getElementById('unread-badge');
+    if (d.noLeidas > 0) {
+      badge.textContent = d.noLeidas > 99 ? '99+' : d.noLeidas;
+      badge.classList.remove('hidden');
+    }
+  }).catch(function(){});
+</script>

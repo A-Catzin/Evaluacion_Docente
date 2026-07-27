@@ -1,9 +1,9 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo } from '../../services/catalogos';
 
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 const cuatrimestre = await obtenerCuatrimestreActivo();
 
 const { count: totalDocentes } = await cliente.from('docentes').select('*', { count: 'exact', head: true });

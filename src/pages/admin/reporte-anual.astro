@@ -1,104 +1,267 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../services/docentes';
-import { obtenerClienteSuperbase } from '../../lib/supabaseClient';
+import { db } from '../../lib/db';
 import { obtenerCuatrimestres } from '../../services/catalogos';
+import { fetchCuatrimestreScores, fetchBatchScoresPorDocente, calcFinalScore } from '../../services/scoring';
 
-const cliente = obtenerClienteSuperbase();
+const cliente = db();
 const todos = await obtenerDocentes();
-const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestres = (await obtenerCuatrimestres()).sort((a,b)=>a.id-b.id);
 
-// Docentes con evaluaciones
 const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 
+const modo = (Astro.url.searchParams.get('modo') || 'individual') as 'individual' | 'general';
+
+// ─── Individual ───
 const docenteSel = parseInt(Astro.url.searchParams.get('docente_id')||'') || 0;
 
 let historial: any[] = [];
-if (docenteSel) {
+let totalCycles = 0, sumFinals = 0;
+if (modo === 'individual' && docenteSel) {
   for (const c of cuatrimestres) {
-    const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] = await Promise.all([
-      cliente.from('encuesta_estudiantil').select('score_normalizado').eq('docente_id', docenteSel).eq('cuatrimestre_id', c.id),
-      cliente.from('evaluacion_coordinacion').select('score_normalizado').eq('docente_id', docenteSel).eq('cuatrimestre_id', c.id).order('id',{ascending:false}).limit(1),
-      cliente.from('planeaciones').select('puntaje_promedio').eq('docente_id', docenteSel).eq('cuatrimestre_id', c.id).eq('estado','Aprobado'),
-      cliente.from('observaciones').select('cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').eq('docente_id', docenteSel).eq('cuatrimestre_id', c.id),
-      cliente.from('autodiagnosticos').select('puntaje_total').eq('docente_id', docenteSel).eq('cuatrimestre_id', c.id).order('id',{ascending:false}).limit(1),
-    ]);
-    const promEst = eeData?.length ? Math.round(eeData.reduce((s,e)=>s+e.score_normalizado,0)/eeData.length) : 0;
-    const promCoord = coordData?.[0]?.score_normalizado ? Math.round(coordData[0].score_normalizado) : 0;
-    const promPlan = planData?.length ? Math.round(planData.reduce((s,p)=>s+p.puntaje_promedio,0)/planData.length) : 0;
-    let promObs = 0; for(const o of(obsData||[])){const r=[o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);if(r.length)promObs=Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100)}
-    const promAuto = diagData?.[0]?.puntaje_total ? Math.round((diagData[0].puntaje_total/120)*100) : 0;
-    const disp = [promEst,promCoord,promPlan,promObs,promAuto]; const pesos = [0.35,0.20,0.15,0.25,0.05];
-    let fin = 0; for(let i=0;i<5;i++)if(disp[i])fin+=disp[i]*pesos[i];
-    const inst = disp.filter(v=>v>0).length;
-    const cat = inst===5?(fin>=90?'Sobresaliente':fin>=80?'Distinguido':fin>=70?'Bueno':fin>=60?'Aprobado':fin>=50?'A mejorar':'Insuficiente'):fin>0?'Parcial':'No iniciado';
-    if (inst > 0) historial.push({ clave: c.clave, ee: promEst, coord: promCoord, plan: promPlan, obs: promObs, auto: promAuto, final: Math.round(fin), cat, inst });
+    const scores = await fetchCuatrimestreScores(cliente, docenteSel, c.id);
+    const { final, instrumentCount, category } = calcFinalScore(scores);
+    if (instrumentCount > 0) {
+      historial.push({ clave: c.clave, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto, final, cat: category, inst: instrumentCount });
+      totalCycles++;
+      sumFinals += final;
+    }
   }
 }
+const annualAvg = totalCycles > 0 ? Math.round(sumFinals / totalCycles) : null;
 
 const docente = docentes.find(d=>d.id===docenteSel);
+
+// ─── General ───
+const cicloInicioParam = parseInt(Astro.url.searchParams.get('ciclo_inicio') || '') || cuatrimestres[0]?.id || 0;
+const cicloFinParam = parseInt(Astro.url.searchParams.get('ciclo_fin') || '') || cuatrimestres[cuatrimestres.length - 1]?.id || 0;
+const idxInicio = cuatrimestres.findIndex(c => c.id === cicloInicioParam);
+const idxFin = cuatrimestres.findIndex(c => c.id === cicloFinParam);
+const generalRangeOk = idxInicio >= 0 && idxFin >= 0 && idxInicio <= idxFin && (idxFin - idxInicio) <= 2;
+const cicloIdsGeneral = generalRangeOk ? cuatrimestres.slice(idxInicio, idxFin + 1).map(c => c.id) : [];
+const cicloIdsGeneralSet = new Set(cicloIdsGeneral);
+let generalData: any = null;
+let generalError = '';
+if (modo === 'general') {
+  if (!generalRangeOk) {
+    generalError = 'Selecciona un ciclo inicial y final válidos. El rango máximo es de 3 ciclos (diferencia de 2).';
+  } else {
+    const { data: allDocs } = await cliente.from('docentes').select('id,nombre,apellidos,email,campus').eq('activo', true).order('apellidos');
+
+    if (allDocs?.length) {
+      const allDocIds = allDocs.map(d => d.id);
+
+      const scoresPorCiclo = new Map<number, Map<number, any>>();
+      for (const cid of cicloIdsGeneral) {
+        scoresPorCiclo.set(cid, await fetchBatchScoresPorDocente(cliente, allDocIds, cid));
+      }
+
+      const filas = allDocs.flatMap(d => {
+        const puntajes: Record<number, number | null> = {};
+        let sumFinal = 0;
+        let countFinal = 0;
+        let tieneEnRango = false;
+
+        for (const c of cuatrimestres) {
+          if (!cicloIdsGeneralSet.has(c.id)) {
+            puntajes[c.id] = null;
+            continue;
+          }
+          const sc = scoresPorCiclo.get(c.id)?.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
+          const { final, instrumentCount } = calcFinalScore(sc);
+          const valor = instrumentCount > 0 ? final : null;
+          puntajes[c.id] = valor;
+          if (valor != null) {
+            tieneEnRango = true;
+            sumFinal += valor;
+            countFinal++;
+          }
+        }
+
+        if (!tieneEnRango) return [];
+
+        return [{
+          ...d,
+          puntajes,
+          promedioAnual: countFinal > 0 ? Math.round(sumFinal / countFinal) : null,
+        }];
+      });
+
+      generalData = {
+        cicloInicio: cicloInicioParam,
+        cicloFin: cicloFinParam,
+        cuatrisSeleccionados: cuatrimestres,
+        docentes: filas,
+      };
+    }
+  }
+}
 
 function fmt(n:any){return n!=null?Math.round(n).toString():'—'}
 function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60?'text-amber-600':'text-red-600'}
 ---
 
 <LayoutAdmin titulo="Reporte Anual — Admin">
-  <div class="animate-flotar-entrada max-w-5xl mx-auto">
-    <h1 class="text-3xl font-bold text-tup mb-6">📊 Reporte de Desempeño Anual</h1>
+  <div class="animate-flotar-entrada max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+      <div>
+        <h1 class="text-3xl font-bold text-tup">Reporte de Desempeño Anual</h1>
+        <p class="text-slate-500 text-sm mt-1">
+          {modo === 'individual' ? 'Evaluación detallada por docente' : 'Comparativa general por ciclo'}
+        </p>
+      </div>
+    </div>
 
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
-      <form method="GET" class="flex gap-3 items-center">
-        <label class="text-sm font-medium text-slate-700">Docente:</label>
-        <select name="docente_id" class="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
-          <option value="">Seleccionar docente...</option>
-          {docentes.map(d => (<option value={d.id} selected={d.id===docenteSel}>{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()} — {d.email}</option>))}
-        </select>
-        {docenteSel > 0 && <a href={`/api/admin/historial-docente?docente_id=${docenteSel}&format=csv`} class="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-medium">📥 Descargar CSV</a>}
+      <form method="GET" class="flex flex-wrap gap-4 items-center">
+        <div class="flex items-center gap-2">
+          <label class="text-sm font-medium text-slate-700">Modo:</label>
+            <select name="modo" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+              <option value="individual" selected={modo === 'individual'}>Individual</option>
+              <option value="general" selected={modo === 'general'}>General</option>
+            </select>
+          </div>
+
+        {modo === 'individual' ? (
+          <div class="flex gap-3 items-center flex-1">
+            <label class="text-sm font-medium text-slate-700 ml-2">Docente:</label>
+            <select name="docente_id" class="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
+              <option value="">Seleccionar docente...</option>
+              {docentes.map(d => (<option value={d.id} selected={d.id===docenteSel}>{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()} — {d.email}</option>))}
+            </select>
+            {docenteSel > 0 && <a href={`/api/admin/historial-docente?docente_id=${docenteSel}&format=csv`} class="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-medium whitespace-nowrap">Descargar CSV</a>}
+          </div>
+        ) : (
+          <div class="flex flex-wrap items-end gap-3 ml-auto">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Ciclo inicial</label>
+              <select name="ciclo_inicio" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+                {cuatrimestres.map((c, idx) => {
+                  const minIdx = Math.max(0, idxFin - 2);
+                  const maxIdx = idxFin >= 0 ? idxFin : cuatrimestres.length - 1;
+                  const disabled = idx < minIdx || idx > maxIdx;
+                  return <option value={c.id} selected={c.id === cicloInicioParam} disabled={disabled}>{c.clave}</option>;
+                })}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Ciclo final</label>
+              <select name="ciclo_fin" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+                {cuatrimestres.map((c, idx) => {
+                  const minIdx = idxInicio >= 0 ? idxInicio : 0;
+                  const maxIdx = Math.min(cuatrimestres.length - 1, (idxInicio >= 0 ? idxInicio : 0) + 2);
+                  const disabled = idx < minIdx || idx > maxIdx;
+                  return <option value={c.id} selected={c.id === cicloFinParam} disabled={disabled}>{c.clave}</option>;
+                })}
+              </select>
+            </div>
+            <button type="submit" class="px-4 py-2 rounded-xl bg-tup text-white text-xs font-medium">Aplicar</button>
+            {generalData && generalData.docentes.length > 0 && (
+              <a href={`/api/admin/reporte-general?ciclo_inicio=${cicloInicioParam}&ciclo_fin=${cicloFinParam}&format=csv`} class="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-medium whitespace-nowrap">Descargar CSV</a>
+            )}
+          </div>
+        )}
       </form>
     </div>
 
-    {docenteSel === 0 ? (
-      <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">Selecciona un docente para ver su reporte anual.</div>
-    ) : historial.length === 0 ? (
-      <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No hay datos de evaluación para este docente.</div>
-    ) : (
-      <>
-        <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
-          <h2 class="text-lg font-bold text-tup mb-1">{docente?.nombre?.toUpperCase()} {docente?.apellidos?.toUpperCase()}</h2>
-          <p class="text-sm text-slate-400">{docente?.email}</p>
-        </div>
+    {modo === 'individual' && (
+      docenteSel === 0 ? (
+        <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">Selecciona un docente para ver su reporte anual.</div>
+      ) : historial.length === 0 ? (
+        <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No hay datos de evaluación para este docente.</div>
+      ) : (
+        <>
+          <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
+            <div class="flex items-start justify-between flex-wrap gap-4">
+              <div>
+                <h2 class="text-lg font-bold text-tup mb-1">{docente?.nombre?.toUpperCase()} {docente?.apellidos?.toUpperCase()}</h2>
+                <p class="text-sm text-slate-400">{docente?.email}</p>
+              </div>
+              <a href={`/admin/docentes/${docenteSel}`} class="px-4 py-2 rounded-xl bg-tup/10 text-tup text-sm font-medium hover:bg-tup/20 whitespace-nowrap">📋 Ver Histórico</a>
+            </div>
+          </div>
 
-        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-          <table class="w-full text-sm">
-            <thead><tr class="bg-slate-50 border-b">
-              <th class="text-left px-3 py-3 text-xs uppercase">Cuatrimestre</th>
-              <th class="text-center px-2 py-3 text-xs uppercase">EE (35%)</th>
-              <th class="text-center px-2 py-3 text-xs uppercase">Coord (20%)</th>
-              <th class="text-center px-2 py-3 text-xs uppercase">Plan (15%)</th>
-              <th class="text-center px-2 py-3 text-xs uppercase">Obs (25%)</th>
-              <th class="text-center px-2 py-3 text-xs uppercase">Auto (5%)</th>
-              <th class="text-center px-2 py-3 text-xs uppercase">Final</th>
-              <th class="text-center px-2 py-3 text-xs uppercase">Categoría</th>
-              <th class="text-center px-2 py-3 text-xs uppercase">Instr.</th>
-            </tr></thead>
-            <tbody class="divide-y">{historial.map(h => (
-              <tr class="hover:bg-slate-50">
-                <td class="px-3 py-2 font-medium">{h.clave}</td>
-                <td class={"px-2 py-2 text-center font-medium "+colorN(h.ee)}>{fmt(h.ee)}</td>
-                <td class={"px-2 py-2 text-center font-medium "+colorN(h.coord)}>{fmt(h.coord)}</td>
-                <td class={"px-2 py-2 text-center font-medium "+colorN(h.plan)}>{fmt(h.plan)}</td>
-                <td class={"px-2 py-2 text-center font-medium "+colorN(h.obs)}>{fmt(h.obs)}</td>
-                <td class={"px-2 py-2 text-center font-medium "+colorN(h.auto)}>{fmt(h.auto)}</td>
-                <td class={"px-2 py-2 text-center font-bold "+colorN(h.final)}>{h.final}</td>
-                <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">{h.cat}</span></td>
-                <td class="px-2 py-2 text-center text-xs text-slate-400">{h.inst}/5</td>
-              </tr>
-            ))}</tbody>
-          </table>
+          <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-slate-50 border-b">
+                <th class="text-left px-3 py-3 text-xs uppercase">Cuatrimestre</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">EE (35%)</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Coord (20%)</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Plan (15%)</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Obs (25%)</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Auto (5%)</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Final</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Categoría</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Instr.</th>
+              </tr></thead>
+              <tbody class="divide-y">{historial.map(h => (
+                <tr class="hover:bg-slate-50">
+                  <td class="px-3 py-2 font-medium">{h.clave}</td>
+                  <td class={"px-2 py-2 text-center font-medium "+colorN(h.ee)}>{fmt(h.ee)}</td>
+                  <td class={"px-2 py-2 text-center font-medium "+colorN(h.coord)}>{fmt(h.coord)}</td>
+                  <td class={"px-2 py-2 text-center font-medium "+colorN(h.plan)}>{fmt(h.plan)}</td>
+                  <td class={"px-2 py-2 text-center font-medium "+colorN(h.obs)}>{fmt(h.obs)}</td>
+                  <td class={"px-2 py-2 text-center font-medium "+colorN(h.auto)}>{fmt(h.auto)}</td>
+                  <td class={"px-2 py-2 text-center font-bold "+colorN(h.final)}>{h.final}</td>
+                  <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">{h.cat}</span></td>
+                  <td class="px-2 py-2 text-center text-xs text-slate-400">{h.inst}/5</td>
+                </tr>
+              ))}
+              {annualAvg != null && (
+                <tr class="bg-tup/5 font-bold">
+                  <td class="px-3 py-2 text-tup">Promedio anual</td>
+                  <td colspan="5"></td>
+                  <td class={"px-2 py-2 text-center "+colorN(annualAvg)}>{annualAvg}</td>
+                  <td colspan="2" class="px-2 py-2 text-center text-xs text-tup">{totalCycles} ciclo{totalCycles !== 1 ? 's' : ''}</td>
+                </tr>
+              )}</tbody>
+            </table>
+          </div>
+        </>
+      )
+    )}
+
+    {modo === 'general' && (
+      generalError ? (
+        <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">{generalError}</div>
+      ) : !generalData || generalData.docentes.length === 0 ? (
+        <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">
+          'No se encontraron docentes con evaluación en el rango seleccionado.'
         </div>
-      </>
+      ) : (
+        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-slate-50 border-b">
+                <th class="text-left px-3 py-3 text-xs uppercase">Nombre</th>
+                <th class="text-left px-3 py-3 text-xs uppercase">Email</th>
+                <th class="text-left px-3 py-3 text-xs uppercase">Campus</th>
+                {cuatrimestres.map((c: any) => (
+                  <th class="text-center px-2 py-3 text-xs uppercase">{c.clave}</th>
+                ))}
+                <th class="text-center px-2 py-3 text-xs uppercase bg-tup/10 text-tup">Prom. anual</th>
+              </tr></thead>
+              <tbody class="divide-y">
+                {generalData.docentes.map((d: any) => (
+                  <tr class="hover:bg-slate-50">
+                    <td class="px-3 py-2"><p class="font-medium text-xs">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</p></td>
+                    <td class="px-3 py-2 text-xs text-slate-500">{d.email}</td>
+                    <td class="px-3 py-2 text-xs text-slate-500">{d.campus || '—'}</td>
+                    {cuatrimestres.map((c: any) => {
+                      const val = d.puntajes[c.id];
+                      return <td class={"px-2 py-2 text-center font-bold " + colorN(val)}>{val != null ? val : '—'}</td>;
+                    })}
+                    <td class={"px-2 py-2 text-center font-bold bg-tup/5 " + colorN(d.promedioAnual)}>{d.promedioAnual != null ? d.promedioAnual : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )
     )}
   </div>
 </LayoutAdmin>

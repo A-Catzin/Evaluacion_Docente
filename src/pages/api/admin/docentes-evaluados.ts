@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { db } from '../../../lib/db';
 
 export const GET: APIRoute = async ({ url, cookies }) => {
   const t = cookies.get('sb-access-token')?.value;
   const r = cookies.get('sb-refresh-token')?.value;
   if (!t || !r) return new Response('[]', { status: 401, headers: { 'Content-Type': 'application/json' } });
 
-  const cl = obtenerClienteSuperbase();
+  const cl = db();
   try {
     const { data: s } = await cl.auth.setSession({ access_token: t, refresh_token: r });
     if (!s.user) return new Response('[]', { status: 401, headers: { 'Content-Type': 'application/json' } });
