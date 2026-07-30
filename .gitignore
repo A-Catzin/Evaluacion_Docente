@@ -30,6 +30,11 @@ pnpm-debug.log*
 .vercel
 .env*
 schema.sql
+.obsidian/
 
 
 Analisis/
+base_datos/
+formularios/
+
+/src/supabase/
