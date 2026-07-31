@@ -34,9 +34,9 @@ if (modo === 'individual') {
   const asigIds = new Set((asigs || []).map(a => a.docente_id));
   const ids = [...asigIds];
 
-  const { data: docentes } = ids.length
-    ? await cliente.from('docentes').select('id,nombre,apellidos,email').in('id', ids).order('apellidos')
-    : { data: [] };
+    const { data: docentes } = ids.length
+      ? await cliente.from('docentes').select('id,nombre,apellidos,email,modalidad').in('id', ids).order('apellidos')
+      : { data: [] };
 
   const scoreMap = ids.length
     ? await fetchBatchScoresPorDocente(cliente, ids, cuatrimestreId)
@@ -48,7 +48,8 @@ if (modo === 'individual') {
       const cScores = await fetchBatchScoresPorDocente(cliente, ids, c.id);
       for (const docId of ids) {
         const sc = cScores.get(docId) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
-        const { final, instrumentCount } = calcFinalScore(sc);
+        const docente = (docentes || []).find((d: any) => d.id === docId);
+        const { final, instrumentCount } = calcFinalScore(sc, docente?.modalidad);
         if (instrumentCount > 0) {
           const acc = anualMap.get(docId) || { sum: 0, count: 0 };
           acc.sum += final;
@@ -78,7 +79,7 @@ if (modo === 'general') {
     const allDocIds = [...new Set((asigs || []).map(a => a.docente_id))];
 
     const { data: docentes } = allDocIds.length
-      ? await cliente.from('docentes').select('id,nombre,apellidos,email,campus').in('id', allDocIds).order('apellidos')
+      ? await cliente.from('docentes').select('id,nombre,apellidos,email,campus,modalidad').in('id', allDocIds).order('apellidos')
       : { data: [] };
 
     const scoresPorCiclo = new Map<number, Map<number, any>>();
@@ -94,7 +95,7 @@ if (modo === 'general') {
         let sumFinal = 0, countFinal = 0;
         for (const cid of cicloIds) {
           const sc = scoresPorCiclo.get(cid)?.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
-          const { final, instrumentCount } = calcFinalScore(sc);
+          const { final, instrumentCount } = calcFinalScore(sc, d.modalidad);
           puntajes[cid] = instrumentCount > 0 ? final : null;
           if (puntajes[cid] != null) { sumFinal += puntajes[cid]!; countFinal++; }
         }
@@ -175,7 +176,7 @@ if (modo === 'general') {
               <tbody class="divide-y">
                 {individualData?.docentes?.map((d: any) => {
                   const scores = individualData.scoreMap.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
-                  const { final, instrumentCount, category } = calcFinalScore(scores);
+                  const { final, instrumentCount, category } = calcFinalScore(scores, d.modalidad);
                   const anual = individualData.anualMap.get(d.id);
                   const anualAvg = anual && anual.count > 0 ? Math.round(anual.sum / anual.count) : null;
                   return (

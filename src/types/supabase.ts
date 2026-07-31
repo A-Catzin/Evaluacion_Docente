@@ -186,6 +186,7 @@ export interface CalificacionFinal {
   id: number;
   docente_id: number;
   cuatrimestre_id: number;
+  modalidad?: string | null;
   score_encuesta_estudiantil: number | null;
   score_coordinacion: number | null;
   score_planeacion: number | null;

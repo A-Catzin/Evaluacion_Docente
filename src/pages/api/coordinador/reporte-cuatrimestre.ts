@@ -29,7 +29,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     }
 
     const { data: docentes } = docIds.length
-      ? await cl.from('docentes').select('id,nombre,apellidos,email').in('id', docIds).order('apellidos')
+      ? await cl.from('docentes').select('id,nombre,apellidos,email,modalidad').in('id', docIds).order('apellidos')
       : { data: [] };
 
     const scoreMap = await fetchBatchScoresPorDocente(cl, docIds, cuatrimestreId);
@@ -38,8 +38,8 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     const rows: string[] = [];
     for (const d of docentes || []) {
       const scores = scoreMap.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
-      const { final, instrumentCount, category } = calcFinalScore(scores);
-      rows.push(`"${d.nombre}","${d.apellidos}","${d.email}",${scores.ee || 0},${scores.coord || 0},${scores.plan || 0},${scores.obs || 0},${scores.auto || 0},${final || 0},"${category}",${instrumentCount}`);
+      const { final, instrumentCount, expectedInstrumentCount, category } = calcFinalScore(scores, d.modalidad);
+      rows.push(`"${d.nombre}","${d.apellidos}","${d.email}",${scores.ee || 0},${scores.coord || 0},${scores.plan || 0},${scores.obs || 0},${scores.auto || 0},${final || 0},"${category}",${instrumentCount}/${expectedInstrumentCount}`);
     }
 
     const csv = [header, ...rows].join('\n');

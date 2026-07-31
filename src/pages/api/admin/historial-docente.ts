@@ -9,15 +9,16 @@ export const GET: APIRoute = async ({ url }) => {
   const cl = db();
 
   const { data: cuatris } = await cl.from('cuatrimestres').select('id,clave').order('id');
+  const { data: docente } = await cl.from('docentes').select('modalidad').eq('id', docenteId).maybeSingle();
   if (!cuatris?.length) return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json' } });
 
   const historial: any[] = [];
   let totalCycles = 0, sumFinals = 0;
   for (const c of cuatris) {
     const scores = await fetchCuatrimestreScores(cl, docenteId, c.id);
-    const { final, instrumentCount, category } = calcFinalScore(scores);
+    const { final, instrumentCount, expectedInstrumentCount, category } = calcFinalScore(scores, docente?.modalidad);
     if (instrumentCount > 0) {
-      historial.push({ clave: c.clave, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto, final, cat: category, inst: instrumentCount });
+      historial.push({ clave: c.clave, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto, final, cat: category, inst: instrumentCount, expected: expectedInstrumentCount });
       totalCycles++;
       sumFinals += final;
     }
@@ -27,7 +28,7 @@ export const GET: APIRoute = async ({ url }) => {
   const format = url.searchParams.get('format') || 'json';
   if (format === 'csv') {
     const header = 'Cuatrimestre,EE,Coordinación,Planeación,Observación,Autodiagnóstico,Final,Categoría,Instrumentos';
-    const rows = historial.map(h => `${h.clave},${h.ee},${h.coord},${h.plan},${h.obs},${h.auto},${h.final},"${h.cat}",${h.inst}`);
+    const rows = historial.map(h => `${h.clave},${h.ee},${h.coord},${h.plan},${h.obs},${h.auto},${h.final},"${h.cat}",${h.inst}/${h.expected}`);
     const allRows = [...rows, `Promedio anual,,,,,,${annualAvg},,"${totalCycles} ciclo${totalCycles !== 1 ? 's' : ''}"`];
     const csv = [header, ...allRows].join('\n');
     return new Response(csv, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="reporte_anual.csv"' } });

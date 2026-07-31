@@ -3,6 +3,7 @@ import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../../services/docentes';
 import { db } from '../../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
+import { calcFinalScore } from '../../../services/scoring';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const page = parseInt(Astro.url.searchParams.get('page')||'1');
@@ -106,10 +107,8 @@ const filas = docentesFiltrados.map(d => {
   const promPlan = count > 0 ? Math.round(sumPlan / count) : 0;
   const promCoord = coord?.score_normalizado ? Math.round(coord.score_normalizado) : 0;
   const promAuto = diag?.puntaje_total ? Math.round((diag.puntaje_total/120)*100) : 0;
-  const pesos = [0.35,0.20,0.15,0.25,0.05];
-  const disponibles = [promEst, promCoord, promPlan, promObs, promAuto];
-  let final360 = 0; for (let i=0;i<5;i++) if (disponibles[i]) final360 += disponibles[i]*pesos[i];
-  return { ...d, promObs, promCoord, promPlan, promAuto, promEst, final360: final360||null, cat360: cat360(Math.round(final360)) };
+  const fin = calcFinalScore({ ee: promEst, coord: promCoord, plan: promPlan, obs: promObs, auto: promAuto }, d.modalidad);
+  return { ...d, promObs, promCoord, promPlan, promAuto, promEst, final360: fin.final||null, cat360: fin.category, instrumentos: fin.instrumentCount, instrumentosEsperados: fin.expectedInstrumentCount };
 });
 
 // Paginación

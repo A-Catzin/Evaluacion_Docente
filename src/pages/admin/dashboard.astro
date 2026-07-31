@@ -3,6 +3,7 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerCuatrimestres, obtenerCuatrimestreActivo } from '../../services/catalogos';
 import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
+import { calcFinalScore } from '../../services/scoring';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const cuatrimestre = await obtenerCuatrimestreActivo();
@@ -67,7 +68,7 @@ interface FilaDashboard {
   id: number; nombre: string; apellidos: string; email: string;
   promEst: number; promObs: number; promCoord: number; promPlan: number; promAuto: number;
   final360: number | null; cat360: string;
-  instrumentos: number; visible: boolean;
+  instrumentos: number; instrumentosEsperados: number; visible: boolean;
 }
 const filasTodas: FilaDashboard[] = docentes.map(d => {
   const eeMap = eePorDocente.get(d.id);
@@ -87,22 +88,16 @@ const filasTodas: FilaDashboard[] = docentes.map(d => {
   const promObs = obsDoc || 0;
   const promCoord = coordMap.get(d.id) || 0;
   const promAuto = diagMap.get(d.id) || 0;
-  const pesos = [0.35,0.20,0.15,0.25,0.05];
-  const disponibles = [promEst, promCoord, promPlan, promObs, promAuto];
-  let final360 = 0;
-  for (let i=0;i<5;i++) if (disponibles[i]) final360 += disponibles[i]*pesos[i];
-  const inst = [promEst>0?1:0, promCoord>0?1:0, promPlan>0?1:0, promObs>0?1:0, promAuto>0?1:0];
-  const instTotal = inst.reduce((a,b)=>a+b,0);
-  const cat = final360>=90?'Sobresaliente':final360>=80?'Distinguido':final360>=70?'Bueno':final360>=60?'Aprobado':final360>=50?'A mejorar':final360>0?'Insuficiente':'No Iniciado';
-  const catFinal = instTotal === 5 ? cat : final360 > 0 ? 'Parcial' : 'No Iniciado';
-  return {
-    id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email,
-    promEst, promObs, promCoord, promPlan, promAuto,
-    final360: final360 || null,
-    cat360: catFinal,
-    instrumentos: instTotal,
-    visible: d.visible_dashboard !== false,
-  };
+   const fin = calcFinalScore({ ee: promEst, coord: promCoord, plan: promPlan, obs: promObs, auto: promAuto }, d.modalidad);
+   return {
+     id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email,
+     promEst, promObs, promCoord, promPlan, promAuto,
+     final360: fin.final || null,
+     cat360: fin.category,
+     instrumentos: fin.instrumentCount,
+     instrumentosEsperados: fin.expectedInstrumentCount,
+     visible: d.visible_dashboard !== false,
+   };
 });
 
 // Filtro por búsqueda (server-side GET)
@@ -126,7 +121,7 @@ const avgPlan = avgInstrumento(filasTodas.map(f => f.promPlan));
 const avgObs = avgInstrumento(filasTodas.map(f => f.promObs));
 const avgAuto = avgInstrumento(filasTodas.map(f => f.promAuto));
 
-const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bueno':0,'Aprobado':0,'A mejorar':0,'Insuficiente':0,'Parcial':0,'No Iniciado':0};
+const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bueno':0,'Aprobado':0,'A mejorar':0,'Insuficiente':0,'Parcial':0,'No iniciado':0};
 filasTodas.forEach(f => { catCounts[f.cat360]++; });
 
 function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
@@ -194,7 +189,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
           <tr class="hover:bg-slate-50">
             <td class="px-3 py-2 text-center font-medium">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</td>
             <td class="px-3 py-2 text-center text-slate-600 text-xs">{d.email}</td>
-            <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/5</span></td>
+            <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/{d.instrumentosEsperados}</span></td>
             <td class="px-2 py-2 text-center {colorN(d.promEst)}">{fmt(d.promEst)}</td>
             <td class="px-2 py-2 text-center {colorN(d.promCoord)}">{fmt(d.promCoord)}</td>
             <td class="px-2 py-2 text-center {colorN(d.promPlan)}">{fmt(d.promPlan)}</td>
@@ -203,7 +198,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
             <td class="px-2 py-2 text-center font-bold {colorN(d.final360)}">{fmt(d.final360)}</td>
             <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{d.cat360}</span></td>
             <td class="px-2 py-2 text-center">
-              <button class="btn-ver-docente px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20" data-docente={JSON.stringify({id:d.id, nombre:d.nombre, apellidos:d.apellidos, promEst:d.promEst, promCoord:d.promCoord, promPlan:d.promPlan, promObs:d.promObs, promAuto:d.promAuto, final360:d.final360, cat360:d.cat360, instrumentos:d.instrumentos, visible:d.visible})}>📊 Ver</button>
+              <button class="btn-ver-docente px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20" data-docente={JSON.stringify({id:d.id, nombre:d.nombre, apellidos:d.apellidos, promEst:d.promEst, promCoord:d.promCoord, promPlan:d.promPlan, promObs:d.promObs, promAuto:d.promAuto, final360:d.final360, cat360:d.cat360, instrumentos:d.instrumentos, instrumentosEsperados:d.instrumentosEsperados, visible:d.visible})}>📊 Ver</button>
             </td>
           </tr>
         ))}</tbody></table></div>
@@ -261,7 +256,7 @@ const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSelecciona
 
       // Body
       var html = '';
-      html += '<div class="mb-4"><span class="text-xs ">Progreso: </span><span class="text-sm font-medium">'+d.instrumentos+'/5 instrumentos</span></div>';
+       html += '<div class="mb-4"><span class="text-xs ">Progreso: </span><span class="text-sm font-medium">'+d.instrumentos+'/'+d.instrumentosEsperados+' instrumentos aplicables</span></div>';
       
       // Canvas para gráfica individual
       html += '<div class="mb-4" style="height:180px"><canvas id="chart-individual" style="max-height:180px"></canvas></div>';

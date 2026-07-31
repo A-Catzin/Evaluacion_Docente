@@ -28,7 +28,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     const cicloIdsValid = cuatris.slice(idxInicio, idxFin + 1).map(c => c.id);
     const claves = cuatris.map(c => c.clave);
 
-    const { data: allDocs } = await cl.from('docentes').select('id,nombre,apellidos,email,campus').eq('activo', true).order('apellidos');
+    const { data: allDocs } = await cl.from('docentes').select('id,nombre,apellidos,email,campus,modalidad').eq('activo', true).order('apellidos');
     if (!allDocs?.length) {
       return new Response(JSON.stringify({ cuatrimestres: claves, docentes: [] }), {
         headers: { 'Content-Type': 'application/json' },
@@ -44,7 +44,8 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       const finalMap = new Map<number, { final: number; category: string; instrumentCount: number }>();
       for (const docId of allDocIds) {
         const scores = batchScores.get(docId) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
-        finalMap.set(docId, calcFinalScore(scores));
+        const docente = allDocs?.find(d => d.id === docId);
+        finalMap.set(docId, calcFinalScore(scores, docente?.modalidad));
       }
       scoresPorCiclo.set(cid, finalMap);
     }
@@ -80,6 +81,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
         apellidos: d.apellidos,
         email: d.email,
         campus: d.campus || '',
+        modalidad: d.modalidad || '',
         puntajes: puntajesPorCiclo,
         promedio_anual: promedioAnual,
       };

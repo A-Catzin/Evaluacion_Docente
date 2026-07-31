@@ -12,6 +12,7 @@ const cuatrimestres = (await obtenerCuatrimestres()).sort((a,b)=>a.id-b.id);
 const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
+const docente = docentes.find(d=>d.id===docenteSel);
 
 const modo = (Astro.url.searchParams.get('modo') || 'individual') as 'individual' | 'general';
 
@@ -23,17 +24,15 @@ let totalCycles = 0, sumFinals = 0;
 if (modo === 'individual' && docenteSel) {
   for (const c of cuatrimestres) {
     const scores = await fetchCuatrimestreScores(cliente, docenteSel, c.id);
-    const { final, instrumentCount, category } = calcFinalScore(scores);
+    const { final, instrumentCount, expectedInstrumentCount, category } = calcFinalScore(scores, docente?.modalidad);
     if (instrumentCount > 0) {
-      historial.push({ clave: c.clave, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto, final, cat: category, inst: instrumentCount });
+      historial.push({ clave: c.clave, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto, final, cat: category, inst: instrumentCount, expected: expectedInstrumentCount });
       totalCycles++;
       sumFinals += final;
     }
   }
 }
 const annualAvg = totalCycles > 0 ? Math.round(sumFinals / totalCycles) : null;
-
-const docente = docentes.find(d=>d.id===docenteSel);
 
 // ─── General ───
 const cicloInicioParam = parseInt(Astro.url.searchParams.get('ciclo_inicio') || '') || cuatrimestres[0]?.id || 0;
@@ -49,7 +48,7 @@ if (modo === 'general') {
   if (!generalRangeOk) {
     generalError = 'Selecciona un ciclo inicial y final válidos. El rango máximo es de 3 ciclos (diferencia de 2).';
   } else {
-    const { data: allDocs } = await cliente.from('docentes').select('id,nombre,apellidos,email,campus').eq('activo', true).order('apellidos');
+    const { data: allDocs } = await cliente.from('docentes').select('id,nombre,apellidos,email,campus,modalidad').eq('activo', true).order('apellidos');
 
     if (allDocs?.length) {
       const allDocIds = allDocs.map(d => d.id);
@@ -71,7 +70,7 @@ if (modo === 'general') {
             continue;
           }
           const sc = scoresPorCiclo.get(c.id)?.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
-          const { final, instrumentCount } = calcFinalScore(sc);
+          const { final, instrumentCount } = calcFinalScore(sc, d.modalidad);
           const valor = instrumentCount > 0 ? final : null;
           puntajes[c.id] = valor;
           if (valor != null) {
@@ -112,6 +111,9 @@ function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60
         <p class="text-slate-500 text-sm mt-1">
           {modo === 'individual' ? 'Evaluación detallada por docente' : 'Comparativa general por ciclo'}
         </p>
+        {modo === 'individual' && docente?.modalidad && (docente.modalidad.toLowerCase().includes('ejecutivo') || docente.modalidad.toLowerCase().includes('ingles') || docente.modalidad.toLowerCase().includes('inglés')) && (
+          <p class="text-xs text-amber-600 mt-1">Ejecutivo/Inglés no incluyen planeación: usan 4 instrumentos aplicables.</p>
+        )}
       </div>
     </div>
 
@@ -190,7 +192,7 @@ function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60
                 <th class="text-left px-3 py-3 text-xs uppercase">Cuatrimestre</th>
                 <th class="text-center px-2 py-3 text-xs uppercase">EE (35%)</th>
                 <th class="text-center px-2 py-3 text-xs uppercase">Coord (20%)</th>
-                <th class="text-center px-2 py-3 text-xs uppercase">Plan (15%)</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Plan (si aplica)</th>
                 <th class="text-center px-2 py-3 text-xs uppercase">Obs (25%)</th>
                 <th class="text-center px-2 py-3 text-xs uppercase">Auto (5%)</th>
                 <th class="text-center px-2 py-3 text-xs uppercase">Final</th>
@@ -207,7 +209,7 @@ function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60
                   <td class={"px-2 py-2 text-center font-medium "+colorN(h.auto)}>{fmt(h.auto)}</td>
                   <td class={"px-2 py-2 text-center font-bold "+colorN(h.final)}>{h.final}</td>
                   <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">{h.cat}</span></td>
-                  <td class="px-2 py-2 text-center text-xs text-slate-400">{h.inst}/5</td>
+                  <td class="px-2 py-2 text-center text-xs text-slate-400">{h.inst}/{h.expected}</td>
                 </tr>
               ))}
               {annualAvg != null && (

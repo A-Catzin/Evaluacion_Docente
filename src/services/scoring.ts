@@ -28,6 +28,36 @@ export function calcObservationScore(row: ObservationRow): number {
 
 export const WEIGHTS = { ee: 0.35, coord: 0.20, plan: 0.15, obs: 0.25, auto: 0.05 } as const;
 
+export type ModalityProfile = {
+  weights: InstrumentScores;
+  expectedInstrumentCount: number;
+};
+
+const MODALITY_PROFILES: Record<string, ModalityProfile> = {
+  normal: {
+    weights: WEIGHTS,
+    expectedInstrumentCount: 5,
+  },
+  ejecutivo: {
+    weights: { ee: 0.40, coord: 0.25, plan: 0, obs: 0.30, auto: 0.05 },
+    expectedInstrumentCount: 4,
+  },
+};
+
+export function normalizarModalidad(modalidad?: string | null): string {
+  return (modalidad || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+export function obtenerPerfilModalidad(modalidad?: string | null): ModalityProfile {
+  const n = normalizarModalidad(modalidad);
+  if (n.includes('ejecutivo') || n.includes('ingles')) return MODALITY_PROFILES.ejecutivo;
+  return MODALITY_PROFILES.normal;
+}
+
 export interface InstrumentScores {
   ee: number;
   coord: number;
@@ -39,28 +69,40 @@ export interface InstrumentScores {
 export interface FinalScore {
   final: number;
   instrumentCount: number;
+  expectedInstrumentCount: number;
   category: string;
 }
 
-export function calcFinalScore(scores: InstrumentScores): FinalScore {
+export function calcFinalScore(scores: InstrumentScores, modalidad?: string | null): FinalScore {
   const { ee, coord, plan, obs, auto: autoScore } = scores;
+  const profile = obtenerPerfilModalidad(modalidad);
   const instruments = [ee, coord, plan, obs, autoScore];
-  const count = instruments.filter(v => v > 0).length;
+  const expectedInstruments = [
+    profile.weights.ee,
+    profile.weights.coord,
+    profile.weights.plan,
+    profile.weights.obs,
+    profile.weights.auto,
+  ];
+  const count = expectedInstruments
+    .map((weight, idx) => weight > 0 && instruments[idx] > 0)
+    .filter(Boolean)
+    .length;
 
   let final = 0;
-  const weights = [WEIGHTS.ee, WEIGHTS.coord, WEIGHTS.plan, WEIGHTS.obs, WEIGHTS.auto];
+  const weights = [profile.weights.ee, profile.weights.coord, profile.weights.plan, profile.weights.obs, profile.weights.auto];
   for (let i = 0; i < 5; i++) {
     if (instruments[i]) final += instruments[i] * weights[i];
   }
   final = Math.round(final);
 
-  const category = getCategory(final, count);
+  const category = getCategory(final, count, profile.expectedInstrumentCount);
 
-  return { final, instrumentCount: count, category };
+  return { final, instrumentCount: count, expectedInstrumentCount: profile.expectedInstrumentCount, category };
 }
 
-export function getCategory(finalScore: number, instrumentCount: number): string {
-  if (instrumentCount === 5) {
+export function getCategory(finalScore: number, instrumentCount: number, expectedInstrumentCount = 5): string {
+  if (instrumentCount === expectedInstrumentCount) {
     if (finalScore >= 90) return 'Sobresaliente';
     if (finalScore >= 80) return 'Distinguido';
     if (finalScore >= 70) return 'Bueno';

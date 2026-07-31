@@ -50,6 +50,7 @@ const grupos = [
           <div class="space-y-0.5 ml-3 mt-1">{g.items.map((item,i) => (<a href={`/admin/${item}`} class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-tup/5 hover:text-tup transition-colors"><span class="text-xs">{g.icons[i]}</span> {g.labels[i]}</a>))}</div>
         </div>))}
         <a href={`/admin/planeaciones${qs}`} class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">📄 Planeaciones</a>
+        <a href="/admin/evaluar-docentes" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-tup bg-tup/5 hover:bg-tup/10 transition-colors">⭐ Evaluar Docentes</a>
       </nav>
       <div class="p-4 border-t border-slate-100"><a href="/api/auth/signout" class="flex items-center gap-2 text-xs text-slate-400 hover:text-red-500 transition-colors">🚪 Cerrar Sesión</a></div>
     </aside>

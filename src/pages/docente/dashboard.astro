@@ -2,6 +2,7 @@
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { db } from '../../lib/db';
+import { calcFinalScore } from '../../services/scoring';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -25,14 +26,16 @@ let docenteEmail = usuario?.email || '';
 
 // Buscar todos los docentes que corresponden a este usuario (por entidad_id, email, y nombre)
 let docenteIdsSet = new Set<number>();
+let docenteModalidad = 'Escolarizado';
 if (docenteId) {
   docenteIdsSet.add(docenteId);
   // Obtener nombre del docente vinculado para buscar coincidencias por nombre
-  const { data: miDoc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteId).maybeSingle();
+  const { data: miDoc } = await cl.from('docentes').select('nombre,apellidos,modalidad').eq('id', docenteId).maybeSingle();
   if (miDoc?.nombre && miDoc?.apellidos) {
     const { data: mismosNombres } = await cl.from('docentes').select('id').eq('nombre', miDoc.nombre).eq('apellidos', miDoc.apellidos);
     (mismosNombres||[]).forEach(d => docenteIdsSet.add(d.id));
   }
+  docenteModalidad = miDoc?.modalidad || docenteModalidad;
 }
 if (docenteEmail) {
   const { data: docsMatch } = await cl.from('docentes').select('id').eq('email', docenteEmail);
@@ -42,7 +45,7 @@ const docenteIds: number[] = [...docenteIdsSet];
 
 const cuatrimestre = await obtenerCuatrimestreActivo();
 
-let scores = { promEst: 0, promCoord: 0, promPlan: 0, promObs: 0, promAuto: 0, final360: null as number|null, cat360: 'No iniciado', instrumentos: 0 };
+let scores = { promEst: 0, promCoord: 0, promPlan: 0, promObs: 0, promAuto: 0, final360: null as number|null, cat360: 'No iniciado', instrumentos: 0, instrumentosEsperados: 5 };
 let nombreDocente = '';
 let diagInfo: any = null;
 let eeComentarios: string[] = [];
@@ -102,7 +105,7 @@ if (docenteIds.length > 0) {
   const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
     cl.from('encuesta_estudiantil').select('score_normalizado,comentarios,prom_asistencia,prom_organizacion,prom_actitud,prom_ensenanza,prom_dominio,prom_evaluacion,prom_comunicacion,prom_gestion,prom_tecnologia,prom_satisfaccion,promedio_general').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId),
     cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
-    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('fecha_subida', { ascending: false }),
+    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado').order('fecha_subida', { ascending: false }),
     cl.from('observaciones').select('id,docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId),
     cl.from('autodiagnosticos').select('*').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
     cl.from('grupos').select('asignatura_id').in('docente_id', docenteIds),
@@ -140,12 +143,11 @@ if (docenteIds.length > 0) {
   scores.promAuto = diagData?.[0]?.puntaje_total ? Math.round((diagData[0].puntaje_total/120)*100) : 0;
 
   // Final 360
-  const disp = [scores.promEst, scores.promCoord, scores.promPlan, scores.promObs, scores.promAuto];
-  const pesos = [0.35,0.20,0.15,0.25,0.05];
-  let fin = 0; for (let i=0;i<5;i++) if (disp[i]) fin += disp[i]*pesos[i];
-  scores.final360 = fin || null;
-  scores.instrumentos = disp.filter(v=>v>0).length;
-  scores.cat360 = scores.instrumentos===5 ? (fin>=90?'Sobresaliente':fin>=80?'Distinguido':fin>=70?'Bueno':fin>=60?'Aprobado':fin>=50?'A mejorar':'Insuficiente') : fin>0 ? 'Parcial' : 'No iniciado';
+  const fin = calcFinalScore({ ee: scores.promEst, coord: scores.promCoord, plan: scores.promPlan, obs: scores.promObs, auto: scores.promAuto }, docenteModalidad);
+  scores.final360 = fin.final || null;
+  scores.instrumentos = fin.instrumentCount;
+  scores.instrumentosEsperados = fin.expectedInstrumentCount;
+  scores.cat360 = fin.category;
 }
 
 function fmt(n:number|null|undefined):string{return n!=null ? Math.round(n).toString() : '—';}
@@ -158,8 +160,7 @@ function pctRaw(pct:number|null|undefined, raw:number|null|undefined, total:numb
 
 <LayoutDocente titulo="Mi Evaluación — Docente">
   <div class="animate-flotar-entrada">
-    <div class="flex items-center justify-between mb-6">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
       <div><h1 class="text-3xl font-bold text-tup">Mi Evaluación 360°</h1><p class="text-slate-500">{nombreDocente}</p></div>
       <form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
@@ -167,10 +168,9 @@ function pctRaw(pct:number|null|undefined, raw:number|null|undefined, total:numb
         </select>
       </form>
     </div>
-    </div>
 
     {docenteIds.length === 0 ? (
-      <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center ">Completa tu autodiagnóstico para ver tus resultados.</div>
+      <div class="bg-white rounded-2xl p-6 shadow-tarjeta text-center">Completa tu autodiagnóstico para ver tus resultados.</div>
     ) : (
       <>
         <!-- KPIs -->
@@ -207,7 +207,7 @@ function pctRaw(pct:number|null|undefined, raw:number|null|undefined, total:numb
             <p class="text-xs text-slate-400 uppercase mb-2">Calificación Final</p>
             <p class="text-5xl font-bold text-tup">{fmt(scores.final360)}</p>
             <span class="px-2 py-1 rounded text-xs font-medium bg-slate-100 mt-2">{scores.cat360}</span>
-            <p class="text-xs text-slate-400 mt-3">{scores.instrumentos}/5 instrumentos</p>
+            <p class="text-xs text-slate-400 mt-3">{scores.instrumentos}/{scores.instrumentosEsperados} instrumentos aplicables</p>
           </div>
         </div>
       </>

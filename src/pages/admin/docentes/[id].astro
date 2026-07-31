@@ -15,15 +15,15 @@ if (!docente) return Astro.redirect('/admin/docentes');
 
 const cuatrimestres = (await obtenerCuatrimestres()).sort((a, b) => a.id - b.id);
 
-const historial: { clave: string; final: number; cat: string; inst: number; ee: number; coord: number; plan: number; obs: number; auto: number }[] = [];
+const historial: { clave: string; final: number; cat: string; inst: number; expected: number; ee: number; coord: number; plan: number; obs: number; auto: number }[] = [];
 let sumFinals = 0;
 let bestCycle = { clave: '', final: 0 };
 
 for (const c of cuatrimestres) {
   const scores = await fetchCuatrimestreScores(cliente, docenteId, c.id);
-  const { final, instrumentCount, category } = calcFinalScore(scores);
+  const { final, instrumentCount, expectedInstrumentCount, category } = calcFinalScore(scores, docente.modalidad);
   if (instrumentCount > 0) {
-    historial.push({ clave: c.clave, final, cat: category, inst: instrumentCount, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto });
+    historial.push({ clave: c.clave, final, cat: category, inst: instrumentCount, expected: expectedInstrumentCount, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto });
     sumFinals += final;
     if (final > bestCycle.final) bestCycle = { clave: c.clave, final };
   }
@@ -124,7 +124,7 @@ function badgeCat(cat: string): string {
                 <td class={`px-3 py-3 text-center font-medium ${colorN(h.auto)}`}>{fmt(h.auto)}</td>
                 <td class={`px-3 py-3 text-center font-bold ${colorN(h.final)}`}>{h.final}</td>
                 <td class="px-3 py-3 text-center"><span class={`px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeCat(h.cat)}`}>{h.cat}</span></td>
-                <td class="px-3 py-3 text-center text-xs text-slate-400">{h.inst}/5</td>
+                <td class="px-3 py-3 text-center text-xs text-slate-400">{h.inst}/{h.expected}</td>
               </tr>
             ))}
           </tbody>
