@@ -37,8 +37,8 @@ import Layout from '../layouts/Layout.astro';
         var rol = data.rol || 'estudiante';
         if (rol === 'superadmin') window.location.href = '/admin/dashboard';
         else if (rol === 'coordinador') window.location.href = '/coordinador/dashboard';
-        else if (rol === 'docente') window.location.href = '/docente/dashboard';
-        else window.location.href = '/docente/dashboard';
+        else if (rol === 'docente') window.location.href = '/docente/materias';
+        else window.location.href = '/docente/materias';
       });
   })();
 </script>

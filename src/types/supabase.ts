@@ -199,6 +199,16 @@ export interface CalificacionFinal {
   num_instrumentos_completados: number;
 }
 
+export interface Docente360Feedback {
+  id: number;
+  docente_id: number;
+  cuatrimestre_id: number;
+  feedback_text: string | null;
+  improvement_areas: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─── Autodiagnóstico ───────────────────────────────────────────
 
 export interface Autodiagnostico {

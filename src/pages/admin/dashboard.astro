@@ -6,6 +6,7 @@ import { db } from '../../lib/db';
 import { calcFinalScore } from '../../services/scoring';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
+const pathname = Astro.url.pathname;
 const cuatrimestre = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const idSeleccionado = Astro.url.searchParams.get('cuatrimestre') || cuatrimestre?.id?.toString() || '';
@@ -16,6 +17,16 @@ if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
 const cliente = db();
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+let adminNombre = 'Administrador';
+if (token && refresh) {
+  const { data: sesion } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+  if (sesion.user) {
+    const { data: u } = await cliente.from('usuarios').select('nombre_completo,email').eq('id', sesion.user.id).maybeSingle();
+    adminNombre = u?.nombre_completo || u?.email?.split('@')[0] || adminNombre;
+  }
+}
 
 // Usuarios pendientes de aprobacion
 const { count: pendientes } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
@@ -128,12 +139,43 @@ function fmt(n: number|null|undefined): string { return n != null ? Math.round(n
 function colorN(n: number|null|undefined): string { if (!n) return ''; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
 
 const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSeleccionado) || cuatrimestre;
+
+const accesosRapidos = [
+  { href: '/admin/dashboard', titulo: 'Resultados', desc: 'Resumen general, indicadores y docentes evaluados.', icono: '📊' },
+  { href: '/admin/reporte-anual', titulo: 'Reporte Anual', desc: 'Comparativas por ciclo y análisis histórico.', icono: '📈' },
+  { href: '/admin/docentes', titulo: 'Docentes', desc: 'Consulta y control del personal docente.', icono: '👨‍🏫' },
+  { href: '/admin/cuatrimestres', titulo: 'Cuatrimestres', desc: 'Activa, abre o cierra ciclos académicos.', icono: '📅' },
+  { href: '/admin/asignaciones', titulo: 'Asignaciones', desc: 'Gestiona coordinadores y evaluadores.', icono: '🔗' },
+  { href: '/admin/usuarios', titulo: 'Usuarios', desc: 'Administra accesos, roles y cuentas.', icono: '👥' },
+  { href: '/admin/evaluar-docentes', titulo: 'Evaluaciones', desc: 'Captura y revisión de docentes.', icono: '⭐' },
+  { href: '/admin/instrumentos', titulo: 'Instrumentos', desc: 'Configura reactivos, módulos y escalas.', icono: '🧩' },
+];
 ---
 
 <LayoutAdmin titulo="Dashboard — Admin">
   <div class="animate-flotar-entrada">
+    <div class="mb-6">
+      <p class="text-slate-500 text-sm">Hola, {adminNombre}</p>
+      <h1 class="text-3xl font-bold text-tup">Dashboard Administrativo</h1>
+      <p class="text-slate-500 mt-1">Atajos rápidos para navegar el panel SED-360.</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+      {accesosRapidos.map(card => (
+        <a href={card.href} class={`bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover hover:-translate-y-0.5 transition-all border ${pathname === card.href ? 'border-tup/30' : 'border-slate-100'}`}>
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">{card.titulo}</p>
+              <p class="text-sm text-slate-600 mt-2">{card.desc}</p>
+            </div>
+            <span class="text-2xl">{card.icono}</span>
+          </div>
+        </a>
+      ))}
+    </div>
+
     <div class="flex items-center justify-between mb-6">
-      <div><h1 class="text-3xl font-bold text-tup">Dashboard Administrativo</h1><p class="text-slate-500">{cuatrimestreSel?.clave || 'Sin cuatrimestre activo'}</p></div>
+      <div><p class="text-sm text-slate-400">Ciclo activo</p><p class="text-slate-500">{cuatrimestreSel?.clave || 'Sin cuatrimestre activo'}</p></div>
       <form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id.toString()===idSeleccionado}>{c.clave}</option>))}</select>
       </form>

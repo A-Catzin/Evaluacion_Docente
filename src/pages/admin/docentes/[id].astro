@@ -1,135 +1,769 @@
 ---
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
-import { obtenerDocente } from '../../../services/docentes';
-import { obtenerCuatrimestres } from '../../../services/catalogos';
-import { db } from '../../../lib/db';
-import { fetchCuatrimestreScores, calcFinalScore, getCategory } from '../../../services/scoring';
+import { dbAdmin } from '../../../lib/db';
+import { fetchCuatrimestreScores, calcFinalScore, OBSERVATION_SELECT } from '../../../services/scoring';
 
-const { id } = Astro.params;
-const docenteId = parseInt(id || '');
-if (!docenteId) return Astro.redirect('/admin/docentes');
+const EE_METRICS = [
+  { field: 'prom_asistencia', label: 'Asistencia' },
+  { field: 'prom_organizacion', label: 'Organización' },
+  { field: 'prom_actitud', label: 'Actitud' },
+  { field: 'prom_ensenanza', label: 'Enseñanza' },
+  { field: 'prom_dominio', label: 'Dominio' },
+  { field: 'prom_evaluacion', label: 'Evaluación' },
+  { field: 'prom_comunicacion', label: 'Comunicación' },
+  { field: 'prom_gestion', label: 'Gestión' },
+  { field: 'prom_tecnologia', label: 'Tecnología' },
+  { field: 'prom_satisfaccion', label: 'Satisfacción' },
+] as const;
 
-const cliente = db();
-const docente = await obtenerDocente(docenteId);
-if (!docente) return Astro.redirect('/admin/docentes');
+const COORD_SECTION_DEFS = [
+  { code: 'A', title: 'Cumplimiento Académico', fields: ['a1', 'a2', 'a3'] },
+  { code: 'B', title: 'Gestión y Organización', fields: ['b1', 'b2', 'b3'] },
+  { code: 'C', title: 'Desempeño Profesional', fields: ['c1', 'c2', 'c3'] },
+  { code: 'D', title: 'Innovación y Mejora', fields: ['d1', 'd2', 'd3'] },
+  { code: 'E', title: 'Compromiso y Ética', fields: ['e1', 'e2', 'e3'] },
+] as const;
 
-const cuatrimestres = (await obtenerCuatrimestres()).sort((a, b) => a.id - b.id);
+const PLAN_CRITERIA = [
+  { field: 'criterio_alineacion', label: 'Alineación curricular' },
+  { field: 'criterio_secuencia', label: 'Secuencia didáctica' },
+  { field: 'criterio_recursos', label: 'Recursos y materiales' },
+  { field: 'criterio_evaluacion', label: 'Sistema de evaluación' },
+] as const;
 
-const historial: { clave: string; final: number; cat: string; inst: number; expected: number; ee: number; coord: number; plan: number; obs: number; auto: number }[] = [];
-let sumFinals = 0;
-let bestCycle = { clave: '', final: 0 };
+const OBS_SECTION_DEFS = [
+  { code: 'A', title: 'Cognitivas', fields: ['cco1', 'cco2', 'cco3', 'cco4', 'cco5', 'cco6', 'cco7'] },
+  { code: 'B', title: 'Metacognitivas', fields: ['cme1', 'cme2', 'cme3', 'cme4', 'cme5', 'cme6', 'cme7', 'cme8', 'cme9'] },
+  { code: 'C', title: 'Comunicativas', fields: ['ccom1', 'ccom2', 'ccom3', 'ccom4'] },
+  { code: 'D', title: 'Sociales', fields: ['cso1', 'cso2', 'cso3', 'cso4'] },
+  { code: 'E', title: 'Gestión de la enseñanza', fields: ['cge1', 'cge2', 'cge3', 'cge4', 'cge5', 'cge6', 'cge7'] },
+  { code: 'F', title: 'Afectivas', fields: ['caf1', 'caf2'] },
+  { code: 'G', title: 'Tecno-pedagógicas', fields: ['ctepe1', 'ctepe2', 'ctepe3', 'ctepe4', 'ctepe5', 'ctepe6', 'ctepe7'] },
+  { code: 'H', title: 'Normativas', fields: ['cno1', 'cno2', 'cno3', 'cno4', 'cno5'] },
+] as const;
 
-for (const c of cuatrimestres) {
-  const scores = await fetchCuatrimestreScores(cliente, docenteId, c.id);
-  const { final, instrumentCount, expectedInstrumentCount, category } = calcFinalScore(scores, docente.modalidad);
-  if (instrumentCount > 0) {
-    historial.push({ clave: c.clave, final, cat: category, inst: instrumentCount, expected: expectedInstrumentCount, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto });
-    sumFinals += final;
-    if (final > bestCycle.final) bestCycle = { clave: c.clave, final };
-  }
+const AUTO_FIELDS = Array.from({ length: 24 }, (_, i) => `r${i + 1}`);
+
+const docenteId = parseInt(Astro.params.id || '');
+if (!docenteId) return Astro.redirect('/admin/resultados-docentes');
+
+const cl = dbAdmin();
+const [docenteRes, cuatrisRes] = await Promise.all([
+  cl.from('docentes').select('id,nombre,apellidos,email,campus,modalidad,visible_dashboard,activo').eq('id', docenteId).maybeSingle(),
+  cl.from('cuatrimestres').select('id,clave,nombre,activo,cerrado').order('id', { ascending: true }),
+]);
+
+const docente = docenteRes.data as any;
+if (!docente) return Astro.redirect('/admin/resultados-docentes');
+
+const cuatrimestres = ((cuatrisRes.data || []) as any[]).sort((a, b) => a.id - b.id);
+const activeCuatriId = cuatrimestres.find((c) => c.activo)?.id ?? cuatrimestres[cuatrimestres.length - 1]?.id ?? 0;
+const cookieCuatriId = parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '') || 0;
+const queryCuatriId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || 0;
+const cuatrimestreId = queryCuatriId || cookieCuatriId || activeCuatriId || 0;
+const selectedCuatrimestre = cuatrimestres.find((c) => c.id === cuatrimestreId) || null;
+const feedbackStatus = Astro.url.searchParams.get('feedback') || '';
+
+if (Astro.url.searchParams.has('cuatrimestre') && cuatrimestreId) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 }
 
-const cyclesEvaluated = historial.length;
-const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluated) : 0;
-const currentCategory = historicalAvg > 0 ? getCategory(historicalAvg, cyclesEvaluated > 0 ? 5 : 0) : '—';
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const submittedCuatriId = parseInt(String(form.get('cuatrimestre_id') || '')) || cuatrimestreId;
+  const feedbackText = String(form.get('feedback_text') || '').trim() || null;
+  const improvementAreas = String(form.get('improvement_areas') || '').trim() || null;
 
-function fmt(n: number | null | undefined): string { return n != null && n > 0 ? Math.round(n).toString() : '—'; }
-function colorN(n: number | null | undefined): string { if (!n) return 'text-slate-400'; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
-function badgeCat(cat: string): string {
+  if (submittedCuatriId) {
+    const { error: saveError } = await cl.from('docente_360_feedback').upsert(
+      {
+        docente_id: docenteId,
+        cuatrimestre_id: submittedCuatriId,
+        feedback_text: feedbackText,
+        improvement_areas: improvementAreas,
+      },
+      { onConflict: 'docente_id,cuatrimestre_id' }
+    );
+
+    if (saveError) return Astro.redirect(`/admin/docentes/${docenteId}?cuatrimestre=${submittedCuatriId}&feedback=error`);
+    return Astro.redirect(`/admin/docentes/${docenteId}?cuatrimestre=${submittedCuatriId}&feedback=saved`);
+  }
+
+  return Astro.redirect(`/admin/docentes/${docenteId}?feedback=error`);
+}
+
+const [feedbackRes, eeRes, coordRes, planRes, obsRes, autoRes, preguntasRes] = await Promise.all([
+  cuatrimestreId
+    ? cl.from('docente_360_feedback').select('id,docente_id,cuatrimestre_id,feedback_text,improvement_areas,created_at,updated_at').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).maybeSingle()
+    : Promise.resolve({ data: null }),
+  cuatrimestreId
+    ? cl.from('encuesta_estudiantil').select('id,docente_id,asignatura_id,grupo_id,total_respuestas,prom_asistencia,prom_organizacion,prom_actitud,prom_ensenanza,prom_dominio,prom_evaluacion,prom_comunicacion,prom_gestion,prom_tecnologia,prom_satisfaccion,promedio_general,score_normalizado,comentarios,fecha_registro').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId)
+    : Promise.resolve({ data: [] }),
+  cuatrimestreId
+    ? cl.from('evaluacion_coordinacion').select('id,docente_id,asignatura_id,campus,ciclo,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3,puntos_obtenidos,score_normalizado,categoria,comentarios,fecha_evaluacion').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
+    : Promise.resolve({ data: [] }),
+  cuatrimestreId
+    ? cl.from('planeaciones').select('id,docente_id,asignatura_id,grupo,campus,turno,modalidad,proyecto,laboratorio,visitas,estado,criterio_alineacion,criterio_secuencia,criterio_recursos,criterio_evaluacion,puntaje_promedio,comentario_retroalimentacion,comentario_interno,fecha_subida,fecha_evaluacion').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('fecha_evaluacion', { ascending: false })
+    : Promise.resolve({ data: [] }),
+  cuatrimestreId
+    ? cl.from('observaciones').select(`id,docente_id,asignatura_id,grupo_id_fk,oferta_academica,cuatrimestre_grupo,ciclo,campus,${OBSERVATION_SELECT},obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,comentario_docente,comentario_evaluador,fecha_observacion`).eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
+    : Promise.resolve({ data: [] }),
+  cuatrimestreId
+    ? cl.from('autodiagnosticos').select('id,docente_id,cuatrimestre_id,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12,r13,r14,r15,r16,r17,r18,r19,r20,r21,r22,r23,r24,puntaje_total,nivel_desempeno,comentarios,fecha_respuesta').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
+    : Promise.resolve({ data: [] }),
+  cl.from('instrumento_preguntas').select('instrumento,seccion,orden,texto').in('instrumento', ['coordinacion', 'planeacion', 'observacion', 'autodiagnostico']).order('instrumento', { ascending: true }).order('orden', { ascending: true }),
+]);
+
+const feedback = feedbackRes.data as any;
+const eeRows = (eeRes.data || []) as any[];
+const coordRows = (coordRes.data || []) as any[];
+const planRows = (planRes.data || []) as any[];
+const obsRows = (obsRes.data || []) as any[];
+const autoRows = (autoRes.data || []) as any[];
+const preguntaRows = (preguntasRes.data || []) as any[];
+
+const asigIds = new Set<number>();
+const grupoIds = new Set<number>();
+for (const row of [...eeRows, ...coordRows, ...planRows, ...obsRows]) {
+  if (row.asignatura_id) asigIds.add(row.asignatura_id);
+  if (row.grupo_id) grupoIds.add(row.grupo_id);
+  if (row.grupo_id_fk) grupoIds.add(row.grupo_id_fk);
+}
+
+const asigIdsArray = [...asigIds];
+const grupoIdsArray = [...grupoIds];
+const [asigLookupRes, grupoLookupRes] = await Promise.all([
+  cl.from('asignaturas').select('id,clave,nombre').in('id', asigIdsArray.length ? asigIdsArray : [-1]),
+  cl.from('grupos').select('id,clave').in('id', grupoIdsArray.length ? grupoIdsArray : [-1]),
+]);
+
+const asigMap = new Map<number, any>();
+for (const item of (asigLookupRes.data || []) as any[]) asigMap.set(item.id, item);
+const grupoMap = new Map<number, any>();
+for (const item of (grupoLookupRes.data || []) as any[]) grupoMap.set(item.id, item);
+
+const preguntaMap = new Map<string, any[]>();
+for (const p of preguntaRows) {
+  if (!preguntaMap.has(p.instrumento)) preguntaMap.set(p.instrumento, []);
+  preguntaMap.get(p.instrumento)!.push(p);
+}
+for (const arr of preguntaMap.values()) arr.sort((a, b) => a.orden - b.orden);
+
+function fmt(n: number | null | undefined): string {
+  return n != null && n > 0 ? Math.round(n).toString() : '—';
+}
+
+function fmtDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' }).format(new Date(value));
+}
+
+function scoreClass(n: number | null | undefined): string {
+  if (!n) return 'text-slate-300';
+  if (n >= 80) return 'text-emerald-600';
+  if (n >= 60) return 'text-amber-600';
+  return 'text-red-600';
+}
+
+function badgeClass(cat: string): string {
   if (cat === 'Sobresaliente') return 'bg-emerald-100 text-emerald-700';
   if (cat === 'Distinguido') return 'bg-blue-100 text-blue-700';
   if (cat === 'Bueno') return 'bg-purple-100 text-purple-700';
   if (cat === 'Aprobado') return 'bg-amber-100 text-amber-700';
   if (cat === 'A mejorar') return 'bg-orange-100 text-orange-700';
+  if (cat === 'Insuficiente') return 'bg-red-100 text-red-700';
   if (cat === 'Parcial') return 'bg-slate-100 text-slate-600';
-  return 'bg-red-100 text-red-700';
+  return 'bg-slate-100 text-slate-600';
 }
+
+function toPct(value: number | null | undefined, max = 5): number | null {
+  if (value == null || value <= 0) return null;
+  return Math.round((value / max) * 100);
+}
+
+function avgPctRaw(row: any, fields: readonly string[]): number | null {
+  const values = fields.map((field) => row[field]).filter((value): value is number => value != null && value > 0);
+  if (!values.length) return null;
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 20);
+}
+
+function buildItems(instrument: string, fields: readonly string[], row: any) {
+  const preguntas = preguntaMap.get(instrument) || [];
+  return fields.map((field, index) => ({
+    field,
+    label: preguntas[index]?.texto || `Item ${index + 1}`,
+    section: preguntas[index]?.seccion || '',
+    value: row[field],
+    score: toPct(row[field]),
+  }));
+}
+
+function seriesLabel(series: any): string {
+  const asig = series.asignatura_id ? asigMap.get(series.asignatura_id) : null;
+  const clave = asig?.clave || '';
+  const nombre = asig?.nombre || '';
+  return [clave, nombre].filter(Boolean).join(' · ') || 'Sin materia';
+}
+
+function groupLabel(id: number | null | undefined): string {
+  if (!id) return '—';
+  return grupoMap.get(id)?.clave || `Grupo ${id}`;
+}
+
+const eeRecords = eeRows.map((row) => ({
+  ...row,
+  title: seriesLabel(row),
+  meta: [row.grupo_id ? `Grupo ${groupLabel(row.grupo_id)}` : null, row.fecha_registro ? fmtDate(row.fecha_registro) : null].filter(Boolean).join(' · '),
+  score: row.score_normalizado != null ? Math.round(row.score_normalizado) : null,
+  metrics: EE_METRICS.map((metric) => ({
+    label: metric.label,
+    score: toPct(row[metric.field]),
+  })),
+}));
+
+const coordRecords = coordRows.map((row) => ({
+  ...row,
+  title: seriesLabel(row),
+  meta: [row.campus || null, row.ciclo || null, row.fecha_evaluacion ? fmtDate(row.fecha_evaluacion) : null].filter(Boolean).join(' · '),
+  score: row.score_normalizado != null ? Math.round(row.score_normalizado) : null,
+  category: row.categoria || '—',
+  sections: COORD_SECTION_DEFS.map((section) => ({
+    code: section.code,
+    title: section.title,
+    score: avgPctRaw(row, section.fields),
+  })),
+  items: buildItems('coordinacion', COORD_SECTION_DEFS.flatMap((section) => section.fields), row),
+  comments: row.comentarios || null,
+}));
+
+const planRecords = planRows.map((row) => ({
+  ...row,
+  title: seriesLabel(row),
+  meta: [row.grupo ? `Grupo ${row.grupo}` : null, row.modalidad || null, row.estado || null, row.fecha_evaluacion ? fmtDate(row.fecha_evaluacion) : null].filter(Boolean).join(' · '),
+  score: row.puntaje_promedio != null ? Math.round(row.puntaje_promedio) : null,
+  criteria: buildItems('planeacion', PLAN_CRITERIA.map((item) => item.field), row).map((item, index) => ({
+    ...item,
+    label: PLAN_CRITERIA[index].label,
+  })),
+  feedback: row.comentario_retroalimentacion || null,
+  internal: row.comentario_interno || null,
+}));
+
+const obsRecords = obsRows.map((row) => ({
+  ...row,
+  title: seriesLabel(row),
+  meta: [row.grupo_id_fk ? `Grupo ${groupLabel(row.grupo_id_fk)}` : null, row.campus || null, row.ciclo || null, row.fecha_observacion ? fmtDate(row.fecha_observacion) : null].filter(Boolean).join(' · '),
+  score: row.score_normalizado != null ? Math.round(row.score_normalizado) : null,
+  sections: OBS_SECTION_DEFS.map((section) => ({
+    code: section.code,
+    title: section.title,
+    score: avgPctRaw(row, section.fields),
+  })),
+  items: buildItems('observacion', OBS_SECTION_DEFS.flatMap((section) => section.fields), row),
+  comments: [row.comentario_docente, row.comentario_evaluador].filter(Boolean).join(' · ') || null,
+}));
+
+const autoRecords = autoRows.map((row) => ({
+  ...row,
+  score: row.puntaje_total != null ? Math.round((row.puntaje_total / 120) * 100) : null,
+  level: row.nivel_desempeno || '—',
+  meta: row.fecha_respuesta ? fmtDate(row.fecha_respuesta) : '—',
+  items: buildItems('autodiagnostico', AUTO_FIELDS, row),
+  comments: row.comentarios || null,
+}));
+
+const currentScores = await fetchCuatrimestreScores(cl, docenteId, cuatrimestreId);
+const currentFinal = calcFinalScore(currentScores, docente.modalidad);
+
+const historial: { clave: string; final: number; cat: string; inst: number; expected: number; ee: number; coord: number; plan: number; obs: number; auto: number }[] = [];
+let sumFinals = 0;
+let bestCycle = { clave: '', final: 0 };
+
+for (const ciclo of cuatrimestres) {
+  const scores = await fetchCuatrimestreScores(cl, docenteId, ciclo.id);
+  const fin = calcFinalScore(scores, docente.modalidad);
+  if (fin.instrumentCount > 0) {
+    historial.push({
+      clave: ciclo.clave,
+      final: fin.final,
+      cat: fin.category,
+      inst: fin.instrumentCount,
+      expected: fin.expectedInstrumentCount,
+      ee: scores.ee,
+      coord: scores.coord,
+      plan: scores.plan,
+      obs: scores.obs,
+      auto: scores.auto,
+    });
+    sumFinals += fin.final;
+    if (fin.final > bestCycle.final) bestCycle = { clave: ciclo.clave, final: fin.final };
+  }
+}
+
+const cyclesEvaluated = historial.length;
+const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluated) : 0;
 ---
 
-<LayoutAdmin titulo={`Histórico — ${docente.nombre} ${docente.apellidos}`}>
-  <div class="animate-flotar-entrada max-w-5xl mx-auto">
-    <!-- Breadcrumb -->
-    <div class="flex items-center gap-2 text-sm text-slate-400 mb-6">
-      <a href="/admin/docentes" class="hover:text-tup">Docentes</a>
+<LayoutAdmin titulo={`Docente 360 — ${docente.nombre} ${docente.apellidos}`}>
+  <div class="animate-flotar-entrada max-w-7xl mx-auto">
+    <div class="flex items-center gap-2 text-sm text-slate-400 mb-6 flex-wrap">
+      <a href="/admin/resultados-docentes" class="hover:text-tup">Resultados 360</a>
       <span>/</span>
-      <a href="/admin/reporte-anual?modo=individual&docente_id={docenteId}" class="hover:text-tup">Reporte Anual</a>
+      <a href="/admin/reporte-anual" class="hover:text-tup">Reporte Anual</a>
       <span>/</span>
-      <span class="text-slate-600 font-medium">Histórico</span>
+      <span class="text-slate-600 font-medium">Docente</span>
     </div>
 
-    <!-- Teacher header -->
-    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
-      <div class="flex items-start justify-between flex-wrap gap-4">
+    <div class="bg-white rounded-3xl p-6 shadow-tarjeta mb-6">
+      <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 class="text-2xl font-bold text-tup">{docente.nombre.toUpperCase()} {docente.apellidos.toUpperCase()}</h1>
-          <p class="text-sm text-slate-400 mt-1">{docente.email}</p>
-          <p class="text-xs text-slate-300 mt-0.5">{docente.campus || 'Sin campus'} · {docente.modalidad || 'Sin modalidad'}</p>
+          <h1 class="text-3xl font-bold text-tup">{docente.nombre.toUpperCase()} {docente.apellidos.toUpperCase()}</h1>
+          <p class="text-sm text-slate-500 mt-1">{docente.email}</p>
+          <p class="text-xs text-slate-400 mt-1">{docente.campus || 'Sin campus'} · {docente.modalidad || 'Sin modalidad'} · {selectedCuatrimestre?.clave || 'Sin ciclo'}</p>
         </div>
-        <div class="flex gap-2">
-          <a href="/admin/reporte-anual?modo=individual&docente_id={docenteId}" class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">📊 Reporte Anual</a>
+        <div class="flex flex-wrap gap-2">
+          <a href={`/admin/resultados-docentes${cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : ''}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">← Volver a tarjetas</a>
+          <a href={`/admin/reporte-anual?modo=individual&docente_id=${docenteId}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">📈 Reporte anual</a>
           <a href={`/api/admin/historial-docente?docente_id=${docenteId}&format=csv`} class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium">⬇ CSV</a>
         </div>
       </div>
     </div>
 
-    <!-- Summary cards -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    {feedbackStatus === 'saved' && <div class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">La retroalimentación se guardó.</div>}
+    {feedbackStatus === 'error' && <div class="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">No se pudo guardar la retroalimentación.</div>}
+
+    <div class="grid grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
-        <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Promedio histórico</p>
-        <p class={`text-3xl font-bold ${colorN(historicalAvg)}`}>{historicalAvg > 0 ? historicalAvg : '—'}</p>
+        <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">360 actual</p>
+        <p class={`text-4xl font-bold ${scoreClass(currentFinal.final)}`}>{fmt(currentFinal.final)}</p>
       </div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
-        <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Ciclos evaluados</p>
-        <p class="text-3xl font-bold text-tup">{cyclesEvaluated}</p>
+        <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Categoría</p>
+        <p class="text-xl font-bold text-tup">{currentFinal.category}</p>
       </div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
-        <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Mejor ciclo</p>
+        <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Instrumentos</p>
+        <p class="text-3xl font-bold text-tup">{currentFinal.instrumentCount}/{currentFinal.expectedInstrumentCount}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
+        <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Promedio histórico</p>
+        <p class={`text-3xl font-bold ${scoreClass(historicalAvg)}`}>{fmt(historicalAvg)}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
+        <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Mejor ciclo</p>
         <p class="text-2xl font-bold text-tup">{bestCycle.clave || '—'}</p>
-        <p class={`text-lg font-semibold ${colorN(bestCycle.final)}`}>{bestCycle.final > 0 ? bestCycle.final : '—'}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta text-center">
-        <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Categoría actual</p>
-        <p class="text-xl font-bold text-tup">{currentCategory}</p>
+        <p class={`text-lg font-semibold ${scoreClass(bestCycle.final)}`}>{fmt(bestCycle.final)}</p>
       </div>
     </div>
 
-    <!-- Report cards / fichas -->
-    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-      <div class="px-6 py-4 border-b border-slate-100">
-        <h2 class="text-lg font-bold text-tup">Fichas por cuatrimestre</h2>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+      <div class="bg-white rounded-3xl p-6 shadow-tarjeta">
+        <h2 class="text-lg font-bold text-tup mb-4">Scores por instrumento</h2>
+        <div class="h-[260px]"><canvas id="chart-barras" class="max-h-[260px]"></canvas></div>
       </div>
-      {historial.length === 0 ? (
-        <div class="p-12 text-center text-slate-400">No hay datos de evaluación para este docente.</div>
-      ) : (
-        <table class="w-full text-sm">
-          <thead><tr class="bg-slate-50 border-b">
-            <th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Cuatrimestre</th>
-            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">EE (35%)</th>
-            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Coord (20%)</th>
-            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Plan (15%)</th>
-            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Obs (25%)</th>
-            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Auto (5%)</th>
-            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Final</th>
-            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Categoría</th>
-            <th class="text-center px-3 py-3 text-xs uppercase text-slate-600">Instr.</th>
-          </tr></thead>
-          <tbody class="divide-y">
-            {historial.map(h => (
-              <tr class="hover:bg-slate-50">
-                <td class="px-4 py-3 font-medium text-slate-700">{h.clave}</td>
-                <td class={`px-3 py-3 text-center font-medium ${colorN(h.ee)}`}>{fmt(h.ee)}</td>
-                <td class={`px-3 py-3 text-center font-medium ${colorN(h.coord)}`}>{fmt(h.coord)}</td>
-                <td class={`px-3 py-3 text-center font-medium ${colorN(h.plan)}`}>{fmt(h.plan)}</td>
-                <td class={`px-3 py-3 text-center font-medium ${colorN(h.obs)}`}>{fmt(h.obs)}</td>
-                <td class={`px-3 py-3 text-center font-medium ${colorN(h.auto)}`}>{fmt(h.auto)}</td>
-                <td class={`px-3 py-3 text-center font-bold ${colorN(h.final)}`}>{h.final}</td>
-                <td class="px-3 py-3 text-center"><span class={`px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeCat(h.cat)}`}>{h.cat}</span></td>
-                <td class="px-3 py-3 text-center text-xs text-slate-400">{h.inst}/{h.expected}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <div class="bg-white rounded-3xl p-6 shadow-tarjeta">
+        <h2 class="text-lg font-bold text-tup mb-4">Radar 360</h2>
+        <div class="h-[260px]"><canvas id="chart-radar" class="max-h-[260px]"></canvas></div>
+      </div>
     </div>
+
+    <div class="grid grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
+      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+        <p class="text-xs uppercase text-slate-400">Estudiantil</p>
+        <p class={`text-2xl font-bold mt-1 ${scoreClass(currentScores.ee)}`}>{fmt(currentScores.ee)}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+        <p class="text-xs uppercase text-slate-400">Coordinación</p>
+        <p class={`text-2xl font-bold mt-1 ${scoreClass(currentScores.coord)}`}>{fmt(currentScores.coord)}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+        <p class="text-xs uppercase text-slate-400">Planeación</p>
+        <p class={`text-2xl font-bold mt-1 ${scoreClass(currentScores.plan)}`}>{fmt(currentScores.plan)}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+        <p class="text-xs uppercase text-slate-400">Observación</p>
+        <p class={`text-2xl font-bold mt-1 ${scoreClass(currentScores.obs)}`}>{fmt(currentScores.obs)}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
+        <p class="text-xs uppercase text-slate-400">Autodiagnóstico</p>
+        <p class={`text-2xl font-bold mt-1 ${scoreClass(currentScores.auto)}`}>{fmt(currentScores.auto)}</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-3xl p-6 shadow-tarjeta mb-8">
+      <div class="flex items-center justify-between gap-4 flex-wrap mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-tup">Retroalimentación persistente</h2>
+          <p class="text-sm text-slate-500">Se guarda por docente y cuatrimestre en la base de datos.</p>
+        </div>
+        {feedback?.updated_at && <p class="text-xs text-slate-400">Actualizado: {fmtDate(feedback.updated_at)}</p>}
+      </div>
+
+      <form method="POST" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <input type="hidden" name="cuatrimestre_id" value={cuatrimestreId} />
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-700 mb-2">Retroalimentación general</span>
+          <textarea name="feedback_text" rows="6" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:ring-2 focus:ring-tup focus:outline-none" placeholder="Escribe aquí la retroalimentación global para este docente...">{feedback?.feedback_text || ''}</textarea>
+        </label>
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-700 mb-2">Áreas a mejorar</span>
+          <textarea name="improvement_areas" rows="6" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:ring-2 focus:ring-tup focus:outline-none" placeholder="Lista las áreas de oportunidad priorizadas...">{feedback?.improvement_areas || ''}</textarea>
+        </label>
+        <div class="lg:col-span-2 flex items-center justify-end gap-3">
+          <a href={`/admin/resultados-docentes${cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : ''}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Cancelar</a>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-tup text-white text-sm font-medium">Guardar feedback</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="space-y-6 mb-8">
+      <details open class="bg-white rounded-3xl shadow-tarjeta overflow-hidden">
+        <summary class="px-6 py-4 border-b border-slate-100 cursor-pointer list-none flex items-center justify-between">
+          <span class="text-lg font-bold text-tup">Encuesta estudiantil</span>
+          <span class="text-sm text-slate-400">{eeRecords.length} registros</span>
+        </summary>
+        <div class="p-6 space-y-4">
+          {eeRecords.length === 0 ? (
+            <div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400">No hay registros de encuesta para este ciclo.</div>
+          ) : (
+            eeRecords.map((record) => (
+              <article class="rounded-3xl border border-slate-100 p-5">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p class="text-xs uppercase tracking-wider text-slate-400">{record.title}</p>
+                    <h3 class="text-lg font-semibold text-slate-800 mt-1">{record.meta || 'Sin metadatos'}</h3>
+                  </div>
+                  <div class="text-right">
+                    <p class={`text-3xl font-bold ${scoreClass(record.score)}`}>{fmt(record.score)}</p>
+                    <p class="text-xs text-slate-400">{record.total_respuestas || 0} respuestas</p>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+                  {record.metrics.map((metric: any) => (
+                    <div class="rounded-2xl bg-slate-50 p-3 text-center">
+                      <p class="text-[11px] uppercase tracking-wider text-slate-400">{metric.label}</p>
+                      <p class={`text-xl font-bold mt-1 ${scoreClass(metric.score)}`}>{fmt(metric.score)}</p>
+                    </div>
+                  ))}
+                </div>
+                {record.comentarios && <p class="mt-4 text-sm text-slate-600 italic">“{record.comentarios}”</p>}
+              </article>
+            ))
+          )}
+        </div>
+      </details>
+
+      <details class="bg-white rounded-3xl shadow-tarjeta overflow-hidden">
+        <summary class="px-6 py-4 border-b border-slate-100 cursor-pointer list-none flex items-center justify-between">
+          <span class="text-lg font-bold text-tup">Coordinación</span>
+          <span class="text-sm text-slate-400">{coordRecords.length} registros</span>
+        </summary>
+        <div class="p-6 space-y-6">
+          {coordRecords.length === 0 ? (
+            <div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400">No hay evaluaciones de coordinación para este ciclo.</div>
+          ) : (
+            coordRecords.map((record) => (
+              <article class="rounded-3xl border border-slate-100 p-5">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p class="text-xs uppercase tracking-wider text-slate-400">{record.title}</p>
+                    <h3 class="text-lg font-semibold text-slate-800 mt-1">{record.meta || 'Sin metadatos'}</h3>
+                  </div>
+                  <div class="text-right">
+                    <p class={`text-3xl font-bold ${scoreClass(record.score)}`}>{fmt(record.score)}</p>
+                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeClass(record.category)}`}>{record.category}</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+                  {record.sections.map((section: any) => (
+                    <div class="rounded-2xl bg-slate-50 p-3 text-center">
+                      <p class="text-[11px] uppercase tracking-wider text-slate-400">{section.code}</p>
+                      <p class={`text-xl font-bold mt-1 ${scoreClass(section.score)}`}>{fmt(section.score)}</p>
+                      <p class="text-[11px] text-slate-500 mt-1">{section.title}</p>
+                    </div>
+                  ))}
+                </div>
+                <div class="mt-5 overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="bg-slate-50 text-slate-500">
+                        <th class="px-3 py-2 text-left text-xs uppercase">Sección</th>
+                        <th class="px-3 py-2 text-left text-xs uppercase">Pregunta</th>
+                        <th class="px-3 py-2 text-center text-xs uppercase">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                      {record.items.map((item: any) => (
+                        <tr>
+                          <td class="px-3 py-2 text-xs text-slate-400">{item.section || '—'}</td>
+                          <td class="px-3 py-2 text-slate-700">{item.label}</td>
+                          <td class={`px-3 py-2 text-center font-semibold ${scoreClass(item.score)}`}>{fmt(item.score)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {record.comments && <p class="mt-4 text-sm text-slate-600 italic">“{record.comments}”</p>}
+              </article>
+            ))
+          )}
+        </div>
+      </details>
+
+      <details class="bg-white rounded-3xl shadow-tarjeta overflow-hidden">
+        <summary class="px-6 py-4 border-b border-slate-100 cursor-pointer list-none flex items-center justify-between">
+          <span class="text-lg font-bold text-tup">Planeación</span>
+          <span class="text-sm text-slate-400">{planRecords.length} registros</span>
+        </summary>
+        <div class="p-6 space-y-6">
+          {planRecords.length === 0 ? (
+            <div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400">No hay planeaciones aprobadas para este ciclo.</div>
+          ) : (
+            planRecords.map((record) => (
+              <article class="rounded-3xl border border-slate-100 p-5">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p class="text-xs uppercase tracking-wider text-slate-400">{record.title}</p>
+                    <h3 class="text-lg font-semibold text-slate-800 mt-1">{record.meta || 'Sin metadatos'}</h3>
+                  </div>
+                  <div class="text-right">
+                    <p class={`text-3xl font-bold ${scoreClass(record.score)}`}>{fmt(record.score)}</p>
+                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeClass(record.estado)}`}>{record.estado}</span>
+                  </div>
+                </div>
+                <div class="mt-5 overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="bg-slate-50 text-slate-500">
+                        <th class="px-3 py-2 text-left text-xs uppercase">Criterio</th>
+                        <th class="px-3 py-2 text-center text-xs uppercase">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                      {record.criteria.map((item: any) => (
+                        <tr>
+                          <td class="px-3 py-2 text-slate-700">{item.label}</td>
+                          <td class={`px-3 py-2 text-center font-semibold ${scoreClass(item.score)}`}>{fmt(item.score)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
+                  {record.feedback && <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Retroalimentación</p><p class="text-slate-600 italic">“{record.feedback}”</p></div>}
+                  {record.internal && <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Comentario interno</p><p class="text-slate-600 italic">“{record.internal}”</p></div>}
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+      </details>
+
+      <details class="bg-white rounded-3xl shadow-tarjeta overflow-hidden">
+        <summary class="px-6 py-4 border-b border-slate-100 cursor-pointer list-none flex items-center justify-between">
+          <span class="text-lg font-bold text-tup">Observación de clase</span>
+          <span class="text-sm text-slate-400">{obsRecords.length} registros</span>
+        </summary>
+        <div class="p-6 space-y-6">
+          {obsRecords.length === 0 ? (
+            <div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400">No hay observaciones para este ciclo.</div>
+          ) : (
+            obsRecords.map((record) => (
+              <article class="rounded-3xl border border-slate-100 p-5">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p class="text-xs uppercase tracking-wider text-slate-400">{record.title}</p>
+                    <h3 class="text-lg font-semibold text-slate-800 mt-1">{record.meta || 'Sin metadatos'}</h3>
+                  </div>
+                  <div class="text-right">
+                    <p class={`text-3xl font-bold ${scoreClass(record.score)}`}>{fmt(record.score)}</p>
+                    <p class="text-xs text-slate-400">Observación</p>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                  {record.sections.map((section: any) => (
+                    <div class="rounded-2xl bg-slate-50 p-3 text-center">
+                      <p class="text-[11px] uppercase tracking-wider text-slate-400">{section.code}</p>
+                      <p class={`text-xl font-bold mt-1 ${scoreClass(section.score)}`}>{fmt(section.score)}</p>
+                      <p class="text-[11px] text-slate-500 mt-1">{section.title}</p>
+                    </div>
+                  ))}
+                </div>
+                <div class="mt-5 overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="bg-slate-50 text-slate-500">
+                        <th class="px-3 py-2 text-left text-xs uppercase">Sección</th>
+                        <th class="px-3 py-2 text-left text-xs uppercase">Reactivo</th>
+                        <th class="px-3 py-2 text-center text-xs uppercase">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                      {record.items.map((item: any) => (
+                        <tr>
+                          <td class="px-3 py-2 text-xs text-slate-400">{item.section || '—'}</td>
+                          <td class="px-3 py-2 text-slate-700">{item.label}</td>
+                          <td class={`px-3 py-2 text-center font-semibold ${scoreClass(item.score)}`}>{fmt(item.score)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
+                  {record.comments && <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Comentarios</p><p class="text-slate-600 italic">“{record.comments}”</p></div>}
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+      </details>
+
+      <details class="bg-white rounded-3xl shadow-tarjeta overflow-hidden">
+        <summary class="px-6 py-4 border-b border-slate-100 cursor-pointer list-none flex items-center justify-between">
+          <span class="text-lg font-bold text-tup">Autodiagnóstico</span>
+          <span class="text-sm text-slate-400">{autoRecords.length} registros</span>
+        </summary>
+        <div class="p-6 space-y-6">
+          {autoRecords.length === 0 ? (
+            <div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400">No hay autodiagnósticos para este ciclo.</div>
+          ) : (
+            autoRecords.map((record) => (
+              <article class="rounded-3xl border border-slate-100 p-5">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p class="text-xs uppercase tracking-wider text-slate-400">Autodiagnóstico docente</p>
+                    <h3 class="text-lg font-semibold text-slate-800 mt-1">{record.meta}</h3>
+                  </div>
+                  <div class="text-right">
+                    <p class={`text-3xl font-bold ${scoreClass(record.score)}`}>{fmt(record.score)}</p>
+                    <p class="text-xs text-slate-400">{record.level}</p>
+                  </div>
+                </div>
+                <div class="mt-5 overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="bg-slate-50 text-slate-500">
+                        <th class="px-3 py-2 text-left text-xs uppercase">Reactivo</th>
+                        <th class="px-3 py-2 text-center text-xs uppercase">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                      {record.items.map((item: any) => (
+                        <tr>
+                          <td class="px-3 py-2 text-slate-700">{item.label}</td>
+                          <td class={`px-3 py-2 text-center font-semibold ${scoreClass(item.score)}`}>{fmt(item.score)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {record.comments && <p class="mt-4 text-sm text-slate-600 italic">“{record.comments}”</p>}
+              </article>
+            ))
+          )}
+        </div>
+      </details>
+    </div>
+
+    <details class="bg-white rounded-3xl shadow-tarjeta overflow-hidden">
+      <summary class="px-6 py-4 border-b border-slate-100 cursor-pointer list-none flex items-center justify-between">
+        <span class="text-lg font-bold text-tup">Historial por cuatrimestre</span>
+        <span class="text-sm text-slate-400">{cyclesEvaluated} ciclos</span>
+      </summary>
+      <div class="p-6">
+        {historial.length === 0 ? (
+          <div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400">No hay historial disponible.</div>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b text-slate-500">
+                  <th class="text-left px-4 py-3 text-xs uppercase">Cuatrimestre</th>
+                  <th class="text-center px-3 py-3 text-xs uppercase">EE</th>
+                  <th class="text-center px-3 py-3 text-xs uppercase">Coord</th>
+                  <th class="text-center px-3 py-3 text-xs uppercase">Plan</th>
+                  <th class="text-center px-3 py-3 text-xs uppercase">Obs</th>
+                  <th class="text-center px-3 py-3 text-xs uppercase">Auto</th>
+                  <th class="text-center px-3 py-3 text-xs uppercase">Final</th>
+                  <th class="text-center px-3 py-3 text-xs uppercase">Categoría</th>
+                  <th class="text-center px-3 py-3 text-xs uppercase">Instr.</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                {historial.map((h) => (
+                  <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-3 font-medium text-slate-700">{h.clave}</td>
+                    <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.ee)}`}>{fmt(h.ee)}</td>
+                    <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.coord)}`}>{fmt(h.coord)}</td>
+                    <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.plan)}`}>{fmt(h.plan)}</td>
+                    <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.obs)}`}>{fmt(h.obs)}</td>
+                    <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.auto)}`}>{fmt(h.auto)}</td>
+                    <td class={`px-3 py-3 text-center font-bold ${scoreClass(h.final)}`}>{h.final}</td>
+                    <td class="px-3 py-3 text-center"><span class={`px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeClass(h.cat)}`}>{h.cat}</span></td>
+                    <td class="px-3 py-3 text-center text-xs text-slate-400">{h.inst}/{h.expected}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </details>
   </div>
 </LayoutAdmin>
+
+<script is:inline define:vars={{
+  chartLabels: JSON.stringify(['Estudiantil', 'Coordinación', 'Planeación', 'Observación', 'Autodiagnóstico']),
+  chartScores: JSON.stringify([currentScores.ee || 0, currentScores.coord || 0, currentScores.plan || 0, currentScores.obs || 0, currentScores.auto || 0]),
+}}>
+  function drawCharts() {
+    var labels = JSON.parse(chartLabels);
+    var scores = JSON.parse(chartScores);
+
+    var ctxBar = document.getElementById('chart-barras');
+    if (ctxBar) {
+      new Chart(ctxBar, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{ data: scores, backgroundColor: ['#22c55e', '#3b82f6', '#a855f7', '#f59e0b', '#f97316'], borderRadius: 8, borderWidth: 0 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, max: 100, ticks: { font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' } },
+            x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
+    var ctxRadar = document.getElementById('chart-radar');
+    if (ctxRadar) {
+      new Chart(ctxRadar, {
+        type: 'radar',
+        data: {
+          labels: labels,
+          datasets: [{ data: scores, fill: true, backgroundColor: 'rgba(14,165,233,0.12)', borderColor: '#0ea5e9', pointBackgroundColor: '#0ea5e9', pointBorderColor: '#fff', pointHoverBackgroundColor: '#fff', pointHoverBorderColor: '#0ea5e9' }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { r: { beginAtZero: true, suggestedMax: 100, ticks: { backdropColor: 'transparent', font: { size: 9 } } } },
+          plugins: { legend: { display: false } },
+        },
+      });
+    }
+  }
+
+  if (typeof Chart === 'undefined') {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+    s.onload = drawCharts;
+    document.head.appendChild(s);
+  } else {
+    drawCharts();
+  }
+</script>

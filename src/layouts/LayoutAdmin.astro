@@ -5,14 +5,55 @@ export interface Props { titulo?: string; }
 const { titulo = 'Admin — SED-360' } = Astro.props;
 const cuatrimestreSel = Astro.cookies.get('cuatrimestre_sel')?.value;
 const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
+const pathname = Astro.url.pathname;
 
-const grupos = [
-  { nombre: 'Académico', icono: '🎓', items: ['ofertas','asignaturas','cuatrimestres','campus','turnos'], labels: ['Ofertas Académicas','Asignaturas','Cuatrimestres','Campus','Turnos'], icons: ['🎓','📚','📅','🏫','🕐'] },
-  { nombre: 'Personal', icono: '👥',     items: ['docentes','coordinadores','usuarios','asignaciones','reporte-anual'],
-    labels: ['Docentes','Coordinadores','Usuarios','Asignaciones','Reporte Anual'],
-    icons: ['👨‍🏫','📊','👥','🔗','📈'] },
-  { nombre: 'Configuración', icono: '⚙️', items: ['instrumentos','roles'], labels: ['Instrumentos','Roles'], icons: ['📋','🔑'] }
+const secciones = [
+  {
+    nombre: 'Resultados',
+    icono: '📊',
+    items: [
+      { href: `/admin/dashboard${qs}`, label: 'Dashboard', icon: '📊' },
+      { href: `/admin/resultados-docentes${qs}`, label: 'Docentes 360', icon: '🧑‍🏫' },
+      { href: '/admin/reporte-anual', label: 'Reporte Anual', icon: '📈' },
+    ],
+  },
+  {
+    nombre: 'Gestión de Personal',
+    icono: '👥',
+    items: [
+      { href: '/admin/docentes', label: 'Docentes', icon: '👨‍🏫' },
+      { href: '/admin/coordinadores', label: 'Coordinadores', icon: '📊' },
+      { href: `/admin/asignaciones${qs}`, label: 'Asignaciones', icon: '🔗' },
+      { href: '/admin/evaluar-docentes', label: 'Evaluar Docentes', icon: '⭐' },
+    ],
+  },
+  {
+    nombre: 'Académico',
+    icono: '🎓',
+    items: [
+      { href: `/admin/cuatrimestres${qs}`, label: 'Cuatrimestres', icon: '📅' },
+      { href: '/admin/ofertas', label: 'Ofertas Académicas', icon: '🎓' },
+      { href: '/admin/asignaturas', label: 'Asignaturas', icon: '📚' },
+      { href: '/admin/campus', label: 'Campus', icon: '🏫' },
+      { href: '/admin/turnos', label: 'Turnos', icon: '🕐' },
+    ],
+  },
+  {
+    nombre: 'Configuración',
+    icono: '⚙️',
+    items: [
+      { href: '/admin/instrumentos', label: 'Instrumentos', icon: '📋' },
+      { href: '/admin/roles', label: 'Roles', icon: '🔑' },
+      { href: '/admin/usuarios', label: 'Usuarios', icon: '👥' },
+      { href: '/admin/importar', label: 'Importar CSV', icon: '📤' },
+    ],
+  },
 ];
+
+function isActive(href: string): boolean {
+  const clean = href.split('?')[0];
+  return pathname === clean || pathname.startsWith(clean + '/');
+}
 ---
 
 <BaseLayout titulo={titulo}>
@@ -39,18 +80,22 @@ const grupos = [
         <button class="lg:hidden text-slate-400" onclick="document.getElementById('sidebar').classList.remove('translate-x-0');document.getElementById('overlay').classList.add('hidden');">✕</button>
       </div>
 
-      <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
-        <a href={`/admin/dashboard${qs}`} class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">📊 Dashboard</a>
-        <a href="/admin/importar" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">📤 Importar CSV</a>
-        {grupos.map(g => (<div>
-          <button type="button" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')">
-            <span>{g.icono} {g.nombre}</span>
-            <svg class="w-3.5 h-3.5 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-          </button>
-          <div class="space-y-0.5 ml-3 mt-1">{g.items.map((item,i) => (<a href={`/admin/${item}`} class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-tup/5 hover:text-tup transition-colors"><span class="text-xs">{g.icons[i]}</span> {g.labels[i]}</a>))}</div>
-        </div>))}
-        <a href={`/admin/planeaciones${qs}`} class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-tup/5 hover:text-tup transition-colors">📄 Planeaciones</a>
-        <a href="/admin/evaluar-docentes" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-tup bg-tup/5 hover:bg-tup/10 transition-colors">⭐ Evaluar Docentes</a>
+      <nav class="flex-1 p-3 space-y-3 overflow-y-auto">
+        {secciones.map((s, idx) => (
+          <details open={idx === 0} class="group rounded-2xl">
+            <summary class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer list-none hover:text-slate-600">
+              <span>{s.icono} {s.nombre}</span>
+              <svg class="w-3.5 h-3.5 transition-transform duration-200 group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="space-y-0.5 ml-4 mt-1.5">
+              {s.items.map(item => (
+                <a href={item.href} class={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${isActive(item.href) ? 'bg-tup/10 text-tup font-medium' : 'text-slate-600 hover:bg-tup/5 hover:text-tup'}`}>
+                  <span class="text-xs">{item.icon}</span> {item.label}
+                </a>
+              ))}
+            </div>
+          </details>
+        ))}
       </nav>
       <div class="p-4 border-t border-slate-100"><a href="/api/auth/signout" class="flex items-center gap-2 text-xs text-slate-400 hover:text-red-500 transition-colors">🚪 Cerrar Sesión</a></div>
     </aside>

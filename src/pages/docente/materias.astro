@@ -1,0 +1,93 @@
+---
+import LayoutDocente from '../../layouts/LayoutDocente.astro';
+import { db } from '../../lib/db';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (!token || !refresh) return Astro.redirect('/auth');
+
+const cl = db();
+const { data: sesion } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
+if (!sesion.user) return Astro.redirect('/auth');
+
+const { data: usuario } = await cl.from('usuarios').select('entidad_id,email').eq('id', sesion.user.id).maybeSingle();
+let entidadId = usuario?.entidad_id;
+if (!entidadId && usuario?.email) {
+  const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
+  if (doc) entidadId = doc.id;
+}
+if (!entidadId) return Astro.redirect('/docente/dashboard');
+
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+if (Astro.url.searchParams.has('cuatrimestre')) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
+} else if (cuatrimestreActivo?.id) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
+}
+
+const { data: docente } = await cl.from('docentes').select('nombre,apellidos,modalidad').eq('id', entidadId).maybeSingle();
+const { data: grupos } = await cl.from('grupos').select('id,clave,modalidad,asignatura_id,cuatrimestre_id, cuatrimestres(clave)').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).order('clave');
+const asigIds = [...new Set((grupos||[]).map(g=>g.asignatura_id))];
+const { data: asigs } = asigIds.length>0 ? await cl.from('asignaturas').select('id,clave,nombre').in('id', asigIds).order('nombre') : { data: [] };
+const asigMap = new Map<number, {clave:string; nombre:string}>();
+(asigs||[]).forEach(a=>asigMap.set(a.id, a));
+const grupoMap = new Map<number, { clave: string; modalidad: string }[]>();
+for (const g of (grupos||[])) {
+  if (!grupoMap.has(g.asignatura_id)) grupoMap.set(g.asignatura_id, []);
+  grupoMap.get(g.asignatura_id)!.push({ clave: g.clave || '—', modalidad: g.modalidad || '—' });
+}
+---
+
+<LayoutDocente titulo="Mis Materias">
+  <div class="animate-flotar-entrada max-w-5xl mx-auto">
+    <div class="mb-6">
+      <p class="text-sm text-slate-400">Hola</p>
+      <h1 class="text-3xl font-bold text-tup">{docente?.nombre?.toUpperCase()} {docente?.apellidos?.toUpperCase()}</h1>
+      <p class="text-slate-500 mt-1">Consulta tus materias y entra a cada una por separado.</p>
+    </div>
+
+    <div class="flex items-center justify-between gap-4 mb-6 flex-wrap">
+      <div class="text-sm text-slate-500">Ciclo activo: <span class="font-medium text-slate-700">{cuatrimestres.find(c=>c.id===cuatrimestreId)?.clave || cuatrimestreActivo?.clave || ''}</span></div>
+      <form method="GET" class="flex items-center gap-2">
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
+        </select>
+      </form>
+    </div>
+
+    {(grupos||[]).length === 0 ? (
+      <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No tienes materias asignadas en este cuatrimestre.</div>
+    ) : (
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {(asigs||[]).map(a => {
+          const gruposMateria = grupoMap.get(a.id) || [];
+          const modalidadSet = [...new Set(gruposMateria.map(g => g.modalidad))];
+          return (
+            <a href={`/docente/materia/${a.id}?cuatrimestre=${cuatrimestreId}`} class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover hover:-translate-y-0.5 transition-all border border-slate-100">
+              <div class="flex items-start justify-between gap-4 mb-3">
+                <div>
+                  <p class="text-xs uppercase text-slate-400 font-semibold">Materia</p>
+                  <h2 class="text-lg font-bold text-tup">{a.nombre}</h2>
+                  <p class="text-xs text-slate-500">{a.clave}</p>
+                </div>
+                <span class="px-2 py-1 rounded-full text-[10px] font-semibold bg-tup/10 text-tup">{gruposMateria.length} grupo{gruposMateria.length!==1?'s':''}</span>
+              </div>
+              <div class="flex flex-wrap gap-2 mb-3">
+                {modalidadSet.map(m => (<span class="px-2 py-1 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">{m}</span>))}
+              </div>
+              <div class="space-y-1 text-sm text-slate-600">
+                {gruposMateria.map(g => (<div class="flex items-center justify-between gap-3"><span>Grupo {g.clave}</span><span class="text-xs text-slate-400">{g.modalidad}</span></div>))}
+              </div>
+              <div class="mt-4 text-sm font-medium text-tup">Ver resultados →</div>
+            </a>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</LayoutDocente>

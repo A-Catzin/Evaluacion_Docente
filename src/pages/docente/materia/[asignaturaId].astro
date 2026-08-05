@@ -1,0 +1,157 @@
+---
+import LayoutDocente from '../../../layouts/LayoutDocente.astro';
+import { db } from '../../../lib/db';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
+
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (!token || !refresh) return Astro.redirect('/auth');
+
+const cl = db();
+const { data: sesion } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
+if (!sesion.user) return Astro.redirect('/auth');
+
+const { data: usuario } = await cl.from('usuarios').select('entidad_id,email').eq('id', sesion.user.id).maybeSingle();
+let entidadId = usuario?.entidad_id;
+if (!entidadId && usuario?.email) {
+  const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
+  if (doc) entidadId = doc.id;
+}
+if (!entidadId) return Astro.redirect('/docente/materias');
+
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
+}
+
+const asignaturaId = parseInt(Astro.params.asignaturaId || '');
+if (!asignaturaId) return Astro.redirect('/docente/materias');
+
+const { data: docente } = await cl.from('docentes').select('nombre,apellidos,modalidad').eq('id', entidadId).maybeSingle();
+const { data: materia } = await cl.from('asignaturas').select('id,clave,nombre').eq('id', asignaturaId).maybeSingle();
+const { data: grupos } = await cl.from('grupos').select('id,clave,modalidad').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).eq('asignatura_id', asignaturaId).order('clave');
+const grupoMap = new Map<number, string>();
+(grupos || []).forEach((g) => grupoMap.set(g.id, g.clave));
+
+const { data: eeData } = await cl.from('encuesta_estudiantil').select('score_normalizado,comentarios,asignatura_id,grupo_id,fecha_registro').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).eq('asignatura_id', asignaturaId);
+const eeRows = eeData || [];
+const eeScores = eeRows
+  .map((e) => {
+    const score = Number(e.score_normalizado);
+    if (Number.isFinite(score) && score > 0) return score;
+    return null;
+  })
+  .filter((v): v is number => v != null);
+const eeAvg = eeScores.length ? Math.round(eeScores.reduce((a,b)=>a+b,0)/eeScores.length) : null;
+function splitComentarios(text: string | null | undefined): string[] {
+  return String(text ?? '')
+    .split('|')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+const eeComentarios = eeRows.flatMap((row) => {
+  const grupo = row.grupo_id ? grupoMap.get(Number(row.grupo_id)) || `Grupo ${row.grupo_id}` : null;
+  const fecha = row.fecha_registro ? new Date(row.fecha_registro) : null;
+  return splitComentarios(row.comentarios).map((comentario) => ({
+    comentario,
+    grupo,
+    fecha,
+  }));
+});
+
+const { data: planData } = await cl.from('planeaciones').select('asignatura_id,grupo,puntaje_promedio,estado,comentario_retroalimentacion,observaciones_generales').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).eq('asignatura_id', asignaturaId).order('fecha_subida', { ascending: false });
+const planAprob = (planData||[]).filter(p => p.estado === 'Aprobado');
+const planAvg = planAprob.length ? Math.round(planAprob.reduce((a,b)=>a + (b.puntaje_promedio || 0), 0) / planAprob.length) : null;
+
+const { data: coordData } = await cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1);
+const coord = coordData?.[0] || null;
+
+const { data: diagData } = await cl.from('autodiagnosticos').select('puntaje_total,nivel_desempeno,comentarios').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1);
+const diag = diagData?.[0] || null;
+
+const { data: obsData } = await cl.from('observaciones').select('comentario_docente,comentario_evaluador,fecha_observacion').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).order('fecha_observacion', { ascending: false }).limit(1);
+const obs = obsData?.[0] || null;
+
+const cuatri = cuatrimestres.find(c => c.id === cuatrimestreId) || cuatrimestreActivo;
+---
+
+<LayoutDocente titulo="Materia — Docente">
+  <div class="animate-flotar-entrada max-w-5xl mx-auto space-y-6">
+    <div>
+      <a href="/docente/materias" class="text-sm text-tup hover:underline">← Volver a materias</a>
+      <h1 class="text-3xl font-bold text-tup mt-2">{materia?.nombre || 'Materia'}</h1>
+      <p class="text-slate-500">{docente?.nombre?.toUpperCase()} {docente?.apellidos?.toUpperCase()} · {cuatri?.clave || ''}</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+        <p class="text-xs uppercase text-slate-400 font-semibold">Encuesta estudiantil de la materia</p>
+        <p class="text-3xl font-bold text-tup mt-2">{eeAvg ?? '—'}</p>
+        <p class="text-xs text-slate-500 mt-1">Promedio de la evaluación estudiantil ligada a esta asignatura</p>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+        <p class="text-xs uppercase text-slate-400 font-semibold">Planeación materia</p>
+        <p class="text-3xl font-bold text-tup mt-2">{planAvg ?? '—'}</p>
+        <p class="text-xs text-slate-500 mt-1">Solo esta asignatura</p>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+        <p class="text-xs uppercase text-slate-400 font-semibold">Grupos</p>
+        <p class="text-3xl font-bold text-tup mt-2">{(grupos||[]).length}</p>
+        <p class="text-xs text-slate-500 mt-1">{(grupos||[]).map(g => g.clave).join(', ') || '—'}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+        <h2 class="font-bold text-tup mb-3">Compartido por docente</h2>
+        <div class="space-y-3 text-sm text-slate-600">
+          <div><span class="font-medium">Autodiagnóstico:</span> {diag?.nivel_desempeno || '—'}</div>
+          <div><span class="font-medium">Coordinación:</span> {coord?.categoria || '—'}</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+        <h2 class="font-bold text-tup mb-3">Observación general del docente</h2>
+        <p class="text-sm text-slate-600">Hoy se muestra unificada por docente. Si después la quieren por materia, esta consulta se puede cambiar para filtrar por asignatura.</p>
+        <p class="text-xs text-slate-400 mt-2">{obs?.comentario_evaluador || obs?.comentario_docente || 'Sin comentarios'}</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+      <h2 class="font-bold text-tup mb-3">Comentarios de la encuesta estudiantil de la materia</h2>
+      {eeComentarios.length === 0 ? (
+        <p class="text-sm text-slate-400">Sin comentarios para esta materia.</p>
+      ) : (
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {eeComentarios.map((item, idx) => (
+            <article class="rounded-2xl border border-slate-100 bg-slate-50 p-4 shadow-sm">
+              <div class="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p class="text-[11px] uppercase tracking-wider text-slate-400">Comentario #{idx + 1}</p>
+                  <p class="text-xs text-slate-500 mt-1">{item.grupo || 'Encuesta general'}{item.fecha ? ` · ${item.fecha.toLocaleDateString('es-MX')}` : ''}</p>
+                </div>
+                <span class="text-lg">💬</span>
+              </div>
+              <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{item.comentario}</p>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+
+    <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+      <h2 class="font-bold text-tup mb-3">Planeaciones de la materia</h2>
+      {(planAprob||[]).length === 0 ? (
+        <p class="text-sm text-slate-400">Sin planeaciones aprobadas para esta materia.</p>
+      ) : (
+        <div class="space-y-3">
+          {(planAprob||[]).map(p => (<div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 text-sm"><span>{p.grupo || 'Grupo'}</span><span class="font-semibold text-tup">{Math.round(p.puntaje_promedio || 0)}%</span></div>))}
+        </div>
+      )}
+    </div>
+  </div>
+</LayoutDocente>

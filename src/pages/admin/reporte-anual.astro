@@ -12,12 +12,12 @@ const cuatrimestres = (await obtenerCuatrimestres()).sort((a,b)=>a.id-b.id);
 const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
 const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
-const docente = docentes.find(d=>d.id===docenteSel);
 
 const modo = (Astro.url.searchParams.get('modo') || 'individual') as 'individual' | 'general';
 
 // ─── Individual ───
 const docenteSel = parseInt(Astro.url.searchParams.get('docente_id')||'') || 0;
+const docente = docentes.find(d=>d.id===docenteSel);
 
 let historial: any[] = [];
 let totalCycles = 0, sumFinals = 0;

@@ -24,8 +24,11 @@ const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
 const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
+if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
+}
 // Materias asignadas al docente via grupos
 const { data: gruposDocente } = await cl.from('grupos').select('id,clave,asignatura_id,modalidad').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId);
 const materiasIds = [...new Set((gruposDocente||[]).map(g => g.asignatura_id))];

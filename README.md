@@ -1,46 +1,60 @@
-# Astro Starter Kit: Basics
+# SED-360 — Sistema de Evaluación Docente 360°
 
-```sh
-npm create astro@latest -- --template basics
-```
+Plataforma integral de evaluación docente para el Tecnológico Universitario Playacar. Mide el desempeño docente desde 5 instrumentos evaluados por diferentes actores, generando una calificación final ponderada.
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Stack
 
-## 🚀 Project Structure
+| Capa | Tecnología |
+|------|-----------|
+| Framework | Astro 4.16.18 SSR |
+| Estilos | Tailwind CSS 3.4.17 |
+| Base de datos | Supabase PostgreSQL |
+| Auth | Google OAuth (`@tecplayacar.edu.mx`) + cookies |
+| Storage | Cloudflare R2 (planeaciones PDF) |
+| Validación | Zod |
+| Deploy | Vercel (`@astrojs/vercel`, Node 20.x) |
 
-Inside of your Astro project, you'll see the following folders and files:
+## Roles (4 activos)
+
+| Rol | Acceso |
+|-----|--------|
+| Superadmin | Total: KPIs, catálogos, usuarios, importación CSV, asignaciones, reportes |
+| Coordinador | Evalúa docentes asignados: CA, OC, PD. Reportes de su grupo |
+| Docente | Resultados al cierre, autodiagnóstico, planeaciones, feedback |
+| Observador | Observaciones de clase a docentes asignados (3 modalidades) |
+
+> El plan es volver a 5 roles en el futuro incluyendo estudiantes, migrando toda la información y procesos estudiantiles dentro de la app. Actualmente los datos de evaluación estudiantil provienen de importación CSV Saeko.
+
+## Estructura del proyecto
 
 ```text
-/
-├── public/
-│   └── favicon.svg
-├── src
-│   ├── assets
-│   │   └── astro.svg
-│   ├── components
-│   │   └── Welcome.astro
-│   ├── layouts
-│   │   └── Layout.astro
-│   └── pages
-│       └── index.astro
-└── package.json
+src/
+├── components/          # Componentes UI reutilizables
+├── features/            # Lógica de dominio (moderación, etc.)
+├── layouts/             # Layouts por rol (BaseLayout, Layout, LayoutAdmin, LayoutCoordinador, LayoutDocente, LayoutObservador)
+├── lib/                 # Clientes: db.ts, storage.ts (Cloudflare R2), supabaseClient.ts
+├── pages/               # Páginas Astro + endpoints API
+│   ├── admin/           # Dashboard, catálogos, docentes, evaluar-docentes, instrumentos, reportes
+│   ├── coordinador/     # Dashboard, captura, docentes, planeaciones, reportes
+│   ├── docente/         # Dashboard, autodiagnóstico, autoevaluación, materias, planeaciones
+│   ├── observador/      # Dashboard
+│   └── api/             # Endpoints REST (auth, admin, coordinador, docente)
+├── services/            # Lógica de negocio: autodiagnostico, calificaciones, catalogos, docentes, estudiantes, instrumentos, notificaciones, observaciones, planeaciones, scoring, usuarios
+└── types/               # Tipos TypeScript (supabase.ts)
+supabase/
+└── migrations/          # Migraciones 001–026 (incluye 026_neon y 025_notificaciones)
 ```
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+## Comandos
 
-## 🧞 Commands
+| Comando | Acción |
+|---------|--------|
+| `npm install` | Instalar dependencias |
+| `npm run dev` | Servidor de desarrollo en `localhost:4321` |
+| `npm run build` | Build de producción a `./dist/` |
+| `npm run preview` | Previsualizar build local |
+| `npm run check:r2` | Verificar configuración de Cloudflare R2 |
 
-All commands are run from the root of the project, from a terminal:
+## Documentación
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Ver `docs/contexto.md` para la visión general del sistema y `docs/roadmap.md` para el estado actual y plan futuro.

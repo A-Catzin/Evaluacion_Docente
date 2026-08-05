@@ -22,11 +22,19 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ error: 'Datos inválidos' }), { status: 400 });
     }
 
-    const { error } = await cliente.from('usuarios').update({ rol }).eq('id', user_id);
+    const { data: actualizado, error } = await cliente
+      .from('usuarios')
+      .update({ rol })
+      .eq('id', user_id)
+      .select('id')
+      .maybeSingle();
+
     if (error) throw error;
+    if (!actualizado) return new Response(JSON.stringify({ error: 'Usuario no encontrado' }), { status: 404 });
 
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'Error interno' }), { status: 500 });
+    const message = err instanceof Error ? err.message : 'Error interno';
+    return new Response(JSON.stringify({ error: message }), { status: 500 });
   }
 };
