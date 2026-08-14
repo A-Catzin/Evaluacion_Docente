@@ -9,9 +9,10 @@ const busqueda = Astro.url.searchParams.get('q') || '';
 const pathname = Astro.url.pathname;
 const cuatrimestre = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
-const idSeleccionado = Astro.url.searchParams.get('cuatrimestre') || cuatrimestre?.id?.toString() || '';
+const idSeleccionado = Astro.url.searchParams.get('cuatrimestre') || '';
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(idSeleccionado) || parseInt(cuatrimestreIdCookie||'') || cuatrimestre?.id || 0;
+const cuatrimestreId = parseInt(idSeleccionado) || cuatrimestre?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
 // Persistir en cookie
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
@@ -138,17 +139,17 @@ filasTodas.forEach(f => { catCounts[f.cat360]++; });
 function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
 function colorN(n: number|null|undefined): string { if (!n) return ''; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
 
-const cuatrimestreSel = cuatrimestres.find(c => c.id.toString() === idSeleccionado) || cuatrimestre;
+const cuatrimestreSel = cuatrimestres.find(c => c.id === cuatrimestreId) || cuatrimestre;
 
 const accesosRapidos = [
-  { href: '/admin/dashboard', titulo: 'Resultados', desc: 'Resumen general, indicadores y docentes evaluados.', icono: '📊' },
-  { href: '/admin/reporte-anual', titulo: 'Reporte Anual', desc: 'Comparativas por ciclo y análisis histórico.', icono: '📈' },
-  { href: '/admin/docentes', titulo: 'Docentes', desc: 'Consulta y control del personal docente.', icono: '👨‍🏫' },
-  { href: '/admin/cuatrimestres', titulo: 'Cuatrimestres', desc: 'Activa, abre o cierra ciclos académicos.', icono: '📅' },
-  { href: '/admin/asignaciones', titulo: 'Asignaciones', desc: 'Gestiona coordinadores y evaluadores.', icono: '🔗' },
-  { href: '/admin/usuarios', titulo: 'Usuarios', desc: 'Administra accesos, roles y cuentas.', icono: '👥' },
-  { href: '/admin/evaluar-docentes', titulo: 'Evaluaciones', desc: 'Captura y revisión de docentes.', icono: '⭐' },
-  { href: '/admin/instrumentos', titulo: 'Instrumentos', desc: 'Configura reactivos, módulos y escalas.', icono: '🧩' },
+  { href: '/admin/dashboard', titulo: 'Resultados', desc: 'Resumen general, indicadores y docentes evaluados.', icono: '📊', cycleScoped: true },
+  { href: '/admin/reporte-anual', titulo: 'Reporte Anual', desc: 'Comparativas por ciclo y análisis histórico.', icono: '📈', cycleScoped: true },
+  { href: '/admin/docentes', titulo: 'Docentes', desc: 'Consulta y control del personal docente.', icono: '👨‍🏫', cycleScoped: true },
+  { href: '/admin/cuatrimestres', titulo: 'Cuatrimestres', desc: 'Activa, abre o cierra ciclos académicos.', icono: '📅', cycleScoped: false },
+  { href: '/admin/asignaciones', titulo: 'Asignaciones', desc: 'Gestiona coordinadores y evaluadores.', icono: '🔗', cycleScoped: true },
+  { href: '/admin/usuarios', titulo: 'Usuarios', desc: 'Administra accesos, roles y cuentas.', icono: '👥', cycleScoped: false },
+  { href: '/admin/evaluar-docentes', titulo: 'Evaluaciones', desc: 'Captura y revisión de docentes.', icono: '⭐', cycleScoped: true },
+  { href: '/admin/instrumentos', titulo: 'Instrumentos', desc: 'Configura reactivos, módulos y escalas.', icono: '🧩', cycleScoped: false },
 ];
 ---
 
@@ -162,7 +163,7 @@ const accesosRapidos = [
 
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
       {accesosRapidos.map(card => (
-        <a href={card.href} class={`bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover hover:-translate-y-0.5 transition-all border ${pathname === card.href ? 'border-tup/30' : 'border-slate-100'}`}>
+        <a href={`${card.href}${card.cycleScoped ? qs : ''}`} class={`bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover hover:-translate-y-0.5 transition-all border ${pathname === card.href ? 'border-tup/30' : 'border-slate-100'}`}>
           <div class="flex items-start justify-between gap-3">
             <div>
               <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">{card.titulo}</p>
@@ -202,9 +203,10 @@ const accesosRapidos = [
 
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
+        <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
         <input type="text" name="q" value={busqueda} placeholder="Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href="/admin/dashboard" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+        {busqueda && (<a href={`/admin/dashboard${qs}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 

@@ -34,7 +34,9 @@ schema.sql
 
 
 Analisis/
-base_datos/
-formularios/
+
+docs/base_datos/
+
+docs/formularios/
 
 /src/supabase/

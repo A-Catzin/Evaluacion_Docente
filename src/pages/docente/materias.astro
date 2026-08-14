@@ -5,6 +5,7 @@ import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+const currentSearch = Astro.url.search || '';
 if (!token || !refresh) return Astro.redirect('/auth');
 
 const cl = db();
@@ -17,7 +18,7 @@ if (!entidadId && usuario?.email) {
   const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
   if (doc) entidadId = doc.id;
 }
-if (!entidadId) return Astro.redirect('/docente/dashboard');
+if (!entidadId) return Astro.redirect(`/docente/dashboard${currentSearch}`);
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();

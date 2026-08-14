@@ -1,11 +1,15 @@
 ---
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 const docenteIdParam = Astro.url.searchParams.get('docente_id');
-const qs = docenteIdParam ? `?docente_id=${docenteIdParam}` : '';
+const cuatrimestreParam = Astro.url.searchParams.get('cuatrimestre');
+const params = new URLSearchParams();
+if (docenteIdParam) params.set('docente_id', docenteIdParam);
+if (cuatrimestreParam) params.set('cuatrimestre', cuatrimestreParam);
+const qs = params.toString() ? `?${params.toString()}` : '';
 ---
 <LayoutAdmin titulo="Observación — Admin">
   <div class="animate-flotar-entrada max-w-2xl mx-auto">
-    <a href="/admin/evaluar-docentes" class="text-sm text-tup hover:underline mb-4 inline-block">← Volver a Evaluar Docentes</a>
+    <a href={`/admin/evaluar-docentes${qs}`} class="text-sm text-tup hover:underline mb-4 inline-block">← Volver a Evaluar Docentes</a>
     <h1 class="text-3xl font-bold text-tup mb-2">Nueva Observación (Admin)</h1>
     <p class="text-slate-500 mb-8">Selecciona el tipo de observación que deseas realizar</p>
 

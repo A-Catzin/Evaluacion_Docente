@@ -1,119 +1,51 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+
+const cuatrimestre = Astro.url.searchParams.get('cuatrimestre');
+const qs = cuatrimestre ? `?cuatrimestre=${encodeURIComponent(cuatrimestre)}` : '';
 ---
 
-<LayoutAdmin titulo="Importar CSV — Admin">
-  <div class="animate-flotar-entrada max-w-2xl mx-auto">
-    <h1 class="text-3xl font-bold text-tup mb-2">Importar Evaluaciones (Saeko)</h1>
-    <p class="text-slate-500 mb-6">Subí el archivo CSV exportado de Saeko para cargar las evaluaciones estudiantiles.</p>
-
-    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
-      <h2 class="text-lg font-bold text-tup mb-4">📤 Subir archivo</h2>
-      <form id="form-importar" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Archivo CSV *</label>
-          <input type="file" id="archivo" accept=".csv" required class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-tup file:text-white" />
-        </div>
-        <div class="bg-amber-50 rounded-xl p-4 text-sm text-amber-700">
-          <p class="font-medium mb-1">📋 Requisitos del archivo:</p>
-          <ul class="list-disc ml-4 text-xs space-y-1">
-            <li>Formato CSV exportado de Saeko (evaluaciones de profesores)</li>
-            <li>Columnas: Plan de estudios, Grupo, Asignatura Clave, Nombre del docente, Promedio, etc.</li>
-            <li>Solo se procesan las filas con estado "Completada"</li>
-            <li>Máximo 10 MB</li>
-          </ul>
-        </div>
-        <button type="submit" id="btn-subir" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90 transition-all">
-          Subir y Procesar CSV
-        </button>
-      </form>
+<LayoutAdmin titulo="Importaciones — Admin">
+  <div class="animate-flotar-entrada max-w-5xl mx-auto">
+    <div class="mb-8">
+      <p class="text-sm font-medium text-tup mb-2">Centro de importaciones</p>
+      <h1 class="text-3xl font-bold text-slate-800 mb-2">Importar información</h1>
+      <p class="text-slate-500 max-w-2xl">Elegí un flujo según el origen de tus datos. Cada importación conserva su propio contrato y alcance para evitar mezclar información académica.</p>
     </div>
 
-    <!-- Barra de progreso -->
-    <div id="barra-progreso" class="hidden bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
-      <p class="text-sm font-medium text-slate-700 mb-2" id="progreso-texto">Procesando...</p>
-      <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-        <div id="progreso-fill" class="h-full bg-tup rounded-full transition-all duration-300" style="width:0%"></div>
-      </div>
-      <p class="text-xs text-slate-400 mt-1" id="progreso-num">0 / 0</p>
+    <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <a href={`/admin/importar-alumnos${qs}`} class="group bg-white rounded-2xl p-6 shadow-tarjeta border border-transparent hover:border-tup/20 hover:shadow-lg transition-all">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-2xl mb-5">👥</div>
+        <h2 class="text-lg font-bold text-slate-800 group-hover:text-tup transition-colors">Importar alumnos / Actualizar grupos</h2>
+        <p class="text-sm text-slate-500 mt-3">Carga un padrón CSV completo para el ciclo elegido y actualiza inscripciones contra grupos académicos ya registrados.</p>
+        <span class="inline-flex mt-6 text-sm font-semibold text-tup">Abrir importador <span aria-hidden="true" class="ml-1">→</span></span>
+      </a>
+
+      <a href={`/admin/importar-docentes${qs}`} class="group bg-white rounded-2xl p-6 shadow-tarjeta border border-transparent hover:border-tup/20 hover:shadow-lg transition-all">
+        <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center text-2xl mb-5">🧑‍🏫</div>
+        <h2 class="text-lg font-bold text-slate-800 group-hover:text-tup transition-colors">Importar docentes</h2>
+        <p class="text-sm text-slate-500 mt-3">Alta y actualización del catálogo de docentes mediante correo o número de empleado estable.</p>
+        <span class="inline-flex mt-6 text-sm font-semibold text-amber-700">Abrir importador <span aria-hidden="true" class="ml-1">→</span></span>
+      </a>
+
+      <a href={`/admin/importar-asignaciones${qs}`} class="group bg-white rounded-2xl p-6 shadow-tarjeta border border-transparent hover:border-tup/20 hover:shadow-lg transition-all">
+        <div class="w-12 h-12 rounded-2xl bg-violet-50 text-violet-700 flex items-center justify-center text-2xl mb-5">🔗</div>
+        <h2 class="text-lg font-bold text-slate-800 group-hover:text-tup transition-colors">Asignar grupos, materias y docentes</h2>
+        <p class="text-sm text-slate-500 mt-3">Reconcilia el reporte de clases contra el ciclo seleccionado sin crear ciclos ni hacer coincidencias difusas.</p>
+        <span class="inline-flex mt-6 text-sm font-semibold text-violet-700">Abrir importador <span aria-hidden="true" class="ml-1">→</span></span>
+      </a>
+
+      <a href={`/admin/importar-saeko${qs}`} class="group bg-white rounded-2xl p-6 shadow-tarjeta border border-transparent hover:border-tup/20 hover:shadow-lg transition-all">
+        <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center text-2xl mb-5">📊</div>
+        <h2 class="text-lg font-bold text-slate-800 group-hover:text-tup transition-colors">Importar evaluaciones Saeko</h2>
+        <p class="text-sm text-slate-500 mt-3">Conserva el flujo actual para cargar resultados de evaluaciones docentes exportados desde Saeko.</p>
+        <span class="inline-flex mt-6 text-sm font-semibold text-tup">Abrir importador <span aria-hidden="true" class="ml-1">→</span></span>
+      </a>
     </div>
 
-    <!-- Resultado -->
-    <div id="resultado" class="hidden bg-white rounded-2xl p-6 shadow-tarjeta">
-      <h2 id="resultado-titulo" class="text-lg font-bold mb-4"></h2>
-      <div id="resultado-detalle" class="text-sm text-slate-600 space-y-1"></div>
+    <div class="mt-6 rounded-2xl bg-slate-50 border border-slate-200 p-5 text-sm text-slate-600">
+      <p class="font-semibold text-slate-700 mb-1">Alcance del centro</p>
+      <p>El ciclo se selecciona en la aplicación. Los valores <code class="text-xs bg-white px-1.5 py-0.5 rounded">CICLO</code> de un CSV solo se usan para diagnosticar mezclas o diferencias; nunca crean ni cambian ciclos.</p>
     </div>
-
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
 </LayoutAdmin>
-
-<script is:inline>
-  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},5000)}
-
-  document.getElementById('form-importar').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    var file = document.getElementById('archivo').files[0];
-    if (!file) { toast('Selecciona un archivo CSV', true); return; }
-    if (file.size > 10 * 1024 * 1024) { toast('El archivo no debe superar 10 MB', true); return; }
-
-    var btn = document.getElementById('btn-subir');
-    btn.disabled = true; btn.textContent = 'Procesando...';
-
-    // Contar filas totales para la barra
-    var text = await file.text();
-    var lines = text.split('\n').filter(function(l) { return l.trim(); });
-    var total = lines.length - 1; // menos el header
-
-    // Mostrar barra de progreso
-    var barra = document.getElementById('barra-progreso');
-    barra.classList.remove('hidden');
-    document.getElementById('progreso-num').textContent = '0 / ' + total;
-
-    // Simular progreso mientras se procesa
-    var progress = 0;
-    var interval = setInterval(function() {
-      progress = Math.min(progress + Math.ceil(total / 50), total - 1);
-      var pct = Math.round((progress / total) * 100);
-      document.getElementById('progreso-fill').style.width = pct + '%';
-      document.getElementById('progreso-num').textContent = progress + ' / ' + total;
-      document.getElementById('progreso-texto').textContent = 'Procesando filas...';
-    }, 500);
-
-    var formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      var res = await fetch('/api/admin/importar-saeko', { method: 'POST', body: formData });
-      clearInterval(interval);
-
-      // Completar barra
-      document.getElementById('progreso-fill').style.width = '100%';
-      document.getElementById('progreso-num').textContent = total + ' / ' + total;
-      document.getElementById('progreso-texto').textContent = '¡Completado!';
-      setTimeout(function() { barra.classList.add('hidden'); }, 1500);
-
-      var data = await res.json();
-
-      if (res.ok) {
-        toast('Importación completada', false);
-        document.getElementById('resultado').classList.remove('hidden');
-        document.getElementById('resultado-titulo').textContent = '✅ Importación exitosa';
-        document.getElementById('resultado-titulo').className = 'text-lg font-bold text-emerald-700 mb-4';
-        document.getElementById('resultado-detalle').innerHTML =
-          '<p>📄 Filas procesadas: <strong>' + data.total + '</strong></p>' +
-          '<p>👨‍🏫 Docentes: <strong>' + data.docentes + '</strong></p>' +
-          '<p>📚 Asignaturas: <strong>' + data.asignaturas + '</strong></p>' +
-          '<p>👥 Grupos: <strong>' + data.grupos + '</strong></p>' +
-          '<p>📊 Evaluaciones guardadas: <strong>' + data.evaluaciones + '</strong></p>' +
-          (data.errores ? '<p class="text-amber-600 mt-2">⚠️ ' + data.errores + ' errores</p>' : '');
-      } else {
-        toast(data.error || 'Error al procesar', true);
-        btn.disabled = false; btn.textContent = 'Subir y Procesar CSV';
-      }
-    } catch (err) {
-      toast('Error de conexión', true);
-      btn.disabled = false; btn.textContent = 'Subir y Procesar CSV';
-    }
-  });
-</script>

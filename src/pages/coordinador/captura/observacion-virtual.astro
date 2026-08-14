@@ -8,7 +8,7 @@ import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../servic
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
 const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
 const cuatrimestreClave = cuatrimestre?.clave || '26-2';
 
@@ -96,7 +96,7 @@ const SECCIONES = [
     prefs.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb)data[p+i]=rb.value==='N/A'?0:parseInt(rb.value)}});
     prefs.forEach(function(p){var obs=document.querySelector('textarea[name="obs_'+p+'"]');if(obs&&obs.value.trim())data['obs_'+p]=obs.value.trim()});
     data.comentario_evaluador=document.getElementById('com_evaluador').value.trim()||null;
-    try{var res=await fetch('/api/coordinador/observacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('Observación guardada',false);setTimeout(function(){location.href='/coordinador/dashboard'},1500)}else{var j=await res.json();toast(j.error||'Error',true);btn.disabled=false;btn.textContent='Enviar Observación Virtual'}}catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación Virtual'}
+    try{var res=await fetch('/api/coordinador/observacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('Observación guardada',false);setTimeout(function(){location.href='/coordinador/dashboard?cuatrimestre='+cuatrimestreId},1500)}else{var j=await res.json();toast(j.error||'Error',true);btn.disabled=false;btn.textContent='Enviar Observación Virtual'}}catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación Virtual'}
   });
 document.addEventListener("input", function(e){ if(e.target.id==="buscar-docente") filtrarDocentes(e.target.value); });
 </script>

@@ -1,0 +1,80 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+
+const cuatrimestres = await obtenerCuatrimestres();
+const activo = await obtenerCuatrimestreActivo();
+const queryId = Number(Astro.url.searchParams.get('cuatrimestre'));
+const cookieId = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+const cuatrimestreId = cuatrimestres.some(c => c.id === queryId) ? queryId : activo?.id || cookieId || cuatrimestres[0]?.id || 0;
+---
+
+<LayoutAdmin titulo="Importar alumnos — Admin">
+  <div class="animate-flotar-entrada max-w-4xl mx-auto">
+    <div class="flex items-center gap-3 mb-6">
+      <a href={`/admin/importar${cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : ''}`} class="text-sm text-slate-400 hover:text-tup">← Importaciones</a>
+    </div>
+    <div class="mb-6">
+      <p class="text-sm font-medium text-emerald-700 mb-2">Padrón de alumnos</p>
+      <h1 class="text-3xl font-bold text-slate-800 mb-2">Importar alumnos / Actualizar grupos</h1>
+      <p class="text-slate-500">Subí el archivo completo de alumnos. El ciclo seleccionado define el alcance de grupos e inscripciones.</p>
+    </div>
+
+    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
+      <form id="form-importar" class="space-y-5">
+        <div>
+          <label for="cuatrimestre" class="block text-sm font-medium text-slate-700 mb-1">Ciclo de destino *</label>
+          <select id="cuatrimestre" name="cuatrimestre" required class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:ring-2 focus:ring-tup focus:outline-none">
+            <option value="">Seleccionar ciclo...</option>
+            {cuatrimestres.map(c => <option value={c.id} selected={c.id === cuatrimestreId}>{c.clave}{c.nombre ? ` · ${c.nombre}` : ''}</option>)}
+          </select>
+          <p class="text-xs text-slate-400 mt-2">El CSV no puede cambiar este ciclo ni crear uno nuevo. Su columna CICLO solo se conserva como diagnóstico informativo.</p>
+        </div>
+        <div>
+          <label for="archivo" class="block text-sm font-medium text-slate-700 mb-1">Archivo CSV *</label>
+          <input type="file" id="archivo" accept=".csv,text/csv" required class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-tup file:text-white" />
+          <p class="text-xs text-slate-400 mt-2">Se acepta el archivo completo, incluyendo comas, saltos de línea y campos entre comillas. Máximo 25 MB.</p>
+        </div>
+        <div class="rounded-xl bg-amber-50 border border-amber-100 p-4 text-sm text-amber-800">
+          <p class="font-semibold mb-1">Importación segura</p>
+           <p>El nombre se toma únicamente de <strong>NOMBRE COMPLETO</strong>; las columnas separadas de nombre y apellidos se ignoran. El ciclo seleccionado define la importación y se crean o actualizan grupos base sin inventar docentes, asignaturas ni correos ficticios.</p>
+        </div>
+        <button type="submit" id="btn-importar" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90 transition-all disabled:opacity-60">Subir y procesar padrón</button>
+      </form>
+    </div>
+
+    <div id="estado" class="hidden bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
+      <div class="flex items-center gap-3"><span class="w-3 h-3 rounded-full bg-tup animate-pulse"></span><p id="estado-texto" class="text-sm font-medium text-slate-700">Procesando archivo completo...</p></div>
+    </div>
+
+    <div id="resultado" class="hidden bg-white rounded-2xl p-6 shadow-tarjeta">
+      <div class="flex items-start justify-between gap-4 mb-5"><div><p class="text-sm font-medium text-emerald-700">Resultado de la importación</p><h2 id="resultado-ciclo" class="text-xl font-bold text-slate-800 mt-1"></h2></div><span id="resultado-alerta" class="text-xs px-2.5 py-1 rounded-lg"></span></div>
+      <div id="metricas" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+      <div id="diagnosticos" class="hidden mt-6 rounded-xl bg-amber-50 border border-amber-100 p-4"><p class="font-semibold text-sm text-amber-800 mb-2">Diagnósticos que requieren revisión</p><ul id="diagnosticos-lista" class="text-xs text-amber-800 space-y-1 max-h-64 overflow-y-auto"></ul></div>
+      <p id="nota-carga" class="mt-5 text-xs text-slate-500"></p>
+    </div>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
+</LayoutAdmin>
+
+<script is:inline>
+  function toast(message, error) { var element=document.getElementById('toast'); element.textContent=message; element.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(error?'bg-red-600 text-white':'bg-emerald-600 text-white'); element.classList.remove('hidden'); setTimeout(function(){element.classList.add('hidden')},5000); }
+  function metric(label, value) { return '<div class="rounded-xl bg-slate-50 p-3"><p class="text-[11px] text-slate-500">'+label+'</p><p class="text-xl font-bold text-slate-800 mt-1">'+value+'</p></div>'; }
+  var reasonLabels={estado_no_inscrito:'Estado no inscrito',identidad_incompleta:'Identidad incompleta',identidad_fuera_de_rango:'Identidad fuera de rango',identidad_ambigua:'Identidad ambigua',estudiante_no_guardado:'Alumno no guardado',grupo_ambiguo:'Grupo ambiguo',grupo_no_guardado:'Grupo no guardado',inscripcion_no_guardada:'Inscripción no guardada'};
+  document.getElementById('form-importar').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    var file=document.getElementById('archivo').files[0]; var cycle=document.getElementById('cuatrimestre').value;
+    if(!cycle){toast('Selecciona el ciclo de destino',true);return} if(!file){toast('Selecciona un archivo CSV',true);return} if(file.size>25*1024*1024){toast('El archivo no debe superar 25 MB',true);return}
+    var button=document.getElementById('btn-importar');button.disabled=true;button.textContent='Procesando archivo completo...';document.getElementById('estado').classList.remove('hidden');
+    var formData=new FormData();formData.append('file',file);formData.append('cuatrimestre_id',cycle);
+    try {
+      var response=await fetch('/api/admin/importar-alumnos',{method:'POST',body:formData}); var data=await response.json();
+      if(!response.ok){toast(data.error||'No se pudo procesar el padrón',true);button.disabled=false;button.textContent='Subir y procesar padrón';document.getElementById('estado').classList.add('hidden');return}
+      document.getElementById('estado').classList.add('hidden');document.getElementById('resultado').classList.remove('hidden');document.getElementById('resultado-ciclo').textContent='Ciclo '+data.cycle.clave;
+       var requiresReview=Number(data.errors)>0||Number(data.ambiguous)>0||Number(data.skipped)>0;document.getElementById('resultado-alerta').textContent=requiresReview?'Requiere revisión':'Procesado';document.getElementById('resultado-alerta').className='text-xs px-2.5 py-1 rounded-lg '+(requiresReview?'bg-amber-100 text-amber-800':'bg-emerald-100 text-emerald-700');
+       document.getElementById('metricas').innerHTML=metric('Filas leídas',data.rowsRead)+metric('Alumnos coincidentes',data.studentsMatched)+metric('Alumnos creados',data.studentsCreated)+metric('Alumnos actualizados',data.studentsUpdated)+metric('Grupos coincidentes',data.groupsMatched)+metric('Grupos creados',data.groupsCreated)+metric('Grupos actualizados',data.groupsUpdated)+metric('Inscripciones upsert',data.inscriptionsUpserted)+metric('Omitidas',data.skipped)+metric('Ambiguas',data.ambiguous)+metric('Errores',data.errors)+metric('Valores CICLO del archivo',(data.cycleValues||[]).length);
+       var list=document.getElementById('diagnosticos-lista');list.innerHTML='';document.getElementById('diagnosticos').classList.toggle('hidden',!(data.diagnostics||[]).length);(data.diagnostics||[]).forEach(function(item){var li=document.createElement('li');li.textContent=(item.row?'Fila '+item.row+': ':'')+(reasonLabels[item.reason]||item.reason)+(item.matricula?' · '+item.matricula:'')+(item.grupo?' · '+item.grupo:'');list.appendChild(li)});
+       document.getElementById('nota-carga').textContent='Los grupos base se crean o actualizan sin docente ni asignatura. La futura carga de docentes/materias los vinculará sin crear identidades desde este padrón.';toast('Padrón procesado',false);button.disabled=false;button.textContent='Procesar otro archivo';
+    } catch(error) { toast('Error de conexión',true);button.disabled=false;button.textContent='Subir y procesar padrón';document.getElementById('estado').classList.add('hidden'); }
+  });
+</script>

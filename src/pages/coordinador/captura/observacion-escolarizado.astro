@@ -7,7 +7,7 @@ import { db } from '../../../lib/db';
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
 const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
 const cuatrimestreClave = cuatrimestre?.clave || '26-2';
 
@@ -186,7 +186,7 @@ if (docenteIdParam) {
     try{
       var res=await fetch('/api/coordinador/observacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
       var j=await res.json();
-      if(res.ok){toast('Observación guardada exitosamente',false);setTimeout(function(){location.href='/coordinador/dashboard'},1500)}
+      if(res.ok){toast('Observación guardada exitosamente',false);setTimeout(function(){location.href='/coordinador/dashboard?cuatrimestre='+cuatrimestreId},1500)}
       else{toast(j.error||'Error al guardar',true);btn.disabled=false;btn.textContent='Enviar Observación'}
     }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación'}
   });

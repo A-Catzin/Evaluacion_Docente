@@ -8,7 +8,7 @@ const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
 const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
 const todos = await obtenerDocentes();
 

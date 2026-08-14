@@ -1,0 +1,28 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+
+const cuatrimestre = Astro.url.searchParams.get('cuatrimestre');
+const back = `/admin/importar${cuatrimestre ? `?cuatrimestre=${encodeURIComponent(cuatrimestre)}` : ''}`;
+---
+
+<LayoutAdmin titulo="Importar docentes — Admin">
+  <div class="animate-flotar-entrada max-w-3xl mx-auto">
+    <a href={back} class="text-sm text-slate-400 hover:text-tup">← Importaciones</a>
+    <div class="mb-6 mt-6"><p class="text-sm font-medium text-amber-700 mb-2">Catálogo de identidad</p><h1 class="text-3xl font-bold text-slate-800 mb-2">Importar docentes</h1><p class="text-slate-500">Este flujo solo mantiene identidades docentes. La carga académica se importa por separado desde el reporte de clases.</p></div>
+    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
+      <form id="form-importar" class="space-y-5">
+        <div><label for="archivo" class="block text-sm font-medium text-slate-700 mb-1">Archivo CSV *</label><input id="archivo" type="file" accept=".csv,text/csv" required class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-tup file:text-white" /><p class="text-xs text-slate-400 mt-2">Contrato flexible: <code>CORREO</code> o <code>NUM EMPLEADO</code> y <code>NOMBRE COMPLETO</code>, o <code>NOMBRE</code> + <code>APELLIDO PATERNO</code> + <code>APELLIDO MATERNO</code>. Se acepta BOM, CRLF y campos entre comillas.</p></div>
+        <div class="rounded-xl bg-amber-50 border border-amber-100 p-4 text-sm text-amber-800"><p class="font-semibold mb-1">Regla de seguridad</p><p>No se inventan correos. Las identidades ausentes, duplicadas o ambiguas quedan como incidencias y no se guardan.</p></div>
+        <div class="flex flex-wrap gap-3"><a href="/api/admin/importar-docentes" class="inline-flex items-center rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 hover:border-tup hover:text-tup">Descargar plantilla</a><button id="btn-importar" type="submit" class="flex-1 min-w-52 bg-tup text-white font-semibold py-3 rounded-xl hover:bg-tup/90 disabled:opacity-60">Subir y procesar</button></div>
+      </form>
+    </div>
+    <div id="resultado" class="hidden bg-white rounded-2xl p-6 shadow-tarjeta"><p class="text-sm font-medium text-emerald-700">Resultado</p><h2 id="titulo" class="text-xl font-bold text-slate-800 mt-1"></h2><div id="metricas" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5"></div><a id="reporte" class="hidden inline-flex mt-5 text-sm font-semibold text-tup hover:underline" target="_blank">Abrir reporte de revisión</a></div>
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  </div>
+</LayoutAdmin>
+
+<script is:inline>
+  function toast(message, error) { var element=document.getElementById('toast'); element.textContent=message; element.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(error?'bg-red-600 text-white':'bg-emerald-600 text-white'); element.classList.remove('hidden'); setTimeout(function(){element.classList.add('hidden')},5000); }
+  function metric(label,value){return '<div class="rounded-xl bg-slate-50 p-3"><p class="text-[11px] text-slate-500">'+label+'</p><p class="text-xl font-bold text-slate-800 mt-1">'+value+'</p></div>'}
+  document.getElementById('form-importar').addEventListener('submit',async function(event){event.preventDefault();var file=document.getElementById('archivo').files[0];if(!file){toast('Selecciona un archivo CSV',true);return}var button=document.getElementById('btn-importar');button.disabled=true;button.textContent='Procesando...';var fd=new FormData();fd.append('file',file);try{var response=await fetch('/api/admin/importar-docentes',{method:'POST',body:fd});var data=await response.json();if(!response.ok){toast(data.error||'No se pudo procesar el archivo',true);button.disabled=false;button.textContent='Subir y procesar';return}document.getElementById('resultado').classList.remove('hidden');document.getElementById('titulo').textContent=data.issues?'Procesado con incidencias':'Procesado correctamente';document.getElementById('metricas').innerHTML=metric('Filas',data.rowsRead)+metric('Coincidentes',data.matched)+metric('Creados',data.created)+metric('Actualizados',data.updated)+metric('Omitidos',data.skipped)+metric('Incidencias',data.issues);var link=document.getElementById('reporte');link.href=data.reportUrl;link.classList.remove('hidden');toast('Importación procesada',false);button.disabled=false;button.textContent='Procesar otro archivo'}catch(error){toast('Error de conexión',true);button.disabled=false;button.textContent='Subir y procesar'}});
+</script>

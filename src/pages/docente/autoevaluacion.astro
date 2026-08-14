@@ -1,4 +1,4 @@
 ---
 // Redirige al nuevo autodiagnóstico
-return Astro.redirect('/docente/autodiagnostico');
+return Astro.redirect(`/docente/autodiagnostico${Astro.url.search || ''}`);
 ---

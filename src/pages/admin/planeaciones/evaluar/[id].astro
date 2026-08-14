@@ -5,9 +5,10 @@ import { obtenerUrlFirmadaDesdeUrlAlmacenada } from '../../../../lib/storage';
 import { obtenerPlaneacion } from '../../../../services/planeaciones';
 
 const id = parseInt(Astro.params.id || '0');
+const backSearch = Astro.url.search || '';
 const cliente = db();
 const plan = await obtenerPlaneacion(id);
-if (!plan) return Astro.redirect('/admin/planeaciones');
+if (!plan) return Astro.redirect(`/admin/planeaciones${backSearch}`);
 
 let urlFirmada = plan.url_pdf;
 try {
@@ -28,7 +29,7 @@ const categorias = (cats || []).map(c => {
 
 <LayoutAdmin titulo="Evaluar Planeación — Admin">
   <div class="animate-flotar-entrada max-w-3xl mx-auto">
-    <a href="/admin/planeaciones" class="text-sm text-tup hover:underline mb-4 inline-block">← Volver</a>
+    <a href={`/admin/planeaciones${backSearch}`} class="text-sm text-tup hover:underline mb-4 inline-block">← Volver</a>
     <h1 class="text-3xl font-bold text-tup mb-2">Evaluar Planeación Docente (Admin)</h1>
     <p class="text-slate-500 mb-1">{docente?.nombre} {docente?.apellidos} · {asignatura?.nombre || ''} · Grupo {plan.grupo}</p>
     <a href={urlFirmada} target="_blank" class="text-sm text-tup hover:underline mb-6 inline-block">📄 Ver PDF de la planeación</a>
@@ -82,7 +83,7 @@ const categorias = (cats || []).map(c => {
   </div>
 </LayoutAdmin>
 
-<script is:inline define:vars={{ obsData: JSON.stringify(categorias) }}>
+<script is:inline define:vars={{ obsData: JSON.stringify(categorias), returnUrl: `/admin/planeaciones${backSearch}` }}>
   var catData = JSON.parse(obsData);
   var scores = {};
 
@@ -151,7 +152,7 @@ const categorias = (cats || []).map(c => {
 
     try {
       var res = await fetch('/api/coordinador/planeacion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-      if (res.ok) { toast('Evaluación guardada — Puntaje: ' + puntaje + '%', false); setTimeout(function() { location.href = '/admin/planeaciones'; }, 1500); }
+      if (res.ok) { toast('Evaluación guardada — Puntaje: ' + puntaje + '%', false); setTimeout(function() { location.href = returnUrl; }, 1500); }
       else { var j = await res.json(); toast(j.error || 'Error', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; }
     } catch(err) { toast('Error de conexión', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; }
   });

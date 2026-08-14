@@ -13,7 +13,8 @@ const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
@@ -134,9 +135,10 @@ function buildPageUrl(p:number) {
     </div>
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
+        <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href="/admin/docentes" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+        {busqueda && (<a href={`/admin/docentes${qs}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden overflow-x-auto">
@@ -171,7 +173,7 @@ function buildPageUrl(p:number) {
                 <td class="px-2 py-2 text-center {colorScore(f.promCoord)}">{fmt(f.promCoord)}</td>
                 <td class="px-2 py-2 text-center {colorScore(f.promPlan)}">{fmt(f.promPlan)}</td>
                 <td class="px-2 py-2 text-center {colorScore(f.promAuto)}">{fmt(f.promAuto)}</td>
-                <td class="px-2 py-2 text-center"><a href={`/admin/docentes/${f.id}`} class="px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20 whitespace-nowrap">📋 Histórico</a></td>
+                <td class="px-2 py-2 text-center"><a href={`/admin/docentes/${f.id}${qs}`} class="px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20 whitespace-nowrap">📋 Histórico</a></td>
               </tr>
             );
           })}</tbody>

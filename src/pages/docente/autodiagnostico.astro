@@ -6,6 +6,7 @@ import { db } from '../../lib/db';
 
 const tokenAcceso = Astro.cookies.get('sb-access-token')?.value;
 const tokenRefresco = Astro.cookies.get('sb-refresh-token')?.value;
+const currentSearch = Astro.url.search || '';
 if (!tokenAcceso || !tokenRefresco) return Astro.redirect('/auth');
 
 const cliente = db();
@@ -13,7 +14,7 @@ const { data: sesion } = await cliente.auth.setSession({ access_token: tokenAcce
 if (!sesion.user) return Astro.redirect('/auth');
 
 const { data: usuario } = await cliente.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
-if (!usuario || usuario.rol !== 'docente') return Astro.redirect('/docente/dashboard');
+if (!usuario || usuario.rol !== 'docente') return Astro.redirect(`/docente/dashboard${currentSearch}`);
 let docenteId = usuario.entidad_id;
 // Si no tiene entidad_id, buscar por email
 if (!docenteId && usuario.email) {
@@ -31,6 +32,7 @@ if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
 }
 if (!cuatrimestre) return Astro.redirect('/docente/dashboard');
+const dashboardUrl = `/docente/dashboard?cuatrimestre=${cuatrimestreId}`;
 
 const { data: existente } = docenteId ? await cliente.from('autodiagnosticos').select('id').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestre.id).maybeSingle() : { data: null };
 const yaRespondido = !!existente;
@@ -86,7 +88,7 @@ const REACTIVOS = [
       <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 text-center">
         <p class="text-emerald-800 font-semibold text-lg">✅ Ya completaste tu autodiagnóstico</p>
         <p class="text-emerald-600 text-sm mt-2">No es posible enviarlo nuevamente para este cuatrimestre.</p>
-        <a href="/docente/dashboard" class="inline-block mt-4 px-6 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Volver al Dashboard</a>
+        <a href={dashboardUrl} class="inline-block mt-4 px-6 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Volver al Dashboard</a>
       </div>
     ) : (
       <>
@@ -193,13 +195,13 @@ const REACTIVOS = [
         <p id="modal-puntaje" class="text-4xl font-bold mb-1"></p>
         <p id="modal-nivel" class="text-sm font-medium mb-4"></p>
         <p id="modal-mensaje" class="text-sm text-slate-500 mb-6"></p>
-        <a href="/docente/dashboard" class="inline-block px-6 py-3 rounded-xl bg-tup text-white font-medium">Volver al Dashboard</a>
+        <a href={dashboardUrl} class="inline-block px-6 py-3 rounded-xl bg-tup text-white font-medium">Volver al Dashboard</a>
       </div>
     </div>
   </div>
 </LayoutDocente>
 
-<script is:inline define:vars={{ cuatrimestreId: cuatrimestre.id }}>
+<script is:inline define:vars={{ cuatrimestreId: cuatrimestre.id, dashboardUrl }}>
   var pasoActual = 1;
   var totalPasos = 4;
 
@@ -295,11 +297,11 @@ const REACTIVOS = [
       if (res.ok) {
         mostrarModal(data);
         // Redirigir al dashboard despues de 2s
-        setTimeout(function() { window.location.href = '/docente/dashboard'; }, 2000);
+        setTimeout(function() { window.location.href = dashboardUrl; }, 2000);
       } else {
         if (res.status === 409) {
           alert(data.error);
-          window.location.href = '/docente/dashboard';
+          window.location.href = dashboardUrl;
           return;
         }
         alert(data.error || 'Error al enviar');

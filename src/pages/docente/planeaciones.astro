@@ -5,12 +5,13 @@ import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+const currentSearch = Astro.url.search || '';
 if (!token || !refresh) return Astro.redirect('/auth');
 const cl = db();
 const { data: sesion } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
 if (!sesion.user) return Astro.redirect('/auth');
 const { data: usuario } = await cl.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
-if (!usuario || usuario.rol !== 'docente') return Astro.redirect('/docente/dashboard');
+if (!usuario || usuario.rol !== 'docente') return Astro.redirect(`/docente/dashboard${currentSearch}`);
 
 // Si no tiene entidad_id, buscar por email
 let entidadId = usuario.entidad_id;
@@ -18,7 +19,7 @@ if (!entidadId && usuario.email) {
   const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
   if (doc) entidadId = doc.id;
 }
-if (!entidadId) return Astro.redirect('/docente/dashboard');
+if (!entidadId) return Astro.redirect(`/docente/dashboard${currentSearch}`);
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();

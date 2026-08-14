@@ -1,9 +1,16 @@
 ---
 import BaseLayout from './BaseLayout.astro';
 import NotificationBell from '../components/NotificationBell.astro';
+import { obtenerCuatrimestreActivo } from '../services/catalogos';
 export interface Props { titulo?: string; }
 const { titulo = 'Admin — SED-360' } = Astro.props;
-const cuatrimestreSel = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreQuery = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestreSel = cuatrimestreQuery || (cuatrimestreActivo?.id ? String(cuatrimestreActivo.id) : cuatrimestreCookie || '');
+if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id && cuatrimestreCookie !== String(cuatrimestreActivo.id)) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
+}
 const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
 const pathname = Astro.url.pathname;
 
@@ -12,40 +19,40 @@ const secciones = [
     nombre: 'Resultados',
     icono: '📊',
     items: [
-      { href: `/admin/dashboard${qs}`, label: 'Dashboard', icon: '📊' },
-      { href: `/admin/resultados-docentes${qs}`, label: 'Docentes 360', icon: '🧑‍🏫' },
-      { href: '/admin/reporte-anual', label: 'Reporte Anual', icon: '📈' },
+      { href: '/admin/dashboard', label: 'Dashboard', icon: '📊', cycleScoped: true },
+      { href: '/admin/resultados-docentes', label: 'Docentes 360', icon: '🧑‍🏫', cycleScoped: true },
+      { href: '/admin/reporte-anual', label: 'Reporte Anual', icon: '📈', cycleScoped: true },
     ],
   },
   {
     nombre: 'Gestión de Personal',
     icono: '👥',
     items: [
-      { href: '/admin/docentes', label: 'Docentes', icon: '👨‍🏫' },
-      { href: '/admin/coordinadores', label: 'Coordinadores', icon: '📊' },
-      { href: `/admin/asignaciones${qs}`, label: 'Asignaciones', icon: '🔗' },
-      { href: '/admin/evaluar-docentes', label: 'Evaluar Docentes', icon: '⭐' },
+      { href: '/admin/docentes', label: 'Docentes', icon: '👨‍🏫', cycleScoped: true },
+      { href: '/admin/coordinadores', label: 'Coordinadores', icon: '📊', cycleScoped: false },
+      { href: '/admin/asignaciones', label: 'Asignaciones', icon: '🔗', cycleScoped: true },
+      { href: '/admin/evaluar-docentes', label: 'Evaluar Docentes', icon: '⭐', cycleScoped: true },
     ],
   },
   {
     nombre: 'Académico',
     icono: '🎓',
     items: [
-      { href: `/admin/cuatrimestres${qs}`, label: 'Cuatrimestres', icon: '📅' },
-      { href: '/admin/ofertas', label: 'Ofertas Académicas', icon: '🎓' },
-      { href: '/admin/asignaturas', label: 'Asignaturas', icon: '📚' },
-      { href: '/admin/campus', label: 'Campus', icon: '🏫' },
-      { href: '/admin/turnos', label: 'Turnos', icon: '🕐' },
+      { href: '/admin/cuatrimestres', label: 'Cuatrimestres', icon: '📅', cycleScoped: false },
+      { href: '/admin/ofertas', label: 'Ofertas Académicas', icon: '🎓', cycleScoped: false },
+      { href: '/admin/grupos-asignados', label: 'Grupos asignados', icon: '📚', cycleScoped: true },
+      { href: '/admin/campus', label: 'Campus', icon: '🏫', cycleScoped: false },
+      { href: '/admin/turnos', label: 'Turnos', icon: '🕐', cycleScoped: false },
     ],
   },
   {
     nombre: 'Configuración',
     icono: '⚙️',
     items: [
-      { href: '/admin/instrumentos', label: 'Instrumentos', icon: '📋' },
-      { href: '/admin/roles', label: 'Roles', icon: '🔑' },
-      { href: '/admin/usuarios', label: 'Usuarios', icon: '👥' },
-      { href: '/admin/importar', label: 'Importar CSV', icon: '📤' },
+      { href: '/admin/instrumentos', label: 'Instrumentos', icon: '📋', cycleScoped: false },
+      { href: '/admin/roles', label: 'Roles', icon: '🔑', cycleScoped: false },
+      { href: '/admin/usuarios', label: 'Usuarios', icon: '👥', cycleScoped: false },
+      { href: '/admin/importar', label: 'Importar CSV', icon: '📤', cycleScoped: false },
     ],
   },
 ];
@@ -73,7 +80,7 @@ function isActive(href: string): boolean {
     <!-- Sidebar: móvil (slide-in) + desktop (fixed) -->
     <aside id="sidebar" class="w-64 bg-white border-r border-slate-200 flex-shrink-0 flex flex-col fixed lg:static inset-y-0 left-0 z-50 -translate-x-full lg:translate-x-0 transition-transform duration-300">
       <div class="p-6 border-b border-slate-100 flex items-center justify-between">
-        <a href="/admin/dashboard" class="flex flex-col items-center gap-2">
+        <a href={`/admin/dashboard${qs}`} class="flex flex-col items-center gap-2">
           <img src="/logo-tup.png" alt="TUP" class="w-20 h-20 lg:w-40 lg:h-40 object-contain" />
           <span class="font-semibold text-tup text-sm">SED-360</span>
         </a>
@@ -89,7 +96,7 @@ function isActive(href: string): boolean {
             </summary>
             <div class="space-y-0.5 ml-4 mt-1.5">
               {s.items.map(item => (
-                <a href={item.href} class={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${isActive(item.href) ? 'bg-tup/10 text-tup font-medium' : 'text-slate-600 hover:bg-tup/5 hover:text-tup'}`}>
+                <a href={`${item.href}${item.cycleScoped ? qs : ''}`} class={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${isActive(item.href) ? 'bg-tup/10 text-tup font-medium' : 'text-slate-600 hover:bg-tup/5 hover:text-tup'}`}>
                   <span class="text-xs">{item.icon}</span> {item.label}
                 </a>
               ))}

@@ -1,9 +1,16 @@
 ---
 import BaseLayout from './BaseLayout.astro';
 import NotificationBell from '../components/NotificationBell.astro';
+import { obtenerCuatrimestreActivo } from '../services/catalogos';
 export interface Props { titulo?: string; }
 const { titulo = 'Coordinador — SED-360' } = Astro.props;
-const cuatrimestreSel = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreQuery = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestreSel = cuatrimestreQuery || (cuatrimestreActivo?.id ? String(cuatrimestreActivo.id) : cuatrimestreCookie || '');
+if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id && cuatrimestreCookie !== String(cuatrimestreActivo.id)) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
+}
 const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
 ---
 <BaseLayout titulo={titulo}>

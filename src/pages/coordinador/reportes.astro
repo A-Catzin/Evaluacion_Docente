@@ -12,7 +12,7 @@ const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
 const modo = (Astro.url.searchParams.get('modo') || 'individual') as 'individual' | 'general';
 
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
 const cuatrimestreSel = cuatrimestres.find(c => c.id === cuatrimestreId);
 
 const token = Astro.cookies.get('sb-access-token')?.value;
@@ -121,7 +121,6 @@ if (modo === 'general') {
 
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex flex-wrap gap-4 items-center">
-        <input type="hidden" name="modo" value={modo} />
         <div class="flex items-center gap-2">
           <label class="text-sm font-medium text-slate-700">Modo:</label>
           <select name="modo" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">

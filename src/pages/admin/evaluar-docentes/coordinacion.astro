@@ -117,7 +117,7 @@ const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docente
     if(!data.docente_id||!data.ciclo||!data.campus){toast('Completa los datos de identificación',true);btn.disabled=false;btn.textContent='Enviar Evaluación';return}
     try{
       var res=await fetch('/api/coordinador/evaluacion-coordinacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-      if(res.ok){var d=await res.json();toast('Evaluación guardada — '+d.score+'% ('+d.puntos+'/75)',false);setTimeout(function(){location.href='/admin/evaluar-docentes'},1500)}
+      if(res.ok){var d=await res.json();toast('Evaluación guardada — '+d.score+'% ('+d.puntos+'/75)',false);setTimeout(function(){location.href='/admin/evaluar-docentes?cuatrimestre='+cuatrimestreId},1500)}
       else{var j=await res.json();toast(j.error||'Error',true);btn.disabled=false;btn.textContent='Enviar Evaluación'}
     }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Evaluación'}
   });

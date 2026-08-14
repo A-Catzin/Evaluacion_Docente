@@ -1,7 +1,11 @@
 ---
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
+const cuatrimestreParam = Astro.url.searchParams.get('cuatrimestre');
 const docenteIdParam = Astro.url.searchParams.get('docente_id');
-const qs = docenteIdParam ? `?docente_id=${docenteIdParam}` : '';
+const params = new URLSearchParams();
+if (docenteIdParam) params.set('docente_id', docenteIdParam);
+if (cuatrimestreParam) params.set('cuatrimestre', cuatrimestreParam);
+const qs = params.toString() ? `?${params.toString()}` : '';
 ---
 <LayoutCoordinador titulo="Observación — Coordinador">
   <div class="animate-flotar-entrada max-w-2xl mx-auto">

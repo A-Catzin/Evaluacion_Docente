@@ -6,7 +6,10 @@ import { db } from '../../lib/db';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
-const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
+const cuatrimestreQuery = cuatrimestreId ? `&cuatrimestre=${cuatrimestreId}` : '';
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
@@ -108,9 +111,10 @@ function buildPageUrl(p:number) {
     <!-- Buscador -->
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex gap-3">
+        <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
         <input type="text" name="q" value={busqueda} placeholder="🔍 Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href="/coordinador/dashboard" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+        {busqueda && (<a href={`/coordinador/dashboard${qs}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
@@ -163,17 +167,17 @@ function buildPageUrl(p:number) {
               </div>
               <div class="flex gap-1.5">
                 {e.coordinacion === 'pendiente' ? (
-                  <a href={`/coordinador/captura/coordinacion?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-purple-600 text-white text-[10px] font-medium hover:bg-purple-700">CA</a>
+                  <a href={`/coordinador/captura/coordinacion?docente_id=${e.docente.id}${cuatrimestreQuery}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-purple-600 text-white text-[10px] font-medium hover:bg-purple-700">CA</a>
                 ) : (
                   <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ CA</span>
                 )}
                 {e.observacion === 'pendiente' ? (
-                  <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
+                  <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}${cuatrimestreQuery}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
                 ) : (
                   <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Obs.</span>
                 )}
                 {e.planeacion === 'pendiente' ? (
-                  <a href="/coordinador/planeaciones" class="flex-1 text-center px-2 py-1.5 rounded-lg bg-dorado text-white text-[10px] font-medium hover:bg-dorado/90">Plan.</a>
+                  <a href={`/coordinador/planeaciones${qs}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-dorado text-white text-[10px] font-medium hover:bg-dorado/90">Plan.</a>
                 ) : e.planeacion === 'no_aplica' ? (
                   <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-[10px] font-medium">—</span>
                 ) : (
@@ -204,8 +208,8 @@ function buildPageUrl(p:number) {
                 </div>
               </div>
               <div class="flex gap-2">
-                <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}`} class="flex-1 text-center px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100" onclick="return confirm('¿Querés editar la observación de este docente?')">✏️ Editar Obs.</a>
-                <a href={`/coordinador/planeaciones`} class="flex-1 text-center px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100">📋 Ver Plan.</a>
+                <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}${cuatrimestreQuery}`} class="flex-1 text-center px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100" onclick="return confirm('¿Querés editar la observación de este docente?')">✏️ Editar Obs.</a>
+                <a href={`/coordinador/planeaciones${qs}`} class="flex-1 text-center px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100">📋 Ver Plan.</a>
               </div>
             </div>
           ))}

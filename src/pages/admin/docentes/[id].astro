@@ -44,8 +44,9 @@ const OBS_SECTION_DEFS = [
 
 const AUTO_FIELDS = Array.from({ length: 24 }, (_, i) => `r${i + 1}`);
 
+const currentSearch = Astro.url.search || '';
 const docenteId = parseInt(Astro.params.id || '');
-if (!docenteId) return Astro.redirect('/admin/resultados-docentes');
+if (!docenteId) return Astro.redirect(`/admin/resultados-docentes${currentSearch}`);
 
 const cl = dbAdmin();
 const [docenteRes, cuatrisRes] = await Promise.all([
@@ -54,13 +55,15 @@ const [docenteRes, cuatrisRes] = await Promise.all([
 ]);
 
 const docente = docenteRes.data as any;
-if (!docente) return Astro.redirect('/admin/resultados-docentes');
+if (!docente) return Astro.redirect(`/admin/resultados-docentes${currentSearch}`);
 
 const cuatrimestres = ((cuatrisRes.data || []) as any[]).sort((a, b) => a.id - b.id);
 const activeCuatriId = cuatrimestres.find((c) => c.activo)?.id ?? cuatrimestres[cuatrimestres.length - 1]?.id ?? 0;
-const cookieCuatriId = parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '') || 0;
 const queryCuatriId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || 0;
-const cuatrimestreId = queryCuatriId || cookieCuatriId || activeCuatriId || 0;
+const cookieCuatriId = parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '') || 0;
+const cuatrimestreId = queryCuatriId || activeCuatriId || cookieCuatriId || 0;
+const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
+const cuatrimestreQuery = cuatrimestreId ? `&cuatrimestre=${cuatrimestreId}` : '';
 const selectedCuatrimestre = cuatrimestres.find((c) => c.id === cuatrimestreId) || null;
 const feedbackStatus = Astro.url.searchParams.get('feedback') || '';
 
@@ -307,9 +310,9 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
 <LayoutAdmin titulo={`Docente 360 — ${docente.nombre} ${docente.apellidos}`}>
   <div class="animate-flotar-entrada max-w-7xl mx-auto">
     <div class="flex items-center gap-2 text-sm text-slate-400 mb-6 flex-wrap">
-      <a href="/admin/resultados-docentes" class="hover:text-tup">Resultados 360</a>
+      <a href={`/admin/resultados-docentes${qs}`} class="hover:text-tup">Resultados 360</a>
       <span>/</span>
-      <a href="/admin/reporte-anual" class="hover:text-tup">Reporte Anual</a>
+      <a href={`/admin/reporte-anual${qs}`} class="hover:text-tup">Reporte Anual</a>
       <span>/</span>
       <span class="text-slate-600 font-medium">Docente</span>
     </div>
@@ -322,8 +325,8 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
           <p class="text-xs text-slate-400 mt-1">{docente.campus || 'Sin campus'} · {docente.modalidad || 'Sin modalidad'} · {selectedCuatrimestre?.clave || 'Sin ciclo'}</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <a href={`/admin/resultados-docentes${cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : ''}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">← Volver a tarjetas</a>
-          <a href={`/admin/reporte-anual?modo=individual&docente_id=${docenteId}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">📈 Reporte anual</a>
+          <a href={`/admin/resultados-docentes${qs}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">← Volver a tarjetas</a>
+          <a href={`/admin/reporte-anual?modo=individual&docente_id=${docenteId}${cuatrimestreQuery}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">📈 Reporte anual</a>
           <a href={`/api/admin/historial-docente?docente_id=${docenteId}&format=csv`} class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium">⬇ CSV</a>
         </div>
       </div>
@@ -410,7 +413,7 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
           <textarea name="improvement_areas" rows="6" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:ring-2 focus:ring-tup focus:outline-none" placeholder="Lista las áreas de oportunidad priorizadas...">{feedback?.improvement_areas || ''}</textarea>
         </label>
         <div class="lg:col-span-2 flex items-center justify-end gap-3">
-          <a href={`/admin/resultados-docentes${cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : ''}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Cancelar</a>
+          <a href={`/admin/resultados-docentes${qs}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Cancelar</a>
           <button type="submit" class="px-5 py-2 rounded-xl bg-tup text-white text-sm font-medium">Guardar feedback</button>
         </div>
       </form>

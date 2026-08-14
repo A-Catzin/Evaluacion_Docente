@@ -56,7 +56,20 @@
     var id = el.dataset.id;
     var url = el.dataset.url;
     fetch('/api/notificaciones/' + id, {method:'POST'}).then(function(){ el.classList.add('opacity-60'); el.classList.remove('bg-blue-50'); cargarNotificaciones(); });
-    if (url) window.location.href = url;
+    if (url) {
+      var target = new URL(url, window.location.origin);
+      var current = new URL(window.location.href);
+      var cycleScoped = /^\/(admin\/(dashboard|resultados-docentes|docentes|asignaciones|evaluar-docentes|planeaciones|reporte-anual)|coordinador|docente|observador\/dashboard)(?:\/|$)/.test(target.pathname);
+      var cuatrimestre = current.searchParams.get('cuatrimestre');
+      if (target.origin === window.location.origin) {
+        if (cycleScoped && cuatrimestre && !target.searchParams.has('cuatrimestre')) {
+          target.searchParams.set('cuatrimestre', cuatrimestre);
+        }
+        window.location.href = target.pathname + target.search + target.hash;
+      } else {
+        window.location.href = target.href;
+      }
+    }
   }
   document.getElementById('mark-all-read').addEventListener('click', function(e){
     e.stopPropagation();

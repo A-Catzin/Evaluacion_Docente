@@ -5,6 +5,7 @@ import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../servic
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+const currentSearch = Astro.url.search || '';
 if (!token || !refresh) return Astro.redirect('/auth');
 
 const cl = db();
@@ -17,7 +18,7 @@ if (!entidadId && usuario?.email) {
   const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
   if (doc) entidadId = doc.id;
 }
-if (!entidadId) return Astro.redirect('/docente/materias');
+if (!entidadId) return Astro.redirect(`/docente/materias${currentSearch}`);
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
@@ -29,7 +30,8 @@ if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id) {
 }
 
 const asignaturaId = parseInt(Astro.params.asignaturaId || '');
-if (!asignaturaId) return Astro.redirect('/docente/materias');
+if (!asignaturaId) return Astro.redirect(`/docente/materias${currentSearch}`);
+const materiasUrl = `/docente/materias?cuatrimestre=${cuatrimestreId}`;
 
 const { data: docente } = await cl.from('docentes').select('nombre,apellidos,modalidad').eq('id', entidadId).maybeSingle();
 const { data: materia } = await cl.from('asignaturas').select('id,clave,nombre').eq('id', asignaturaId).maybeSingle();
@@ -83,7 +85,7 @@ const cuatri = cuatrimestres.find(c => c.id === cuatrimestreId) || cuatrimestreA
 <LayoutDocente titulo="Materia — Docente">
   <div class="animate-flotar-entrada max-w-5xl mx-auto space-y-6">
     <div>
-      <a href="/docente/materias" class="text-sm text-tup hover:underline">← Volver a materias</a>
+      <a href={materiasUrl} class="text-sm text-tup hover:underline">← Volver a materias</a>
       <h1 class="text-3xl font-bold text-tup mt-2">{materia?.nombre || 'Materia'}</h1>
       <p class="text-slate-500">{docente?.nombre?.toUpperCase()} {docente?.apellidos?.toUpperCase()} · {cuatri?.clave || ''}</p>
     </div>

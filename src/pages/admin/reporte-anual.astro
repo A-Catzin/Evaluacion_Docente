@@ -14,6 +14,8 @@ const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 
 const modo = (Astro.url.searchParams.get('modo') || 'individual') as 'individual' | 'general';
+const cuatrimestreContext = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreContextQuery = cuatrimestreContext ? `?cuatrimestre=${cuatrimestreContext}` : '';
 
 // ─── Individual ───
 const docenteSel = parseInt(Astro.url.searchParams.get('docente_id')||'') || 0;
@@ -119,6 +121,7 @@ function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60
 
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex flex-wrap gap-4 items-center">
+        {cuatrimestreContext && <input type="hidden" name="cuatrimestre" value={cuatrimestreContext} />}
         <div class="flex items-center gap-2">
           <label class="text-sm font-medium text-slate-700">Modo:</label>
             <select name="modo" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
@@ -182,7 +185,7 @@ function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60
                 <h2 class="text-lg font-bold text-tup mb-1">{docente?.nombre?.toUpperCase()} {docente?.apellidos?.toUpperCase()}</h2>
                 <p class="text-sm text-slate-400">{docente?.email}</p>
               </div>
-              <a href={`/admin/docentes/${docenteSel}`} class="px-4 py-2 rounded-xl bg-tup/10 text-tup text-sm font-medium hover:bg-tup/20 whitespace-nowrap">📋 Ver Histórico</a>
+              <a href={`/admin/docentes/${docenteSel}${cuatrimestreContextQuery}`} class="px-4 py-2 rounded-xl bg-tup/10 text-tup text-sm font-medium hover:bg-tup/20 whitespace-nowrap">📋 Ver Histórico</a>
             </div>
           </div>
 

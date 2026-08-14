@@ -2,15 +2,23 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { db } from '../../lib/db';
 import type { RolUsuario } from '../../types/supabase';
+import { obtenerCuatrimestreActivo } from '../../services/catalogos';
 
-const rolFiltro = (Astro.url.searchParams.get('rol') as RolUsuario) || undefined;
+type FiltroRol = RolUsuario | 'estudiante';
+
+const rolFiltro = (Astro.url.searchParams.get('rol') as FiltroRol) || undefined;
 const busqueda = Astro.url.searchParams.get('q') || '';
 const cliente = db();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo();
+const cuatrimestreQuery = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || 0;
+const cuatrimestreCookie = parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '') || 0;
+const cuatrimestreId = cuatrimestreQuery || cuatrimestreActivo?.id || cuatrimestreCookie || 0;
+const cycleQuery = cuatrimestreId ? `&cuatrimestre=${cuatrimestreId}` : '';
 
 interface FilaUsuario {
   id: string; email: string; rol: string;
   nombre: string; apellidos: string;
-  campus?: string; materias?: string; coordinador?: string;
+  campus?: string; materias?: string; plan?: string; coordinador?: string;
   modalidad?: string;
   nivel_desempeno?: string; categoria_360?: string; final_360?: number;
   prom_estudiantil?: number; prom_observacion?: number;
@@ -44,9 +52,42 @@ try {
         nombre: u.email.split('@')[0].replace(/[._]/g, ' '), apellidos: '',
       });
     }
+  } else if (rolFiltro === 'estudiante') {
+    const { data: estudiantes, error } = await cliente
+      .from('estudiantes')
+      .select('id,nombre,apellidos,email,matricula')
+      .eq('activo', true)
+      .order('apellidos');
+    if (error) throw error;
+
+    const studentIds = (estudiantes || []).map((student) => student.id);
+    const { data: inscripciones } = cuatrimestreId && studentIds.length
+      ? await cliente.from('inscripciones').select('estudiante_id,grupo_id').in('estudiante_id', studentIds).eq('cuatrimestre_id', cuatrimestreId)
+      : { data: [] };
+    const groupIds = [...new Set((inscripciones || []).map((inscripcion) => inscripcion.grupo_id))];
+    const { data: grupos } = groupIds.length
+      ? await cliente.from('grupos').select('id,plan_normalizado').in('id', groupIds)
+      : { data: [] };
+    const planPorEstudiante = new Map<number, Set<string>>();
+    const gruposPorId = new Map((grupos || []).map((grupo) => [grupo.id, grupo]));
+
+    for (const inscripcion of inscripciones || []) {
+      const grupo = gruposPorId.get(inscripcion.grupo_id);
+      const plan = grupo?.plan_normalizado?.trim() || 'Plan no identificado';
+      if (!planPorEstudiante.has(inscripcion.estudiante_id)) planPorEstudiante.set(inscripcion.estudiante_id, new Set());
+      planPorEstudiante.get(inscripcion.estudiante_id)!.add(plan);
+    }
+
+    for (const estudiante of estudiantes || []) {
+      filas.push({
+        id: String(estudiante.id), email: estudiante.email, rol: 'estudiante',
+        nombre: estudiante.nombre, apellidos: estudiante.apellidos,
+        plan: [...(planPorEstudiante.get(estudiante.id) || new Set(['Sin inscripción en este ciclo']))].join(' · '),
+      });
+    }
   } else {
     let query = cliente.from('usuarios').select('id, email, rol, entidad_id, rol_solicitado');
-    if (rolFiltro) query = query.eq('rol', rolFiltro);
+    if (rolFiltro) query = query.eq('rol', rolFiltro as RolUsuario);
     const { data: usuarios, error } = await query.order('email');
     if (error) throw error;
 
@@ -102,19 +143,19 @@ try {
 
   if (busqueda) {
     const t = busqueda.toLowerCase();
-    filas = filas.filter(f => f.nombre.toLowerCase().includes(t) || f.email.toLowerCase().includes(t));
+    filas = filas.filter(f => `${f.nombre} ${f.apellidos} ${f.email} ${f.plan || ''}`.toLowerCase().includes(t));
   }
 } catch (e) {
   errorMsg = e instanceof Error ? e.message : 'Error al cargar usuarios';
 }
 
-const ROLES: RolUsuario[] = ['superadmin', 'coordinador', 'docente', 'observador', 'pendiente'];
+const ROLES: FiltroRol[] = ['superadmin', 'coordinador', 'docente', 'estudiante', 'observador', 'pendiente'];
 const ETIQUETAS_ROL: Record<string, string> = {
-  superadmin: 'Administrador', coordinador: 'Coordinador', docente: 'Docente', observador: 'Observador', pendiente: 'Pendiente'
+  superadmin: 'Administrador', coordinador: 'Coordinador', docente: 'Docente', estudiante: 'Alumnos', observador: 'Observador', pendiente: 'Pendiente'
 };
 const COLOR_ROL: Record<string, string> = {
   superadmin: 'bg-purple-50 text-purple-700', coordinador: 'bg-blue-50 text-blue-700',
-  docente: 'bg-emerald-50 text-emerald-700', observador: 'bg-amber-50 text-amber-700', pendiente: 'bg-orange-50 text-orange-700'
+  docente: 'bg-emerald-50 text-emerald-700', estudiante: 'bg-cyan-50 text-cyan-700', observador: 'bg-amber-50 text-amber-700', pendiente: 'bg-orange-50 text-orange-700'
 };
 
 // Conteos
@@ -123,7 +164,8 @@ const { count: totalCoord } = await cliente.from('usuarios').select('*', { count
 const { count: totalAdmin } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'superadmin');
 const { count: totalObs } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'observador');
 const { count: totalPend } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
-const conteos: Record<string, number> = { superadmin: totalAdmin || 0, coordinador: totalCoord || 0, docente: totalDocs || 0, observador: totalObs || 0, pendiente: totalPend || 0 };
+const { count: totalEstudiantes } = await cliente.from('estudiantes').select('*', { count: 'exact', head: true }).eq('activo', true);
+const conteos: Record<string, number> = { superadmin: totalAdmin || 0, coordinador: totalCoord || 0, docente: totalDocs || 0, estudiante: totalEstudiantes || 0, observador: totalObs || 0, pendiente: totalPend || 0 };
 
 function formatear(n: number | undefined): string {
   return n !== undefined && n !== null ? Math.round(n).toString() : '—';
@@ -151,10 +193,10 @@ function buildPageUrl(p:number) {
     </div>
 
     {!rolFiltro && !busqueda && (
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         {ROLES.map(r => (
-          <a href={`?rol=${r}`} class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center block">
-            <p class="text-2xl mb-1">{r==='superadmin'?'🔑':r==='coordinador'?'📋':r==='docente'?'👨‍🏫':r==='observador'?'🔍':'⏳'}</p>
+          <a href={`?rol=${r}${cycleQuery}`} class="bg-white rounded-2xl p-5 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center block">
+            <p class="text-2xl mb-1">{r==='superadmin'?'🔑':r==='coordinador'?'📋':r==='docente'?'👨‍🏫':r==='estudiante'?'👥':r==='observador'?'🔍':'⏳'}</p>
             <p class="text-lg font-bold text-tup">{ETIQUETAS_ROL[r]}</p>
             <p class="text-3xl font-bold text-slate-600 mt-2">{conteos[r]}</p>
             <p class="text-xs text-slate-400 mt-1">usuarios</p>
@@ -165,13 +207,14 @@ function buildPageUrl(p:number) {
 
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex flex-wrap gap-3 items-center">
+        {cuatrimestreId > 0 && <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />}
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 min-w-[200px] rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-tup" />
           <select name="rol" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
             <option value="" selected={!rolFiltro}>Seleccionar rol...</option>
             {ROLES.map(r => (<option value={r} selected={rolFiltro === r}>{ETIQUETAS_ROL[r]}</option>))}
           </select>
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {(busqueda || rolFiltro) && (<a href="/admin/usuarios" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+        {(busqueda || rolFiltro) && (<a href={`/admin/usuarios${cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : ''}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
@@ -182,7 +225,7 @@ function buildPageUrl(p:number) {
     ) : (
       <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
         <div class="overflow-x-auto">
-          {rolFiltro === 'docente' && (
+           {rolFiltro === 'docente' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b">
                 <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Nombre</th>
@@ -198,10 +241,27 @@ function buildPageUrl(p:number) {
                 const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
                 return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{f.nombre}</td><td class="px-3 py-2 text-center">{paterno}</td><td class="px-3 py-2 text-center">{materno || '—'}</td><td class="px-3 py-2 text-center text-xs">{f.email}</td><td class="px-3 py-2 text-center">{f.campus}</td><td class="px-3 py-2 text-center">{f.turno}</td><td class="px-3 py-2 text-center">{f.modalidad || '—'}</td><td class="px-3 py-2 text-center text-xs">{f.materias}</td></tr>);
               })}</tbody>
-            </table>
-          )}
+             </table>
+           )}
 
-          {rolFiltro === 'coordinador' && (
+           {rolFiltro === 'estudiante' && (
+             <table class="w-full text-sm">
+               <thead><tr class="bg-slate-50 border-b">
+                 <th class="px-4 py-3 text-center text-xs uppercase text-slate-600">Nombre completo</th>
+                 <th class="px-4 py-3 text-center text-xs uppercase text-slate-600">Correo</th>
+                 <th class="px-4 py-3 text-center text-xs uppercase text-slate-600">Plan</th>
+               </tr></thead>
+               <tbody class="divide-y">{filasPag.map(f => (
+                 <tr class="hover:bg-slate-50">
+                   <td class="px-4 py-3 text-center font-medium">{f.nombre} {f.apellidos}</td>
+                   <td class="px-4 py-3 text-center text-slate-600">{f.email}</td>
+                   <td class="px-4 py-3 text-center text-slate-600">{f.plan || '—'}</td>
+                 </tr>
+               ))}</tbody>
+             </table>
+           )}
+
+           {rolFiltro === 'coordinador' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b">
                 <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Nombre</th>

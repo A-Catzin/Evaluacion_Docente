@@ -48,9 +48,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (!u || u.rol !== 'superadmin') return new Response(JSON.stringify({ error: 'Solo superadmin' }), { status: 403 });
 
     // Obtener cuatrimestre activo o seleccionado
+    const requestedCycle = new URL(request.url).searchParams.get('cuatrimestre');
     const cCookie = cookies.get('cuatrimestre_sel')?.value;
     let cuatrimestreId = 0;
-    if (cCookie) { cuatrimestreId = parseInt(cCookie) || 0; }
+    if (requestedCycle) { cuatrimestreId = parseInt(requestedCycle) || 0; }
+    if (!cuatrimestreId && cCookie) { cuatrimestreId = parseInt(cCookie) || 0; }
     if (!cuatrimestreId) {
       const { data: activo } = await cl.from('cuatrimestres').select('id').eq('activo', true).maybeSingle();
       if (activo) cuatrimestreId = activo.id;
@@ -80,13 +82,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     try {
       const { data: docsDB } = await cl.from('docentes').select('nombre,apellidos,email').eq('activo', true);
       for (const d of (docsDB || [])) {
-        const key = (d.nombre + ' ' + d.apellidos).toUpperCase().trim();
+        const key = normalizarNombre(d.nombre + ' ' + d.apellidos);
         if (d.email) emailMap.set(key, d.email);
       }
     } catch {}
 
     function normalizarNombre(n: string) {
-      return n.toUpperCase().replace(/\s+/g, ' ').trim();
+      return n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
     }
 
     // ─── Agrupar únicos ───
@@ -94,6 +96,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const docentesMap = new Map<string, { nombre: string; apellidos: string; email: string }>();
     const asigsMap = new Map<string, string>(); // clave → nombre
     const gruposSet = new Set<string>();
+    let docentesSinIdentidad = 0;
 
     for (const r of rows) {
       const plan = r['Plan de estudios']?.trim() || '';
@@ -111,16 +114,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         else { ap = partes[0]; nom = ''; }
         // Buscar email real
         const key = normalizarNombre(docente_nom);
-        let email = emailMap.get(key) || '';
-        // Fuzzy match
-        if (!email) {
-          for (const [k, v] of emailMap) {
-            const words = key.split(' ');
-            if (words.length >= 2 && k.includes(words[0]) && k.includes(words[words.length-1])) { email = v; break; }
-          }
-        }
-        if (!email) email = (nom+'.'+ap).toLowerCase().replace(/\s+/g,'.')+'@tecplayacar.edu.mx';
-        docentesMap.set(docente_nom, { nombre: nom, apellidos: ap, email });
+        const email = emailMap.get(key) || '';
+        if (email) docentesMap.set(docente_nom, { nombre: nom, apellidos: ap, email });
+        else docentesSinIdentidad++;
       }
       if (grupo_raw) gruposSet.add(grupo_raw);
     }
@@ -254,7 +250,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return new Response(JSON.stringify({
       success: true, total: rows.length,
       docentes: docentesMap.size, asignaturas: asigsMap.size,
-      grupos: gruposSet.size, evaluaciones
+      grupos: gruposSet.size, evaluaciones, errores: docentesSinIdentidad,
     }), { status: 200 });
   } catch (err) {
     console.error('[Importar]', err);

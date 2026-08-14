@@ -14,6 +14,7 @@ if (!cuatrimestreQuery && cuatrimestreActivo?.id && cuatrimestreCookie !== Strin
 const cuatrimestreSel = cuatrimestreSelId ? String(cuatrimestreSelId) : '';
 const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
 const dashLink = `/docente/materias${qs}`;
+const evalLink = `/docente/dashboard${qs}`;
 const adLink = `/docente/autodiagnostico${qs}`;
 const planLink = `/docente/planeaciones${qs}`;
 const gruposLink = `/docente/mis-grupos${qs}`;
@@ -28,7 +29,7 @@ const gruposLink = `/docente/mis-grupos${qs}`;
           <a href={dashLink} class="font-semibold text-tup text-sm sm:text-base">SED-360 · Docente {cuatrimestreSel && <span class="text-[10px] bg-tup text-white px-2 py-0.5 rounded-full ml-1">{cuatrimestreSel}</span>}</a>
         <nav class="hidden sm:flex gap-1">
           <a href={dashLink} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mis Materias</a>
-          <a href="/docente/dashboard" class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mi Evaluación</a>
+          <a href={evalLink} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mi Evaluación</a>
           <a href={adLink} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Autodiagnóstico</a>
           <a href={planLink} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Planeaciones</a>
         </nav>
@@ -39,7 +40,7 @@ const gruposLink = `/docente/mis-grupos${qs}`;
     </header>
     <nav id="nav-menu" class="sm:hidden hidden bg-white border-b border-slate-200 px-4 py-2 space-y-1">
       <a href={dashLink} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">👥 Mis Materias</a>
-      <a href="/docente/dashboard" class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📊 Mi Evaluación</a>
+      <a href={evalLink} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📊 Mi Evaluación</a>
       <a href={adLink} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">🧪 Autodiagnóstico</a>
       <a href={planLink} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📄 Planeaciones</a>
       <a href={gruposLink} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">👥 Mis Grupos</a>

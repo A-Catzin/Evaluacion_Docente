@@ -8,7 +8,8 @@ const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreId = parseInt(cuatrimestreIdParam || cuatrimestreIdCookie || '') || cuatrimestreActivo?.id || 0;
+const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+const cuatrimestreQuery = cuatrimestreId ? `&cuatrimestre=${cuatrimestreId}` : '';
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
@@ -66,7 +67,7 @@ for (const g of (gruposData || [])) {
             <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
               <span>{d.campus || '—'}</span><span>·</span><span>{d.modalidad || '—'}</span><span>·</span><span>{matPorDocente.get(d.id) || 0} grupos</span>
             </div>
-            <a href={`/coordinador/captura/observacion?docente_id=${d.id}`} class="block text-center w-full px-4 py-2 rounded-xl bg-tup text-white text-sm font-medium hover:bg-tup/90 transition-colors">
+            <a href={`/coordinador/captura/observacion?docente_id=${d.id}${cuatrimestreQuery}`} class="block text-center w-full px-4 py-2 rounded-xl bg-tup text-white text-sm font-medium hover:bg-tup/90 transition-colors">
               Iniciar Observación
             </a>
           </div>

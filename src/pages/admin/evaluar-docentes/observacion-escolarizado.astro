@@ -194,7 +194,7 @@ if (docenteIdParam) {
     try{
       var res=await fetch('/api/coordinador/observacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
       var j=await res.json();
-      if(res.ok){toast('Observación guardada exitosamente',false);setTimeout(function(){location.href='/admin/evaluar-docentes/observacion'},1500)}
+      if(res.ok){toast('Observación guardada exitosamente',false);setTimeout(function(){location.href='/admin/evaluar-docentes/observacion?cuatrimestre='+cuatrimestreId},1500)}
       else{toast(j.error||'Error al guardar',true);btn.disabled=false;btn.textContent='Enviar Observación'}
     }catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación'}
   });
