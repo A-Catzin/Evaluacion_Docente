@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
-import { db } from '../../../lib/db';
+import { AuthError, requireRole } from '../../../lib/auth';
+import { ImportFormSchema } from '../../../lib/validation/apiSchemas';
+import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
 type RosterRow = {
   rowNumber: number;
@@ -123,22 +125,26 @@ function legacyGroupMatch(group: any, bucket: GroupBucket): boolean {
 }
 
 export const POST: APIRoute = async ({ request, cookies }) => {
-  const accessToken = cookies.get('sb-access-token')?.value;
-  const refreshToken = cookies.get('sb-refresh-token')?.value;
-  if (!accessToken || !refreshToken) return json({ error: 'No autorizado' }, 401);
+  let client;
+  try {
+    const auth = await requireRole(cookies, ['superadmin']);
+    client = auth.client;
+  } catch (error) {
+    if (error instanceof AuthError) return error.response;
+    console.error('[Importar alumnos] authentication failed', error);
+    return json({ error: 'Error interno al verificar la sesión' }, 500);
+  }
 
   try {
-    const client = db();
-    const { data: session } = await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-    if (!session.user) return json({ error: 'Sesión inválida' }, 401);
-    const { data: user } = await client.from('usuarios').select('rol').eq('id', session.user.id).maybeSingle();
-    if (!user || user.rol !== 'superadmin') return json({ error: 'Solo superadmin' }, 403);
-
     const formData = await request.formData();
-    const file = formData.get('file');
-    const cycleId = Number(formData.get('cuatrimestre_id'));
-    if (!(file instanceof File)) return json({ error: 'Archivo requerido' }, 400);
-    if (!Number.isInteger(cycleId) || cycleId < 1) return json({ error: 'Selecciona un ciclo válido desde la aplicación' }, 400);
+    const formParse = ImportFormSchema.safeParse({
+      file: formData.get('file'),
+      cuatrimestre_id: formData.get('cuatrimestre_id'),
+    });
+    if (!formParse.success) {
+      return json({ error: 'Archivo o ciclo inválido', detalles: formatZodFieldErrors(formParse.error) }, 400);
+    }
+    const { file, cuatrimestre_id: cycleId } = formParse.data;
     if (file.size > 25 * 1024 * 1024) return json({ error: 'El archivo no debe superar 25 MB' }, 400);
 
     const { data: cycle, error: cycleError } = await client.from('cuatrimestres').select('id,clave,nombre').eq('id', cycleId).maybeSingle();

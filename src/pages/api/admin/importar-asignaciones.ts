@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
 import { authorizeSuperadmin, finishImportRun, json, saveImportIssues } from '../../../lib/adminImport';
 import { chunks, findColumn, normalizeEmployeeNumber, normalizeText, parseCsv } from '../../../lib/importCsv';
+import { ImportFormSchema } from '../../../lib/validation/apiSchemas';
+import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
 type ClassRow = {
   row: number;
@@ -44,10 +46,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   try {
     const formData = await request.formData();
-    const file = formData.get('file');
-    const cycleId = Number(formData.get('cuatrimestre_id'));
-    if (!(file instanceof File)) return json({ error: 'Archivo CSV requerido' }, 400);
-    if (!Number.isInteger(cycleId) || cycleId < 1) return json({ error: 'Selecciona un ciclo válido desde la aplicación' }, 400);
+    const formParse = ImportFormSchema.safeParse({
+      file: formData.get('file'),
+      cuatrimestre_id: formData.get('cuatrimestre_id'),
+    });
+    if (!formParse.success) {
+      return json({ error: 'Archivo o ciclo inválido', detalles: formatZodFieldErrors(formParse.error) }, 400);
+    }
+    const { file, cuatrimestre_id: cycleId } = formParse.data;
     if (file.size > 25 * 1024 * 1024) return json({ error: 'El archivo no debe superar 25 MB' }, 400);
 
     const { data: cycle } = await client.from('cuatrimestres').select('id,clave,nombre').eq('id', cycleId).maybeSingle();

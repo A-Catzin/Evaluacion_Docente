@@ -1,27 +1,35 @@
 import type { APIRoute } from 'astro';
-import { db } from '../../../lib/db';
+import { AuthError, requireRole } from '../../../lib/auth';
+import { AutodiagnosticoSchema } from '../../../lib/validation/apiSchemas';
+import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
-  const tokenAcceso = cookies.get('sb-access-token')?.value;
-  const tokenRefresco = cookies.get('sb-refresh-token')?.value;
-  if (!tokenAcceso || !tokenRefresco) return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
+  let cliente;
+  let userId: string;
+  try {
+    const auth = await requireRole(cookies, ['docente', 'pendiente']);
+    cliente = auth.client;
+    userId = auth.user.id;
+  } catch (error) {
+    if (error instanceof AuthError) return error.response;
+    return new Response(JSON.stringify({ error: 'Error interno' }), { status: 500 });
+  }
 
   try {
-    const cliente = db();
-    const { data: sesion } = await cliente.auth.setSession({ access_token: tokenAcceso, refresh_token: tokenRefresco });
-    if (!sesion.user) return new Response(JSON.stringify({ error: 'Sesión inválida' }), { status: 401 });
-
-    const { data: usuario } = await cliente.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
-    if (!usuario || (usuario.rol !== 'docente' && usuario.rol !== 'pendiente')) {
+    const { data: usuario } = await cliente.from('usuarios').select('entidad_id,rol,email').eq('id', userId).maybeSingle();
+    if (!usuario) {
       return new Response(JSON.stringify({ error: 'Solo docentes pueden enviar autodiagnóstico' }), { status: 403 });
     }
 
-    const body = await request.json();
-    const { cuatrimestre_id, nombre, apellido_paterno, apellido_materno, campus, oferta_academica, turno, modalidad, reactivos, comentarios } = body;
-
-    if (!cuatrimestre_id || !nombre || !apellido_paterno || !apellido_materno || !campus || !oferta_academica || !turno || !modalidad || !reactivos || reactivos.length !== 24) {
-      return new Response(JSON.stringify({ error: 'Todos los campos son obligatorios excepto comentarios' }), { status: 400 });
-    }
+        const body = await request.json();
+        const parseResult = AutodiagnosticoSchema.safeParse(body);
+        if (!parseResult.success) {
+          return new Response(
+            JSON.stringify({ error: 'Todos los campos son obligatorios excepto comentarios', detalles: formatZodFieldErrors(parseResult.error) }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        const { cuatrimestre_id, nombre, apellido_paterno, apellido_materno, campus, oferta_academica, turno, modalidad, reactivos, comentarios } = parseResult.data;
 
     // 1. Crear o actualizar docente
     let docenteId = usuario.entidad_id;
@@ -29,7 +37,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     // Si es pendiente, auto-asignar rol docente al completar AD
     if (usuario.rol === 'pendiente') {
-      await cliente.from('usuarios').update({ rol: 'docente' }).eq('id', sesion.user.id);
+      await cliente.from('usuarios').update({ rol: 'docente' }).eq('id', userId);
     }
 
     if (docenteId) {
@@ -42,7 +50,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const { data: existenteDoc } = await cliente.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
       if (existenteDoc) {
         docenteId = existenteDoc.id;
-        await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
+        await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', userId);
         await cliente.from('docentes').update({
           nombre, apellido_paterno, apellido_materno, apellidos,
           campus, turno, oferta_academica, modalidad,
@@ -54,7 +62,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         }).select('id').single();
         if (errIns) throw new Error('Error al crear docente: ' + errIns.message);
         docenteId = nuevo.id;
-        await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', sesion.user.id);
+        await cliente.from('usuarios').update({ entidad_id: docenteId }).eq('id', userId);
       }
     }
 

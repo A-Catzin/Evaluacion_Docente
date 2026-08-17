@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
-import { crearClienteConSesion } from '../../../lib/supabaseClient';
+import { AuthError, requireRole } from '../../../lib/auth';
+import { EstudianteEvaluacionSchema } from '../../../lib/validation/apiSchemas';
+import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -14,15 +16,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function validAnswers(value: unknown): value is number[] {
-  return Array.isArray(value)
-    && value.length === 19
-    && value.every((answer, index) => Number.isInteger(answer) && answer >= 1 && answer <= (index === 0 ? 6 : 4));
-}
-
 export const POST: APIRoute = async ({ request, cookies }) => {
-  const accessToken = cookies.get('sb-access-token')?.value;
-  if (!accessToken) return json({ error: 'Sesión no válida', code: 'session_invalid' }, 401);
+  let client;
+  try {
+    const auth = await requireRole(cookies, ['estudiante']);
+    client = auth.client;
+  } catch (error) {
+    if (error instanceof AuthError) return error.response;
+    console.error('[student evaluations] authentication failed', {
+      message: error instanceof Error ? error.message : 'unknown error',
+    });
+    return json({ error: 'No fue posible verificar la sesión', code: 'session_validation_failed' }, 502);
+  }
 
   let body: unknown;
   try {
@@ -31,27 +36,22 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return json({ error: 'La solicitud no es válida', code: 'invalid_request' }, 400);
   }
 
-  if (!isRecord(body)
-    || !Number.isSafeInteger(body.grupo_id)
-    || (body.grupo_id as number) <= 0
-    || !validAnswers(body.respuestas)
-    || (body.comentario !== undefined && body.comentario !== null && typeof body.comentario !== 'string')) {
-    return json({ error: 'Completa las 19 respuestas con valores válidos', code: 'invalid_answers' }, 400);
-  }
+      const parseResult = EstudianteEvaluacionSchema.safeParse(body);
+      if (!parseResult.success) {
+        return json({
+          error: 'Completa las 19 respuestas con valores válidos',
+          code: 'invalid_answers',
+          detalles: formatZodFieldErrors(parseResult.error),
+        }, 400);
+      }
 
-  const comment = typeof body.comentario === 'string' ? body.comentario.trim() : null;
-  if (comment && comment.length > 2000) {
-    return json({ error: 'El comentario no puede exceder 2000 caracteres', code: 'invalid_comment' }, 400);
-  }
+      const { grupo_id, respuestas, comentario } = parseResult.data;
+      const comment = comentario?.trim() || null;
 
   try {
-    const client = crearClienteConSesion(accessToken);
-    const { data: session, error: sessionError } = await client.auth.getUser(accessToken);
-    if (sessionError || !session.user) return json({ error: 'Sesión no válida', code: 'session_invalid' }, 401);
-
     const { data, error } = await client.rpc('enviar_encuesta_estudiante', {
-      p_grupo_id: body.grupo_id,
-      p_respuestas: body.respuestas,
+      p_grupo_id: grupo_id,
+      p_respuestas: respuestas,
       p_comentario: comment,
     });
     if (error) {

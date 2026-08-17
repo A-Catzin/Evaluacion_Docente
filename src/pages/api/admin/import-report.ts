@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
 import { authorizeSuperadmin } from '../../../lib/adminImport';
+import { RunIdQuerySchema } from '../../../lib/validation/apiSchemas';
+import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] || char));
@@ -8,8 +10,16 @@ function escapeHtml(value: unknown): string {
 export const GET: APIRoute = async ({ request, cookies }) => {
   const auth = await authorizeSuperadmin(cookies);
   if (auth.error) return auth.error;
-  const runId = Number(new URL(request.url).searchParams.get('run_id'));
-  if (!Number.isInteger(runId) || runId < 1) return new Response('run_id inválido', { status: 400 });
+    let runId: number;
+    try {
+      const runParse = RunIdQuerySchema.safeParse({ run_id: new URL(request.url).searchParams.get('run_id') });
+      if (!runParse.success) {
+        return new Response(JSON.stringify({ error: 'run_id inválido', detalles: formatZodFieldErrors(runParse.error) }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      runId = runParse.data.run_id;
+    } catch {
+      return new Response(JSON.stringify({ error: 'run_id inválido' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
   const { data: run, error } = await auth.client.from('import_runs').select('id,tipo,archivo_nombre,cuatrimestre_id,estado,resumen,created_at,finished_at,cuatrimestres(clave,nombre)').eq('id', runId).maybeSingle();
   if (error || !run) return new Response('Importación no encontrada', { status: 404 });
   const { data: issues } = await auth.client.from('import_issues').select('*').eq('run_id', runId).order('id');

@@ -1,23 +1,34 @@
 import type { APIRoute } from 'astro';
-import { db } from '../../../lib/db';
+import { AuthError, requireRole } from '../../../lib/auth';
+import { CoordinacionEvaluacionSchema } from '../../../lib/validation/apiSchemas';
+import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
-  const t = cookies.get('sb-access-token')?.value;
-  const r = cookies.get('sb-refresh-token')?.value;
-  if (!t || !r) return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401 });
+  let cl;
+  let userId: string;
   try {
-    const cl = db();
-    const { data: s } = await cl.auth.setSession({ access_token: t, refresh_token: r });
-    if (!s.user) return new Response(JSON.stringify({ error: 'Sesión inválida' }), { status: 401 });
-    const { data: u } = await cl.from('usuarios').select('rol').eq('id', s.user.id).maybeSingle();
-    if (!u || !['superadmin','coordinador'].includes(u.rol)) return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 403 });
+    const auth = await requireRole(cookies, ['superadmin', 'coordinador']);
+    cl = auth.client;
+    userId = auth.user.id;
+  } catch (error) {
+    if (error instanceof AuthError) return error.response;
+    return new Response(JSON.stringify({ error: 'Error interno' }), { status: 500 });
+  }
 
+  try {
     const body = await request.json();
-    const { docente_id, cuatrimestre_id, ciclo, campus, comentarios, a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3 } = body;
+    const parseResult = CoordinacionEvaluacionSchema.safeParse(body);
+    if (!parseResult.success) {
+      return new Response(
+JSON.stringify({ error: 'Datos de evaluación no válidos', detalles: formatZodFieldErrors(parseResult.error) }),
+{ status: 400, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    const { docente_id, cuatrimestre_id, ciclo, campus, comentarios, ...answers } = parseResult.data;
 
     const { data, error } = await cl.from('evaluacion_coordinacion').insert({
-      docente_id, cuatrimestre_id, evaluador_id: s.user.id, ciclo, campus, comentarios,
-      a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3
+      docente_id, cuatrimestre_id, evaluador_id: userId, ciclo, campus, comentarios,
+      ...answers,
     }).select('puntos_obtenidos,score_normalizado').single();
 
     if (error) {
