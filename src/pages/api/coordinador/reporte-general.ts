@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { db } from '../../../lib/db';
-import { fetchBatchScoresPorDocente, calcFinalScore } from '../../../services/scoring';
+import { fetchBatchScoresPorDocente, calcFinalScore, formatScoreCsv } from '../../../services/scoring';
 
 export const GET: APIRoute = async ({ url, cookies }) => {
   const t = cookies.get('sb-access-token')?.value;
@@ -58,7 +58,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       const batchScores = await fetchBatchScoresPorDocente(cl, allDocIds, cid);
       const finalMap = new Map<number, { final: number; category: string; instrumentCount: number }>();
       for (const docId of allDocIds) {
-        const scores = batchScores.get(docId) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
+        const scores = batchScores.get(docId) || {};
         const docente = docentes?.find(d => d.id === docId);
         finalMap.set(docId, calcFinalScore(scores, docente?.modalidad));
       }
@@ -102,8 +102,8 @@ export const GET: APIRoute = async ({ url, cookies }) => {
           `"${[d.nombre, d.apellidos].filter(Boolean).join(' ')}"`,
           `"${d.email}"`,
           `"${d.campus}"`,
-          ...cicloIdsValid.map(cid => d.puntajes[cid] ?? '—'),
-          d.promedio_anual ?? '—',
+          ...cicloIdsValid.map(cid => formatScoreCsv(d.puntajes[cid])),
+          formatScoreCsv(d.promedio_anual),
         ];
         return cols.join(',');
       });

@@ -3,14 +3,17 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestres } from '../../services/catalogos';
-import { fetchCuatrimestreScores, fetchBatchScoresPorDocente, calcFinalScore } from '../../services/scoring';
+import { fetchCuatrimestreScores, fetchBatchScoresPorDocente, fetchNativeStudentEvaluationScores, calcFinalScore, formatScore } from '../../services/scoring';
 
 const cliente = db();
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
 const todos = await obtenerDocentes();
 const cuatrimestres = (await obtenerCuatrimestres()).sort((a,b)=>a.id-b.id);
 
-const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
-const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
+const nativeScoreRows = await Promise.all(cuatrimestres.map((c) => fetchNativeStudentEvaluationScores(cliente, c.id)));
+const evalsSet = new Set(nativeScoreRows.flat().map((row) => row.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 
 const modo = (Astro.url.searchParams.get('modo') || 'individual') as 'individual' | 'general';
@@ -71,7 +74,7 @@ if (modo === 'general') {
             puntajes[c.id] = null;
             continue;
           }
-          const sc = scoresPorCiclo.get(c.id)?.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
+          const sc = scoresPorCiclo.get(c.id)?.get(d.id) || {};
           const { final, instrumentCount } = calcFinalScore(sc, d.modalidad);
           const valor = instrumentCount > 0 ? final : null;
           puntajes[c.id] = valor;
@@ -101,7 +104,7 @@ if (modo === 'general') {
   }
 }
 
-function fmt(n:any){return n!=null?Math.round(n).toString():'—'}
+function fmt(n:any){return formatScore(n)}
 function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60?'text-amber-600':'text-red-600'}
 ---
 
@@ -210,7 +213,7 @@ function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60
                   <td class={"px-2 py-2 text-center font-medium "+colorN(h.plan)}>{fmt(h.plan)}</td>
                   <td class={"px-2 py-2 text-center font-medium "+colorN(h.obs)}>{fmt(h.obs)}</td>
                   <td class={"px-2 py-2 text-center font-medium "+colorN(h.auto)}>{fmt(h.auto)}</td>
-                  <td class={"px-2 py-2 text-center font-bold "+colorN(h.final)}>{h.final}</td>
+                  <td class={"px-2 py-2 text-center font-bold "+colorN(h.final)}>{fmt(h.final)}</td>
                   <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">{h.cat}</span></td>
                   <td class="px-2 py-2 text-center text-xs text-slate-400">{h.inst}/{h.expected}</td>
                 </tr>
@@ -219,7 +222,7 @@ function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60
                 <tr class="bg-tup/5 font-bold">
                   <td class="px-3 py-2 text-tup">Promedio anual</td>
                   <td colspan="5"></td>
-                  <td class={"px-2 py-2 text-center "+colorN(annualAvg)}>{annualAvg}</td>
+                  <td class={"px-2 py-2 text-center "+colorN(annualAvg)}>{fmt(annualAvg)}</td>
                   <td colspan="2" class="px-2 py-2 text-center text-xs text-tup">{totalCycles} ciclo{totalCycles !== 1 ? 's' : ''}</td>
                 </tr>
               )}</tbody>
@@ -257,9 +260,9 @@ function colorN(n:any){return !n?'text-slate-400':n>=80?'text-emerald-600':n>=60
                     <td class="px-3 py-2 text-xs text-slate-500">{d.campus || '—'}</td>
                     {cuatrimestres.map((c: any) => {
                       const val = d.puntajes[c.id];
-                      return <td class={"px-2 py-2 text-center font-bold " + colorN(val)}>{val != null ? val : '—'}</td>;
+                      return <td class={"px-2 py-2 text-center font-bold " + colorN(val)}>{fmt(val)}</td>;
                     })}
-                    <td class={"px-2 py-2 text-center font-bold bg-tup/5 " + colorN(d.promedioAnual)}>{d.promedioAnual != null ? d.promedioAnual : '—'}</td>
+                    <td class={"px-2 py-2 text-center font-bold bg-tup/5 " + colorN(d.promedioAnual)}>{fmt(d.promedioAnual)}</td>
                   </tr>
                 ))}
               </tbody>

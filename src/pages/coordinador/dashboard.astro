@@ -3,6 +3,7 @@ import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
+import { fetchNativeStudentEvaluationScores } from '../../services/scoring';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
@@ -34,8 +35,8 @@ if (userId) {
 }
 
 // Filtrar solo docentes con evaluaciones (mismo filtro que /admin/docentes)
-const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('encuesta_estudiantil').select('docente_id').limit(10000), cliente.from('autodiagnosticos').select('docente_id').limit(10000), cliente.from('observaciones').select('docente_id').limit(10000), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000), cliente.from('planeaciones').select('docente_id').limit(10000)]);
-const docsEvaluados = new Set([...(eeIds||[]),...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
+const [nativeScoreRows, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([fetchNativeStudentEvaluationScores(cliente, cuatrimestreId), cliente.from('autodiagnosticos').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('observaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('planeaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId)]);
+const docsEvaluados = new Set([...nativeScoreRows,...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
 const docentes = todos.filter(d => docsEvaluados.has(d.id) && docentesAsignados.has(d.id));
 
 // Obtener observaciones, planeaciones y evaluaciones de coordinación para este cuatrimestre

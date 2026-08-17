@@ -2,6 +2,7 @@
 import LayoutDocente from '../../../layouts/LayoutDocente.astro';
 import { db } from '../../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
+import { fetchNativeStudentEvaluationScores, formatScore } from '../../../services/scoring';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -39,32 +40,12 @@ const { data: grupos } = await cl.from('grupos').select('id,clave,modalidad').eq
 const grupoMap = new Map<number, string>();
 (grupos || []).forEach((g) => grupoMap.set(g.id, g.clave));
 
-const { data: eeData } = await cl.from('encuesta_estudiantil').select('score_normalizado,comentarios,asignatura_id,grupo_id,fecha_registro').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).eq('asignatura_id', asignaturaId);
-const eeRows = eeData || [];
-const eeScores = eeRows
-  .map((e) => {
-    const score = Number(e.score_normalizado);
-    if (Number.isFinite(score) && score > 0) return score;
-    return null;
-  })
-  .filter((v): v is number => v != null);
-const eeAvg = eeScores.length ? Math.round(eeScores.reduce((a,b)=>a+b,0)/eeScores.length) : null;
-function splitComentarios(text: string | null | undefined): string[] {
-  return String(text ?? '')
-    .split('|')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-const eeComentarios = eeRows.flatMap((row) => {
-  const grupo = row.grupo_id ? grupoMap.get(Number(row.grupo_id)) || `Grupo ${row.grupo_id}` : null;
-  const fecha = row.fecha_registro ? new Date(row.fecha_registro) : null;
-  return splitComentarios(row.comentarios).map((comentario) => ({
-    comentario,
-    grupo,
-    fecha,
-  }));
-});
+const eeRows = (await fetchNativeStudentEvaluationScores(cl, cuatrimestreId))
+  .filter((row) => row.docente_id === entidadId && row.asignatura_id === asignaturaId);
+const eeResponses = eeRows.reduce((total, row) => total + row.respuestas_validas, 0);
+const eeAvg = eeResponses > 0
+  ? eeRows.reduce((total, row) => total + row.score_normalizado * row.respuestas_validas, 0) / eeResponses
+  : null;
 
 const { data: planData } = await cl.from('planeaciones').select('asignatura_id,grupo,puntaje_promedio,estado,comentario_retroalimentacion,observaciones_generales').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).eq('asignatura_id', asignaturaId).order('fecha_subida', { ascending: false });
 const planAprob = (planData||[]).filter(p => p.estado === 'Aprobado');
@@ -93,8 +74,8 @@ const cuatri = cuatrimestres.find(c => c.id === cuatrimestreId) || cuatrimestreA
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
         <p class="text-xs uppercase text-slate-400 font-semibold">Encuesta estudiantil de la materia</p>
-        <p class="text-3xl font-bold text-tup mt-2">{eeAvg ?? '—'}</p>
-        <p class="text-xs text-slate-500 mt-1">Promedio de la evaluación estudiantil ligada a esta asignatura</p>
+        <p class="text-3xl font-bold text-tup mt-2">{formatScore(eeAvg)}</p>
+        <p class="text-xs text-slate-500 mt-1">Promedio nativo de {eeResponses} respuesta{eeResponses === 1 ? '' : 's'} válida{eeResponses === 1 ? '' : 's'}</p>
       </div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
         <p class="text-xs uppercase text-slate-400 font-semibold">Planeación materia</p>
@@ -121,28 +102,6 @@ const cuatri = cuatrimestres.find(c => c.id === cuatrimestreId) || cuatrimestreA
         <p class="text-sm text-slate-600">Hoy se muestra unificada por docente. Si después la quieren por materia, esta consulta se puede cambiar para filtrar por asignatura.</p>
         <p class="text-xs text-slate-400 mt-2">{obs?.comentario_evaluador || obs?.comentario_docente || 'Sin comentarios'}</p>
       </div>
-    </div>
-
-    <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
-      <h2 class="font-bold text-tup mb-3">Comentarios de la encuesta estudiantil de la materia</h2>
-      {eeComentarios.length === 0 ? (
-        <p class="text-sm text-slate-400">Sin comentarios para esta materia.</p>
-      ) : (
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {eeComentarios.map((item, idx) => (
-            <article class="rounded-2xl border border-slate-100 bg-slate-50 p-4 shadow-sm">
-              <div class="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <p class="text-[11px] uppercase tracking-wider text-slate-400">Comentario #{idx + 1}</p>
-                  <p class="text-xs text-slate-500 mt-1">{item.grupo || 'Encuesta general'}{item.fecha ? ` · ${item.fecha.toLocaleDateString('es-MX')}` : ''}</p>
-                </div>
-                <span class="text-lg">💬</span>
-              </div>
-              <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{item.comentario}</p>
-            </article>
-          ))}
-        </div>
-      )}
     </div>
 
     <div class="bg-white rounded-2xl p-5 shadow-tarjeta">

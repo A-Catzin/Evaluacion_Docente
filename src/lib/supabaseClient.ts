@@ -18,12 +18,16 @@ function obtenerVariablesEntorno() {
 
 export function obtenerClienteSuperbase(): SupabaseClient {
   if (!_cliente) {
-    const { url, clave } = obtenerVariablesEntorno();
-    _cliente = createClient(url, clave, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    _cliente = crearClienteSuperbase();
   }
   return _cliente;
+}
+
+export function crearClienteSuperbase(): SupabaseClient {
+  const { url, clave } = obtenerVariablesEntorno();
+  return createClient(url, clave, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 export function obtenerClienteAdmin(): SupabaseClient {

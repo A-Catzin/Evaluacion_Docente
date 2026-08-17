@@ -14,7 +14,7 @@ Plataforma integral de evaluación docente para el Tecnológico Universitario Pl
 | Validación | Zod |
 | Deploy | Vercel (`@astrojs/vercel`, Node 20.x) |
 
-## Roles (4 activos)
+## Roles y acceso
 
 | Rol | Acceso |
 |-----|--------|
@@ -22,8 +22,10 @@ Plataforma integral de evaluación docente para el Tecnológico Universitario Pl
 | Coordinador | Evalúa docentes asignados: CA, OC, PD. Reportes de su grupo |
 | Docente | Resultados al cierre, autodiagnóstico, planeaciones, feedback |
 | Observador | Observaciones de clase a docentes asignados (3 modalidades) |
+| Estudiante | Consulta y completa evaluaciones nativas de sus grupos elegibles en el ciclo activo |
+| Pendiente | Estado de acceso no resuelto; no habilita un portal operativo |
 
-> El plan es volver a 5 roles en el futuro incluyendo estudiantes, migrando toda la información y procesos estudiantiles dentro de la app. Actualmente los datos de evaluación estudiantil provienen de importación CSV Saeko.
+El acceso se resuelve contra coincidencias exactas, únicas y activas del correo institucional en el padrón. Los roles explícitos de personal se conservan; las coincidencias ambiguas o ausentes permanecen en `pendiente`.
 
 ## Estructura del proyecto
 
@@ -31,18 +33,19 @@ Plataforma integral de evaluación docente para el Tecnológico Universitario Pl
 src/
 ├── components/          # Componentes UI reutilizables
 ├── features/            # Lógica de dominio (moderación, etc.)
-├── layouts/             # Layouts por rol (BaseLayout, Layout, LayoutAdmin, LayoutCoordinador, LayoutDocente, LayoutObservador)
+├── layouts/             # Layouts por rol, incluido LayoutEstudiante
 ├── lib/                 # Clientes: db.ts, storage.ts (Cloudflare R2), supabaseClient.ts
 ├── pages/               # Páginas Astro + endpoints API
-│   ├── admin/           # Dashboard, catálogos, docentes, evaluar-docentes, instrumentos, reportes
+│   ├── admin/           # Dashboard, catálogos, importaciones, docentes, instrumentos y reportes
 │   ├── coordinador/     # Dashboard, captura, docentes, planeaciones, reportes
 │   ├── docente/         # Dashboard, autodiagnóstico, autoevaluación, materias, planeaciones
 │   ├── observador/      # Dashboard
+│   ├── estudiante/      # Dashboard y evaluación nativa por grupo
 │   └── api/             # Endpoints REST (auth, admin, coordinador, docente)
 ├── services/            # Lógica de negocio: autodiagnostico, calificaciones, catalogos, docentes, estudiantes, instrumentos, notificaciones, observaciones, planeaciones, scoring, usuarios
 └── types/               # Tipos TypeScript (supabase.ts)
 supabase/
-└── migrations/          # Migraciones 001–026 (incluye 026_neon y 025_notificaciones)
+└── migrations/          # Línea base y migraciones 030–036 para ciclos, roles y EE nativa
 ```
 
 ## Comandos
@@ -57,4 +60,4 @@ supabase/
 
 ## Documentación
 
-Ver `docs/contexto.md` para la visión general del sistema y `docs/roadmap.md` para el estado actual y plan futuro.
+Empiece por el [runbook operativo](docs/operacion-ciclo-importaciones-y-ee-nativa.md). La visión general está en [docs/contexto.md](docs/contexto.md) y el estado del producto en [docs/roadmap.md](docs/roadmap.md).

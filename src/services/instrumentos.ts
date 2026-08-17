@@ -13,17 +13,13 @@ import type {
 // ─── EE: Encuesta Estudiantil ──────────────────────────────────
 
 export async function enviarEncuestaEstudiantil(
-  data: Partial<EncuestaEstudiantilRespuesta>
+  _data: Partial<EncuestaEstudiantilRespuesta>
 ): Promise<EncuestaEstudiantilRespuesta> {
-  const { data: result, error } = await db().from('encuesta_estudiantil_respuestas').insert(data).select().single();
-  if (error) throw new Error('Error al enviar encuesta');
-  return result as EncuestaEstudiantilRespuesta;
+  throw new Error('La encuesta estudiantil nativa solo se envía mediante el flujo autenticado de estudiantes');
 }
 
-export async function obtenerEncuestasPorDocente(docenteId: number): Promise<EncuestaEstudiantilRespuesta[]> {
-  const { data, error } = await db().from('encuesta_estudiantil_respuestas').select('*').eq('docente_id', docenteId);
-  if (error) throw new Error('Error al obtener encuestas');
-  return data as EncuestaEstudiantilRespuesta[];
+export async function obtenerEncuestasPorDocente(_docenteId: number): Promise<EncuestaEstudiantilRespuesta[]> {
+  throw new Error('Las respuestas estudiantiles crudas no están disponibles; use el contrato agregado nativo');
 }
 
 export async function verificarEncuestaEnviada(estudianteId: number, grupoId: number, cuatrimestreId: number): Promise<boolean> {

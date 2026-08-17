@@ -2,7 +2,8 @@
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../../services/docentes';
 import { obtenerCampus } from '../../../services/catalogos';
-import { db } from '../../../lib/db';
+import { db, dbAdmin } from '../../../lib/db';
+import { fetchNativeStudentEvaluationScores } from '../../../services/scoring';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -19,8 +20,8 @@ const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
 
 const cliente = db();
 const todos = await obtenerDocentes();
-const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
-const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
+const nativeScoreRows = await fetchNativeStudentEvaluationScores(dbAdmin(), cuatrimestreId);
+const evalsSet = new Set(nativeScoreRows.map((row) => row.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 const campusList = await obtenerCampus();
 const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreId);

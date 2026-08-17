@@ -3,12 +3,16 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { db } from '../../lib/db';
 import type { RolUsuario } from '../../types/supabase';
 import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+import { fetchCuatrimestreScores, calcFinalScore } from '../../services/scoring';
 
 type FiltroRol = RolUsuario | 'estudiante';
 
 const rolFiltro = (Astro.url.searchParams.get('rol') as FiltroRol) || undefined;
 const busqueda = Astro.url.searchParams.get('q') || '';
 const cliente = db();
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestreQuery = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || 0;
 const cuatrimestreCookie = parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '') || 0;
@@ -53,32 +57,64 @@ try {
       });
     }
   } else if (rolFiltro === 'estudiante') {
-    const { data: estudiantes, error } = await cliente
-      .from('estudiantes')
-      .select('id,nombre,apellidos,email,matricula')
-      .eq('activo', true)
-      .order('apellidos');
-    if (error) throw error;
+    const pageSize = 500;
+    const estudiantes: Array<{ id: number; nombre: string; apellidos: string; email: string }> = [];
 
-    const studentIds = (estudiantes || []).map((student) => student.id);
-    const { data: inscripciones } = cuatrimestreId && studentIds.length
-      ? await cliente.from('inscripciones').select('estudiante_id,grupo_id').in('estudiante_id', studentIds).eq('cuatrimestre_id', cuatrimestreId)
-      : { data: [] };
-    const groupIds = [...new Set((inscripciones || []).map((inscripcion) => inscripcion.grupo_id))];
-    const { data: grupos } = groupIds.length
-      ? await cliente.from('grupos').select('id,plan_normalizado').in('id', groupIds)
-      : { data: [] };
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await cliente
+        .from('estudiantes')
+        .select('id,nombre,apellidos,email,matricula')
+        .eq('activo', true)
+        .order('apellidos')
+        .order('id')
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      estudiantes.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+
+    const studentIds = new Set(estudiantes.map((student) => student.id));
+    const inscripciones: Array<{ estudiante_id: number; grupo_id: number }> = [];
+
+    if (cuatrimestreId && studentIds.size) {
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await cliente
+          .from('inscripciones')
+          .select('estudiante_id,grupo_id')
+          .eq('cuatrimestre_id', cuatrimestreId)
+          .order('id')
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        for (const inscripcion of data || []) {
+          if (studentIds.has(inscripcion.estudiante_id)) inscripciones.push(inscripcion);
+        }
+        if (!data || data.length < pageSize) break;
+      }
+    }
+
+    const groupIds = [...new Set(inscripciones.map((inscripcion) => inscripcion.grupo_id))];
+    const grupos: Array<{ id: number; plan_normalizado: string | null }> = [];
+
+    for (let offset = 0; offset < groupIds.length; offset += pageSize) {
+      const { data, error } = await cliente
+        .from('grupos')
+        .select('id,plan_normalizado')
+        .in('id', groupIds.slice(offset, offset + pageSize))
+        .order('id');
+      if (error) throw error;
+      grupos.push(...(data || []));
+    }
     const planPorEstudiante = new Map<number, Set<string>>();
-    const gruposPorId = new Map((grupos || []).map((grupo) => [grupo.id, grupo]));
+    const gruposPorId = new Map(grupos.map((grupo) => [grupo.id, grupo]));
 
-    for (const inscripcion of inscripciones || []) {
+    for (const inscripcion of inscripciones) {
       const grupo = gruposPorId.get(inscripcion.grupo_id);
       const plan = grupo?.plan_normalizado?.trim() || 'Plan no identificado';
       if (!planPorEstudiante.has(inscripcion.estudiante_id)) planPorEstudiante.set(inscripcion.estudiante_id, new Set());
       planPorEstudiante.get(inscripcion.estudiante_id)!.add(plan);
     }
 
-    for (const estudiante of estudiantes || []) {
+    for (const estudiante of estudiantes) {
       filas.push({
         id: String(estudiante.id), email: estudiante.email, rol: 'estudiante',
         nombre: estudiante.nombre, apellidos: estudiante.apellidos,
@@ -107,12 +143,11 @@ try {
       }
 
       if (u.rol === 'docente' && u.entidad_id) {
-        const { data: cal } = await cliente.from('calificacion_final_docente').select('*').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
-        if (cal) {
-          fila.categoria_360 = cal.categoria_final || '—';
-          fila.final_360 = cal.calificacion_final;
-          fila.prom_estudiantil = cal.score_encuesta_estudiantil || undefined;
-        }
+        const nativeScores = await fetchCuatrimestreScores(cliente, u.entidad_id, cuatrimestreId);
+        const nativeFinal = calcFinalScore(nativeScores, fila.modalidad);
+        fila.categoria_360 = nativeFinal.category;
+        fila.final_360 = nativeFinal.instrumentCount > 0 ? nativeFinal.final : undefined;
+        fila.prom_estudiantil = nativeScores.ee;
         const { data: planData } = await cliente.from('planeaciones').select('puntaje_promedio').eq('docente_id', u.entidad_id).eq('estado','Aprobado').order('fecha_evaluacion', { ascending: false }).limit(1).maybeSingle();
         if (planData?.puntaje_promedio) fila.prom_planeacion = planData.puntaje_promedio;
         const { data: obsData } = await cliente.from('observaciones').select('*').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
@@ -166,10 +201,6 @@ const { count: totalObs } = await cliente.from('usuarios').select('*', { count: 
 const { count: totalPend } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
 const { count: totalEstudiantes } = await cliente.from('estudiantes').select('*', { count: 'exact', head: true }).eq('activo', true);
 const conteos: Record<string, number> = { superadmin: totalAdmin || 0, coordinador: totalCoord || 0, docente: totalDocs || 0, estudiante: totalEstudiantes || 0, observador: totalObs || 0, pendiente: totalPend || 0 };
-
-function formatear(n: number | undefined): string {
-  return n !== undefined && n !== null ? Math.round(n).toString() : '—';
-}
 
 // Paginación
 const page = parseInt(Astro.url.searchParams.get('page')||'1');

@@ -6,7 +6,7 @@
 
 // ─── Roles ──────────────────────────────────────────────────────
 
-export type RolUsuario = 'superadmin' | 'coordinador' | 'docente' | 'observador' | 'pendiente';
+export type RolUsuario = 'superadmin' | 'coordinador' | 'docente' | 'estudiante' | 'observador' | 'pendiente';
 
 // ─── Planeaciones ──────────────────────────────────────────────
 

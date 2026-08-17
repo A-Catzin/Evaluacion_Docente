@@ -29,7 +29,7 @@ export function calcObservationScore(row: ObservationRow): number {
 export const WEIGHTS = { ee: 0.35, coord: 0.20, plan: 0.15, obs: 0.25, auto: 0.05 } as const;
 
 export type ModalityProfile = {
-  weights: InstrumentScores;
+  weights: Required<InstrumentScores>;
   expectedInstrumentCount: number;
 };
 
@@ -59,11 +59,85 @@ export function obtenerPerfilModalidad(modalidad?: string | null): ModalityProfi
 }
 
 export interface InstrumentScores {
-  ee: number;
-  coord: number;
-  plan: number;
-  obs: number;
-  auto: number;
+  ee?: number;
+  coord?: number;
+  plan?: number;
+  obs?: number;
+  auto?: number;
+}
+
+const scoreFormatter = new Intl.NumberFormat('es-MX', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+export function formatScore(value: number | null | undefined): string {
+  return value != null ? scoreFormatter.format(value) : '—';
+}
+
+export function formatScoreCsv(value: number | null | undefined): string {
+  return value != null ? value.toFixed(1) : '—';
+}
+
+export interface NativeStudentEvaluationScore {
+  cuatrimestre_id: number;
+  docente_id: number;
+  asignatura_id: number;
+  grupo_id: number;
+  respuestas_validas: number;
+  score_normalizado: number;
+  version_calculo: 'native-19-v1';
+}
+
+export async function fetchNativeStudentEvaluationScores(
+  cl: SupabaseClient,
+  cuatrimestreId: number
+): Promise<NativeStudentEvaluationScore[]> {
+  if (!cuatrimestreId) return [];
+  const { data, error } = await cl.rpc('obtener_scores_encuesta_estudiantil_nativa', {
+    p_cuatrimestre_id: cuatrimestreId,
+  });
+  if (error) throw error;
+  return ((data || []) as any[]).map((row) => ({
+    ...row,
+    respuestas_validas: Number(row.respuestas_validas),
+    score_normalizado: Number(row.score_normalizado),
+    version_calculo: 'native-19-v1',
+  }));
+}
+
+export function aggregateNativeScoresByTeacher(
+  rows: NativeStudentEvaluationScore[]
+): Map<number, number> {
+  const totals = new Map<number, { score: number; responses: number }>();
+  for (const row of rows) {
+    if (!Number.isFinite(row.score_normalizado) || row.respuestas_validas <= 0) continue;
+    const total = totals.get(row.docente_id) || { score: 0, responses: 0 };
+    total.score += row.score_normalizado * row.respuestas_validas;
+    total.responses += row.respuestas_validas;
+    totals.set(row.docente_id, total);
+  }
+  return new Map([...totals].map(([docenteId, total]) => [docenteId, total.score / total.responses]));
+}
+
+export function aggregateNativeScoresByTeacherAndSubject(
+  rows: NativeStudentEvaluationScore[]
+): Map<number, Map<number, number>> {
+  const totals = new Map<string, { docenteId: number; asignaturaId: number; score: number; responses: number }>();
+  for (const row of rows) {
+    if (!Number.isFinite(row.score_normalizado) || row.respuestas_validas <= 0) continue;
+    const key = `${row.docente_id}:${row.asignatura_id}`;
+    const total = totals.get(key) || { docenteId: row.docente_id, asignaturaId: row.asignatura_id, score: 0, responses: 0 };
+    total.score += row.score_normalizado * row.respuestas_validas;
+    total.responses += row.respuestas_validas;
+    totals.set(key, total);
+  }
+  const result = new Map<number, Map<number, number>>();
+  for (const total of totals.values()) {
+    if (!result.has(total.docenteId)) result.set(total.docenteId, new Map());
+    result.get(total.docenteId)!.set(total.asignaturaId, total.score / total.responses);
+  }
+  return result;
 }
 
 export interface FinalScore {
@@ -76,8 +150,8 @@ export interface FinalScore {
 export function calcFinalScore(scores: InstrumentScores, modalidad?: string | null): FinalScore {
   const { ee, coord, plan, obs, auto: autoScore } = scores;
   const profile = obtenerPerfilModalidad(modalidad);
-  const instruments = [ee, coord, plan, obs, autoScore];
-  const expectedInstruments = [
+  const instruments: Array<number | undefined> = [ee, coord, plan, obs, autoScore];
+  const expectedInstruments: number[] = [
     profile.weights.ee,
     profile.weights.coord,
     profile.weights.plan,
@@ -85,14 +159,16 @@ export function calcFinalScore(scores: InstrumentScores, modalidad?: string | nu
     profile.weights.auto,
   ];
   const count = expectedInstruments
-    .map((weight, idx) => weight > 0 && instruments[idx] > 0)
+    .map((weight, idx) => weight > 0 && instruments[idx] != null)
     .filter(Boolean)
     .length;
 
   let final = 0;
-  const weights = [profile.weights.ee, profile.weights.coord, profile.weights.plan, profile.weights.obs, profile.weights.auto];
+  const weights: number[] = [profile.weights.ee, profile.weights.coord, profile.weights.plan, profile.weights.obs, profile.weights.auto];
   for (let i = 0; i < 5; i++) {
-    if (instruments[i]) final += instruments[i] * weights[i];
+    const instrument = instruments[i];
+    const weight = weights[i];
+    if (instrument != null && weight > 0) final += instrument * weight;
   }
   final = Math.round(final);
 
@@ -110,7 +186,7 @@ export function getCategory(finalScore: number, instrumentCount: number, expecte
     if (finalScore >= 50) return 'A mejorar';
     return 'Insuficiente';
   }
-  return finalScore > 0 ? 'Parcial' : 'No iniciado';
+  return instrumentCount > 0 ? 'Parcial' : 'No iniciado';
 }
 
 export async function fetchCuatrimestreScores(
@@ -118,23 +194,28 @@ export async function fetchCuatrimestreScores(
   docenteId: number,
   cuatrimestreId: number
 ): Promise<InstrumentScores> {
-  const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] =
+  const [eeData, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] =
     await Promise.all([
-      cl.from('encuesta_estudiantil').select('score_normalizado').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId),
+      fetchNativeStudentEvaluationScores(cl, cuatrimestreId),
       cl.from('evaluacion_coordinacion').select('score_normalizado').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
       cl.from('planeaciones').select('puntaje_promedio').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado'),
       cl.from('observaciones').select(OBSERVATION_SELECT).eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId),
       cl.from('autodiagnosticos').select('puntaje_total').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
     ]);
 
-  const ee = (eeData as any[])?.length ? Math.round((eeData as any[]).reduce((s: number, e: any) => s + e.score_normalizado, 0) / (eeData as any[]).length) : 0;
-  const coord = (coordData as any[])?.[0]?.score_normalizado ? Math.round((coordData as any[])[0].score_normalizado) : 0;
-  const plan = (planData as any[])?.length ? Math.round((planData as any[]).reduce((s: number, p: any) => s + p.puntaje_promedio, 0) / (planData as any[]).length) : 0;
-  let obs = 0;
+  const ee = aggregateNativeScoresByTeacher(eeData).get(docenteId);
+  const coordValue = (coordData as any[])?.[0]?.score_normalizado;
+  const coord = coordValue != null ? Number(coordValue) : undefined;
+  const planRows = (planData as any[]) || [];
+  const plan = planRows.length
+    ? planRows.reduce((sum: number, row: any) => sum + Number(row.puntaje_promedio ?? 0), 0) / planRows.length
+    : undefined;
+  let obs: number | undefined;
   for (const o of (obsData as any[]) || []) {
     obs = calcObservationScore(o);
   }
-  const auto = (diagData as any[])?.[0]?.puntaje_total ? Math.round(((diagData as any[])[0].puntaje_total / 120) * 100) : 0;
+  const autoValue = (diagData as any[])?.[0]?.puntaje_total;
+  const auto = autoValue != null ? (Number(autoValue) / 120) * 100 : undefined;
 
   return { ee, coord, plan, obs, auto };
 }
@@ -146,26 +227,20 @@ export async function fetchBatchScoresPorDocente(
 ): Promise<Map<number, InstrumentScores>> {
   if (!docenteIds.length) return new Map();
 
-  const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] =
+  const [eeData, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] =
     await Promise.all([
-      cl.from('encuesta_estudiantil').select('docente_id,score_normalizado').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId),
+      fetchNativeStudentEvaluationScores(cl, cuatrimestreId),
       cl.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
       cl.from('planeaciones').select('docente_id,puntaje_promedio').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado'),
       cl.from('observaciones').select(`docente_id,${OBSERVATION_SELECT}`).in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId),
       cl.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
     ]);
 
-  const eeMap = new Map<number, { sum: number; count: number }>();
-  for (const e of (eeData as any[]) || []) {
-    const acc = eeMap.get(e.docente_id) || { sum: 0, count: 0 };
-    acc.sum += e.score_normalizado;
-    acc.count++;
-    eeMap.set(e.docente_id, acc);
-  }
+  const eeMap = aggregateNativeScoresByTeacher(eeData);
 
   const coordMap = new Map<number, number>();
   for (const c of (coordData as any[]) || []) {
-    if (!coordMap.has(c.docente_id)) coordMap.set(c.docente_id, Math.round(c.score_normalizado));
+    if (!coordMap.has(c.docente_id) && c.score_normalizado != null) coordMap.set(c.docente_id, Number(c.score_normalizado));
   }
 
   const planMap = new Map<number, { sum: number; count: number }>();
@@ -179,26 +254,24 @@ export async function fetchBatchScoresPorDocente(
   const obsMap = new Map<number, number>();
   for (const o of (obsData as any[]) || []) {
     const score = calcObservationScore(o);
-    if (score > 0 && !obsMap.has(o.docente_id)) obsMap.set(o.docente_id, score);
+    if (!obsMap.has(o.docente_id)) obsMap.set(o.docente_id, score);
   }
 
   const diagMap = new Map<number, number>();
   for (const d of (diagData as any[]) || []) {
-    if (!diagMap.has(d.docente_id)) diagMap.set(d.docente_id, Math.round((d.puntaje_total / 120) * 100));
+    if (!diagMap.has(d.docente_id) && d.puntaje_total != null) diagMap.set(d.docente_id, (Number(d.puntaje_total) / 120) * 100);
   }
 
   const result = new Map<number, InstrumentScores>();
   for (const id of docenteIds) {
-    const eeAcc = eeMap.get(id);
-    const ee = eeAcc ? Math.round(eeAcc.sum / eeAcc.count) : 0;
     const planAcc = planMap.get(id);
-    const plan = planAcc ? Math.round(planAcc.sum / planAcc.count) : 0;
+    const plan = planAcc ? planAcc.sum / planAcc.count : undefined;
     result.set(id, {
-      ee,
-      coord: coordMap.get(id) || 0,
+      ee: eeMap.get(id),
+      coord: coordMap.get(id),
       plan,
-      obs: obsMap.get(id) || 0,
-      auto: diagMap.get(id) || 0,
+      obs: obsMap.get(id),
+      auto: diagMap.get(id),
     });
   }
   return result;

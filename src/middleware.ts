@@ -15,6 +15,7 @@ const ROLES_POR_RUTA: Record<string, string[]> = {
   '/admin': ['superadmin'],
   '/coordinador': ['coordinador', 'superadmin', 'observador'],
   '/docente': ['docente', 'superadmin', 'coordinador'],
+  '/estudiante': ['estudiante'],
   '/observador': ['observador', 'superadmin'],
   '/pendiente': ['pendiente', 'superadmin'],
 };
@@ -41,7 +42,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     });
 
     if (error || !data.user?.email) return redirect('/auth');
-    if (!data.user.email.endsWith(DOMINIO_PERMITIDO)) {
+    if (!data.user.email.toLowerCase().endsWith(DOMINIO_PERMITIDO)) {
       await cliente.auth.signOut();
       cookies.delete('sb-access-token');
       cookies.delete('sb-refresh-token');

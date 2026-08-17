@@ -2,7 +2,7 @@
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
-import { fetchBatchScoresPorDocente, calcFinalScore } from '../../services/scoring';
+import { fetchBatchScoresPorDocente, calcFinalScore, formatScore } from '../../services/scoring';
 
 const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -23,7 +23,7 @@ if (token && refresh) {
   if (s.user) userId = s.user.id;
 }
 
-function fmt(n: any) { return n != null ? Math.round(n).toString() : '—' }
+function fmt(n: any) { return formatScore(n) }
 function colorN(n: any) { return !n ? 'text-slate-400' : n >= 80 ? 'text-emerald-600' : n >= 60 ? 'text-amber-600' : 'text-red-600' }
 
 let individualData: any = null;
@@ -47,7 +47,7 @@ if (modo === 'individual') {
     for (const c of cuatrimestres) {
       const cScores = await fetchBatchScoresPorDocente(cliente, ids, c.id);
       for (const docId of ids) {
-        const sc = cScores.get(docId) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
+        const sc = cScores.get(docId) || {};
         const docente = (docentes || []).find((d: any) => d.id === docId);
         const { final, instrumentCount } = calcFinalScore(sc, docente?.modalidad);
         if (instrumentCount > 0) {
@@ -94,7 +94,7 @@ if (modo === 'general') {
         const puntajes: Record<number, number | null> = {};
         let sumFinal = 0, countFinal = 0;
         for (const cid of cicloIds) {
-          const sc = scoresPorCiclo.get(cid)?.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
+          const sc = scoresPorCiclo.get(cid)?.get(d.id) || {};
           const { final, instrumentCount } = calcFinalScore(sc, d.modalidad);
           puntajes[cid] = instrumentCount > 0 ? final : null;
           if (puntajes[cid] != null) { sumFinal += puntajes[cid]!; countFinal++; }
@@ -174,7 +174,7 @@ if (modo === 'general') {
               </tr></thead>
               <tbody class="divide-y">
                 {individualData?.docentes?.map((d: any) => {
-                  const scores = individualData.scoreMap.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
+                  const scores = individualData.scoreMap.get(d.id) || {};
                   const { final, instrumentCount, category } = calcFinalScore(scores, d.modalidad);
                   const anual = individualData.anualMap.get(d.id);
                   const anualAvg = anual && anual.count > 0 ? Math.round(anual.sum / anual.count) : null;
@@ -186,9 +186,9 @@ if (modo === 'general') {
                       <td class={"px-2 py-2 text-center font-medium " + colorN(scores.plan)}>{fmt(scores.plan)}</td>
                       <td class={"px-2 py-2 text-center font-medium " + colorN(scores.obs)}>{fmt(scores.obs)}</td>
                       <td class={"px-2 py-2 text-center font-medium " + colorN(scores.auto)}>{fmt(scores.auto)}</td>
-                      <td class={"px-2 py-2 text-center font-bold " + colorN(final)}>{final || '—'}</td>
+                      <td class={"px-2 py-2 text-center font-bold " + colorN(final)}>{instrumentCount > 0 ? fmt(final) : '—'}</td>
                       <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{category}</span></td>
-                      <td class={"px-2 py-2 text-center font-bold bg-tup/5 " + colorN(anualAvg)}>{anualAvg != null ? anualAvg : '—'}</td>
+                      <td class={"px-2 py-2 text-center font-bold bg-tup/5 " + colorN(anualAvg)}>{fmt(anualAvg)}</td>
                     </tr>
                   );
                 })}
@@ -227,9 +227,9 @@ if (modo === 'general') {
                     <td class="px-3 py-2 text-xs text-slate-500">{d.campus || '—'}</td>
                     {generalData.cuatrisSeleccionados.map((c: any) => {
                       const val = d.puntajes[c.id];
-                      return <td class={"px-2 py-2 text-center font-bold " + colorN(val)}>{val != null ? val : '—'}</td>;
+                      return <td class={"px-2 py-2 text-center font-bold " + colorN(val)}>{fmt(val)}</td>;
                     })}
-                    <td class={"px-2 py-2 text-center font-bold bg-tup/5 " + colorN(d.promedioAnual)}>{d.promedioAnual != null ? d.promedioAnual : '—'}</td>
+                    <td class={"px-2 py-2 text-center font-bold bg-tup/5 " + colorN(d.promedioAnual)}>{fmt(d.promedioAnual)}</td>
                   </tr>
                 ))}
               </tbody>

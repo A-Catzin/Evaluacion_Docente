@@ -2,63 +2,16 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 
 const cuatrimestre = Astro.url.searchParams.get('cuatrimestre');
-const endpoint = cuatrimestre ? `/api/admin/importar-saeko?cuatrimestre=${encodeURIComponent(cuatrimestre)}` : '/api/admin/importar-saeko';
+const importUrl = `/admin/importar${cuatrimestre ? `?cuatrimestre=${encodeURIComponent(cuatrimestre)}` : ''}`;
 ---
 
-<LayoutAdmin titulo="Importar evaluaciones Saeko — Admin">
+<LayoutAdmin titulo="Importación Saeko retirada — Admin">
   <div class="animate-flotar-entrada max-w-2xl mx-auto">
-    <div class="flex items-center gap-3 mb-6">
-      <a href={`/admin/importar${cuatrimestre ? `?cuatrimestre=${encodeURIComponent(cuatrimestre)}` : ''}`} class="text-sm text-slate-400 hover:text-tup">← Importaciones</a>
+    <div class="bg-white rounded-2xl p-8 shadow-tarjeta border border-amber-200">
+      <p class="text-sm font-semibold text-amber-700 mb-2">Flujo retirado</p>
+      <h1 class="text-3xl font-bold text-tup mb-3">La importación de evaluaciones Saeko ya no está disponible</h1>
+      <p class="text-slate-600">Las evaluaciones estudiantiles se capturan y califican únicamente con las respuestas nativas de 19 reactivos. Los datos históricos de Saeko se conservan solo como archivo de auditoría.</p>
+      <a href={importUrl} class="inline-flex mt-6 px-4 py-2 rounded-xl bg-tup text-white text-sm font-medium">Volver a importaciones</a>
     </div>
-    <h1 class="text-3xl font-bold text-tup mb-2">Importar evaluaciones Saeko</h1>
-    <p class="text-slate-500 mb-6">Subí el archivo CSV exportado de Saeko para cargar las evaluaciones estudiantiles.</p>
-
-    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
-      <h2 class="text-lg font-bold text-tup mb-4">📤 Subir archivo</h2>
-      <form id="form-importar" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Archivo CSV *</label>
-          <input type="file" id="archivo" accept=".csv" required class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-tup file:text-white" />
-        </div>
-        <div class="bg-amber-50 rounded-xl p-4 text-sm text-amber-700">
-          <p class="font-medium mb-1">📋 Requisitos del archivo:</p>
-          <ul class="list-disc ml-4 text-xs space-y-1">
-            <li>Formato CSV exportado de Saeko (evaluaciones de profesores)</li>
-            <li>Columnas: Plan de estudios, Grupo, Asignatura Clave, Nombre del docente, Promedio, etc.</li>
-            <li>Solo se procesan las filas con estado "Completada"</li>
-            <li>Máximo 10 MB</li>
-          </ul>
-        </div>
-        <button type="submit" id="btn-subir" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90 transition-all">Subir y Procesar CSV</button>
-      </form>
-    </div>
-
-    <div id="barra-progreso" class="hidden bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
-      <p class="text-sm font-medium text-slate-700 mb-2" id="progreso-texto">Procesando...</p>
-      <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden"><div id="progreso-fill" class="h-full bg-tup rounded-full transition-all duration-300" style="width:0%"></div></div>
-      <p class="text-xs text-slate-400 mt-1" id="progreso-num">0 / 0</p>
-    </div>
-
-    <div id="resultado" class="hidden bg-white rounded-2xl p-6 shadow-tarjeta">
-      <h2 id="resultado-titulo" class="text-lg font-bold mb-4"></h2>
-      <div id="resultado-detalle" class="text-sm text-slate-600 space-y-1"></div>
-    </div>
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
 </LayoutAdmin>
-
-<script is:inline define:vars={{ endpoint }}>
-  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},5000)}
-  document.getElementById('form-importar').addEventListener('submit', async function(e) {
-    e.preventDefault(); var file=document.getElementById('archivo').files[0];
-    if(!file){toast('Selecciona un archivo CSV',true);return} if(file.size>10*1024*1024){toast('El archivo no debe superar 10 MB',true);return}
-    var btn=document.getElementById('btn-subir');btn.disabled=true;btn.textContent='Procesando...';var text=await file.text();var total=Math.max(0,text.split(/\r?\n/).filter(function(l){return l.trim()}).length-1);
-    var barra=document.getElementById('barra-progreso');barra.classList.remove('hidden');document.getElementById('progreso-num').textContent='0 / '+total;
-    var progress=0;var interval=setInterval(function(){progress=Math.min(progress+Math.ceil(total/50||1),Math.max(total-1,0));document.getElementById('progreso-fill').style.width=(total?Math.round(progress/total*100):0)+'%';document.getElementById('progreso-num').textContent=progress+' / '+total;},500);
-    var fd=new FormData();fd.append('file',file);
-    try{var res=await fetch(endpoint,{method:'POST',body:fd});clearInterval(interval);document.getElementById('progreso-fill').style.width='100%';document.getElementById('progreso-num').textContent=total+' / '+total;setTimeout(function(){barra.classList.add('hidden')},1500);var data=await res.json();
-      if(res.ok){toast('Importación completada',false);document.getElementById('resultado').classList.remove('hidden');document.getElementById('resultado-titulo').textContent='✅ Importación exitosa';document.getElementById('resultado-titulo').className='text-lg font-bold text-emerald-700 mb-4';document.getElementById('resultado-detalle').innerHTML='<p>📄 Filas procesadas: <strong>'+data.total+'</strong></p><p>👨‍🏫 Docentes: <strong>'+data.docentes+'</strong></p><p>📚 Asignaturas: <strong>'+data.asignaturas+'</strong></p><p>👥 Grupos: <strong>'+data.grupos+'</strong></p><p>📊 Evaluaciones guardadas: <strong>'+data.evaluaciones+'</strong></p>'+(data.errores?'<p class="text-amber-600 mt-2">⚠️ '+data.errores+' errores</p>':'');}
-      else{toast(data.error||'Error al procesar',true);btn.disabled=false;btn.textContent='Subir y Procesar CSV'}
-    }catch(err){clearInterval(interval);toast('Error de conexión',true);btn.disabled=false;btn.textContent='Subir y Procesar CSV'}
-  });
-</script>

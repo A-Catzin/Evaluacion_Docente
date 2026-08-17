@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
-import { obtenerClienteSuperbase } from '../../../lib/supabaseClient';
+import { crearClienteConSesion, crearClienteSuperbase } from '../../../lib/supabaseClient';
+import { obtenerDestinoInicio, resolverRolAutenticado } from '../../../lib/roles';
 
 /**
  * Callback de Google OAuth — Plataforma SED-360
@@ -19,7 +20,7 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
   }
 
   try {
-    const cliente = obtenerClienteSuperbase();
+    const cliente = crearClienteSuperbase();
     const { data, error } = await cliente.auth.exchangeCodeForSession(code);
 
     if (error || !data.session) {
@@ -46,7 +47,20 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
       maxAge: 60 * 60 * 24 * 7, // 1 semana
     });
 
-    return redirect('/pendiente');
+    const clienteSesion = crearClienteConSesion(tokenAcceso);
+    const { data: usuario, error: errorUsuario } = await clienteSesion.auth.getUser(tokenAcceso);
+    if (errorUsuario || !usuario.user) {
+      console.error('[SED-360 Callback] No se pudo validar la sesión:', errorUsuario?.message);
+      return redirect('/auth?error=sesion');
+    }
+
+    try {
+      const rol = await resolverRolAutenticado(clienteSesion);
+      return redirect(obtenerDestinoInicio(rol));
+    } catch (error) {
+      console.error('[SED-360 Callback] No se pudo resolver el rol:', error);
+      return redirect('/auth?error=rol');
+    }
   } catch (err) {
     console.error('[SED-360 Callback] Error inesperado:', err);
     return redirect('/auth?error=oauth');

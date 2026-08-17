@@ -13,7 +13,7 @@ const qs = cuatrimestre ? `?cuatrimestre=${encodeURIComponent(cuatrimestre)}` : 
       <p class="text-slate-500 max-w-2xl">Elegí un flujo según el origen de tus datos. Cada importación conserva su propio contrato y alcance para evitar mezclar información académica.</p>
     </div>
 
-    <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+    <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       <a href={`/admin/importar-alumnos${qs}`} class="group bg-white rounded-2xl p-6 shadow-tarjeta border border-transparent hover:border-tup/20 hover:shadow-lg transition-all">
         <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-2xl mb-5">👥</div>
         <h2 class="text-lg font-bold text-slate-800 group-hover:text-tup transition-colors">Importar alumnos / Actualizar grupos</h2>
@@ -35,12 +35,6 @@ const qs = cuatrimestre ? `?cuatrimestre=${encodeURIComponent(cuatrimestre)}` : 
         <span class="inline-flex mt-6 text-sm font-semibold text-violet-700">Abrir importador <span aria-hidden="true" class="ml-1">→</span></span>
       </a>
 
-      <a href={`/admin/importar-saeko${qs}`} class="group bg-white rounded-2xl p-6 shadow-tarjeta border border-transparent hover:border-tup/20 hover:shadow-lg transition-all">
-        <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center text-2xl mb-5">📊</div>
-        <h2 class="text-lg font-bold text-slate-800 group-hover:text-tup transition-colors">Importar evaluaciones Saeko</h2>
-        <p class="text-sm text-slate-500 mt-3">Conserva el flujo actual para cargar resultados de evaluaciones docentes exportados desde Saeko.</p>
-        <span class="inline-flex mt-6 text-sm font-semibold text-tup">Abrir importador <span aria-hidden="true" class="ml-1">→</span></span>
-      </a>
     </div>
 
     <div class="mt-6 rounded-2xl bg-slate-50 border border-slate-200 p-5 text-sm text-slate-600">

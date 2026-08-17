@@ -30,15 +30,23 @@ import Layout from '../layouts/Layout.astro';
     var at = params.access_token, rt = params.refresh_token;
     if (!at || !rt) return;
     fetch('/api/auth/guardar-sesion', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({access_token:at,refresh_token:rt}) })
-      .then(function () {
-        return fetch('/api/auth/rol').then(function (r) { return r.json(); });
+      .then(function (response) {
+        if (!response.ok) throw new Error('No se pudo guardar la sesión');
+        return fetch('/api/auth/rol');
+      })
+      .then(function (response) {
+        if (!response.ok) {
+          window.location.href = response.status === 401 ? '/auth?error=sesion' : '/auth?error=rol';
+          return null;
+        }
+        return response.json();
       })
       .then(function (data) {
-        var rol = data.rol || 'estudiante';
-        if (rol === 'superadmin') window.location.href = '/admin/dashboard';
-        else if (rol === 'coordinador') window.location.href = '/coordinador/dashboard';
-        else if (rol === 'docente') window.location.href = '/docente/materias';
-        else window.location.href = '/docente/materias';
+        if (!data) return;
+        window.location.href = typeof data.destino === 'string' ? data.destino : '/auth?error=rol';
+      })
+      .catch(function () {
+        window.location.href = '/auth?error=rol';
       });
   })();
 </script>

@@ -1,0 +1,170 @@
+---
+import LayoutEstudiante from '../../../layouts/LayoutEstudiante.astro';
+import { crearClienteConSesion } from '../../../lib/supabaseClient';
+import { getCurrentStudentEvaluations, type StudentEvaluation } from '../../../lib/studentEvaluations';
+
+const groupId = Number(Astro.params.grupoId);
+if (!Number.isSafeInteger(groupId) || groupId <= 0) return Astro.redirect('/estudiante/dashboard');
+
+const accessToken = Astro.cookies.get('sb-access-token')?.value;
+if (!accessToken) return Astro.redirect('/auth');
+
+let evaluation: StudentEvaluation | undefined;
+try {
+  const client = crearClienteConSesion(accessToken);
+  const { data, error } = await client.auth.getUser(accessToken);
+  if (error || !data.user) return Astro.redirect('/auth');
+  const current = await getCurrentStudentEvaluations(client);
+  evaluation = current.evaluations.find((item) => item.groupId === groupId);
+} catch (error) {
+  console.error('[student evaluation] unable to load assignment', {
+    message: error instanceof Error ? error.message : 'unknown error',
+  });
+}
+
+if (!evaluation) return Astro.redirect('/estudiante/dashboard');
+
+const prompts = [
+  { text: 'En términos generales, ¿cómo califica la calidad de la docencia recibida?', range: 6, labels: ['1 Muy deficiente', '2', '3', '4', '5', '6 Excelente'] },
+  { text: 'El docente presentó y siguió el plan de estudios de la asignatura.', range: 4 },
+  { text: 'El docente mantuvo un trato respetuoso con el grupo.', range: 4 },
+  { text: 'El docente cumplió con la asistencia programada.', range: 4 },
+  { text: 'El docente inició y concluyó las sesiones con puntualidad.', range: 4 },
+  { text: 'El docente promovió la participación de las y los estudiantes.', range: 4 },
+  { text: 'El docente demostró dominio de los contenidos de la asignatura.', range: 4 },
+  { text: 'El docente utilizó adecuadamente la plataforma institucional cuando fue necesaria.', range: 4 },
+  { text: 'El docente fomentó el pensamiento crítico.', range: 4 },
+  { text: 'El docente planteó retos intelectuales acordes con la asignatura.', range: 4 },
+  { text: 'El docente explicó con claridad los objetivos y actividades del curso.', range: 4 },
+  { text: 'Las lecturas y actividades favorecieron mi aprendizaje.', range: 4 },
+  { text: 'El docente promovió el respeto a las reglas acordadas.', range: 4 },
+  { text: 'El docente despertó interés por la asignatura.', range: 4 },
+  { text: 'El docente utilizó apoyos didácticos pertinentes.', range: 4 },
+  { text: 'El docente mostró actitudes y valores congruentes con su función.', range: 4 },
+  { text: 'El docente proporcionó retroalimentación útil y oportuna.', range: 4 },
+  { text: 'El docente explicó con claridad los criterios de evaluación.', range: 4 },
+  { text: 'El docente fue receptivo a dudas y comentarios del grupo.', range: 4 },
+];
+---
+
+<LayoutEstudiante titulo="Realizar evaluación docente">
+  <section class="animate-flotar-entrada py-6 sm:py-10">
+    <a href="/estudiante/dashboard" class="inline-flex items-center text-sm font-semibold text-tup hover:underline">Volver a mis evaluaciones</a>
+
+    <div class="mt-5 rounded-2xl bg-white p-5 shadow-tarjeta sm:p-7">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{evaluation.subjectKey} · Grupo {evaluation.groupKey}</p>
+      <h1 class="mt-2 text-2xl font-bold text-slate-800">{evaluation.subjectName}</h1>
+      <p class="mt-1 text-slate-600">Docente: <span class="font-semibold">{evaluation.teacherName}</span></p>
+      {(evaluation.plan || evaluation.modality) && <p class="mt-1 text-sm text-slate-500">{[evaluation.plan, evaluation.modality].filter(Boolean).join(' · ')}</p>}
+    </div>
+
+    {evaluation.completed ? (
+      <div class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6" role="status">
+        <h2 class="text-lg font-semibold text-emerald-900">Evaluación completada</h2>
+        <p class="mt-2 text-sm text-emerald-800">Ya registraste una evaluación para esta asignatura en el ciclo actual. No es posible enviarla nuevamente.</p>
+      </div>
+    ) : (
+      <>
+        <div class="mt-6 rounded-2xl border border-tup-100 bg-tup-50 p-5 text-sm text-tup-800">
+          <p class="font-semibold">Indicaciones de respuesta</p>
+          <p class="mt-1">Responde todos los reactivos. En los reactivos 2 a 19, 1 es la valoración más baja y 4 la más alta.</p>
+        </div>
+
+        <form id="evaluation-form" class="mt-6 space-y-5" novalidate>
+          {prompts.map((prompt, index) => (
+            <fieldset class="rounded-2xl bg-white p-5 shadow-tarjeta" aria-describedby={`help-${index}`}>
+              <legend class="font-semibold leading-6 text-slate-800"><span class="mr-2 text-tup">{index + 1}.</span>{prompt.text}</legend>
+              <p id={`help-${index}`} class="mt-2 text-xs text-slate-500">{index === 0 ? 'Selecciona una valoración del 1 al 6.' : 'Selecciona una valoración del 1 al 4.'}</p>
+              <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-6">
+                {Array.from({ length: prompt.range }, (_, answer) => answer + 1).map((answer) => (
+                  <label class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium text-slate-700 hover:border-tup" for={`answer-${index}-${answer}`}>
+                    <input id={`answer-${index}-${answer}`} type="radio" name={`answer-${index}`} value={answer} class="h-4 w-4 accent-tup" />
+                    <span>{prompt.labels?.[answer - 1] || answer}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))}
+
+          <div class="rounded-2xl bg-white p-5 shadow-tarjeta">
+            <label for="comentario" class="font-semibold text-slate-800">Comentario adicional <span class="font-normal text-slate-500">(opcional)</span></label>
+            <textarea id="comentario" name="comentario" maxlength="2000" rows="5" class="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 focus:border-tup focus:outline-none focus:ring-2 focus:ring-tup-100" aria-describedby="comment-help"></textarea>
+            <p id="comment-help" class="mt-2 text-xs text-slate-500">Máximo 2000 caracteres. Evita incluir datos personales.</p>
+          </div>
+
+          <p id="form-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert"></p>
+          <button id="submit-button" type="submit" class="w-full rounded-xl bg-tup px-5 py-3 font-semibold text-white hover:bg-tup-600">Enviar evaluación</button>
+        </form>
+
+        <div id="completion-message" class="mt-6 hidden rounded-2xl border border-emerald-200 bg-emerald-50 p-6" role="status" aria-live="polite" tabindex="-1">
+          <h2 class="text-lg font-semibold text-emerald-900">Evaluación completada</h2>
+          <p id="completion-text" class="mt-2 text-sm text-emerald-800"></p>
+          <a href="/estudiante/dashboard" class="mt-5 inline-flex items-center rounded-xl border border-emerald-300 px-4 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">Volver a mis evaluaciones</a>
+        </div>
+      </>
+    )}
+  </section>
+</LayoutEstudiante>
+
+{!evaluation.completed && <script is:inline define:vars={{ groupId }}>
+  var form = document.getElementById('evaluation-form');
+  var errorMessage = document.getElementById('form-error');
+  var submitButton = document.getElementById('submit-button');
+  var completionMessage = document.getElementById('completion-message');
+  var completionText = document.getElementById('completion-text');
+
+  function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.classList.remove('hidden');
+  }
+
+  form.addEventListener('submit', async function(event) {
+    event.preventDefault();
+    errorMessage.classList.add('hidden');
+
+    var answers = [];
+    for (var index = 0; index < 19; index += 1) {
+      var selected = document.querySelector('input[name="answer-' + index + '"]:checked');
+      if (!selected) {
+        showError('Responde todos los reactivos antes de enviar la evaluación.');
+        selected = document.querySelector('input[name="answer-' + index + '"]');
+        if (selected) selected.focus();
+        return;
+      }
+      answers.push(Number(selected.value));
+    }
+
+    submitButton.disabled = true;
+    submitButton.textContent = 'Enviando evaluación...';
+
+    try {
+      var response = await fetch('/api/estudiante/evaluaciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grupo_id: groupId,
+          respuestas: answers,
+          comentario: document.getElementById('comentario').value.trim() || null,
+        }),
+      });
+      var data = await response.json();
+
+      if (data.status === 'completed' || data.status === 'already_submitted') {
+        form.classList.add('hidden');
+        completionText.textContent = data.status === 'completed'
+          ? 'Tus respuestas se registraron correctamente. Esta evaluación no puede enviarse nuevamente.'
+          : 'Esta evaluación ya había sido completada. No es posible enviarla nuevamente.';
+        completionMessage.classList.remove('hidden');
+        completionMessage.focus();
+        return;
+      }
+
+      showError(data.error || 'No fue posible registrar la evaluación. Intenta nuevamente.');
+    } catch (error) {
+      showError('No fue posible conectar con el servidor. Intenta nuevamente.');
+    }
+
+    submitButton.disabled = false;
+    submitButton.textContent = 'Enviar evaluación';
+  });
+</script>}

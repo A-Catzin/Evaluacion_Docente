@@ -13,22 +13,13 @@ import Layout from '../../layouts/Layout.astro';
   <div class="flex flex-col items-center justify-center min-h-[80vh] gap-4 text-center">
     <div id="spinner" class="w-12 h-12 rounded-full border-4 border-accion border-t-transparent animate-spin"></div>
     <p id="estado" class="text-slate-500 text-sm">Completando inicio de sesión...</p>
-    <div id="debug" class="mt-4 max-w-md w-full text-left text-xs"></div>
   </div>
 </Layout>
 
 <script is:inline>
   (function () {
     var estadoEl = document.getElementById('estado');
-    var debugEl = document.getElementById('debug');
     var spinnerEl = document.getElementById('spinner');
-
-    function log(texto, error) {
-      var div = document.createElement('div');
-      div.className = 'py-1 px-2 rounded mb-1 ' + (error ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600');
-      div.textContent = texto;
-      if (debugEl) debugEl.appendChild(div);
-    }
 
     function setEstado(texto, error) {
       if (estadoEl) {
@@ -39,7 +30,6 @@ import Layout from '../../layouts/Layout.astro';
     }
 
     var hash = window.location.hash.substring(1); // Quitar el #
-    log('Hash presente: ' + (hash ? 'SI (' + hash.length + ' chars)' : 'NO'));
 
     if (!hash) {
       // Intentar con query string (flujo PKCE)
@@ -69,9 +59,6 @@ import Layout from '../../layouts/Layout.astro';
     var accessToken = params.access_token;
     var refreshToken = params.refresh_token;
 
-    log('access_token: ' + (accessToken ? 'SI (' + accessToken.substring(0, 20) + '...)' : 'NO'));
-    log('refresh_token: ' + (refreshToken ? 'SI' : 'NO'));
-
     if (!accessToken || !refreshToken) {
       setEstado('Tokens no encontrados en el hash', true);
       return;
@@ -88,35 +75,36 @@ import Layout from '../../layouts/Layout.astro';
       }),
     })
       .then(function (res) {
-        log('Guardar sesión: ' + res.status);
         if (res.ok) {
-          setEstado('¡Sesión establecida! Redirigiendo...');
+          setEstado('Sesión establecida. Verificando acceso...');
           // Verificar rol antes de redirigir
-          fetch('/api/auth/rol').then(function(r) { return r.json(); }).then(function(d) {
-            var rol = d.rol;
-            if (rol === 'pendiente' || !rol) {
-              window.location.href = '/pendiente';
-            } else if (rol === 'superadmin') {
-              window.location.href = '/admin/dashboard';
-            } else if (rol === 'coordinador') {
-              window.location.href = '/coordinador/dashboard';
-            } else if (rol === 'docente') {
-              window.location.href = '/docente/materias';
-            } else if (rol === 'observador') {
-              window.location.href = '/observador/dashboard';
-            } else {
-              window.location.href = '/pendiente';
+          fetch('/api/auth/rol').then(function(r) {
+            if (!r.ok) {
+              setEstado('No se pudo verificar el acceso. Intenta iniciar sesión nuevamente.', true);
+              setTimeout(function() {
+                window.location.href = r.status === 401 ? '/auth?error=sesion' : '/auth?error=rol';
+              }, 1000);
+              return null;
             }
+            return r.json();
+          }).then(function(d) {
+            if (!d) return;
+            if (typeof d.destino !== 'string') {
+              setEstado('No se pudo verificar el acceso. Intenta iniciar sesión nuevamente.', true);
+              setTimeout(function() { window.location.href = '/auth?error=rol'; }, 1000);
+              return;
+            }
+            window.location.href = d.destino;
           }).catch(function() {
-            setTimeout(function() { window.location.href = '/pendiente'; }, 500);
+            setEstado('No se pudo verificar el acceso. Intenta iniciar sesión nuevamente.', true);
+            setTimeout(function() { window.location.href = '/auth?error=rol'; }, 1000);
           });
         } else {
           setEstado('Error al guardar sesión (status ' + res.status + ')', true);
         }
       })
-      .catch(function (err) {
+      .catch(function () {
         setEstado('Error de conexión al guardar sesión', true);
-        log(err.message, true);
       });
   })();
 </script>

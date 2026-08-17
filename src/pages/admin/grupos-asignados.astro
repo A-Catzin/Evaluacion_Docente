@@ -7,14 +7,44 @@ type GroupRow = {
   id: number;
   docenteId: number | null;
   docente: string | null;
+  docenteResuelto: boolean;
+  asignaturaId: number | null;
+  asignaturaResuelta: boolean;
   grupo: string;
   plan: string;
   grado: string | null;
   clave: string;
   asignatura: string;
+  identidad: string;
   numAlumnos: number;
   inscritos: number;
 };
+
+type Categoria = 'assigned' | 'reconciliation' | 'missing-load';
+
+type ImportIssueRow = {
+  id: number;
+  razon: string;
+  fila: number | null;
+  plan: string | null;
+  grupo: string | null;
+  clave: string | null;
+  asignatura: string | null;
+  docente: string | null;
+};
+
+function normalizarIdentidad(value: string | null | undefined): string {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function identidadGrupo(cicloId: number, plan: string | null | undefined, grado: string | null | undefined, grupo: string | null | undefined): string {
+  return [cicloId, plan, grado, grupo].map(value => normalizarIdentidad(String(value))).join('|');
+}
 
 const cuatrimestres = await obtenerCuatrimestres();
 const activo = await obtenerCuatrimestreActivo();
@@ -26,6 +56,10 @@ const cicloPorCookie = cuatrimestres.find(c => c.id === cookieId);
 const cicloSeleccionado = cicloPorQuery || cicloActivo || cicloPorCookie || cuatrimestres[0];
 const cuatrimestreId = cicloSeleccionado?.id || 0;
 const busqueda = Astro.url.searchParams.get('q')?.trim() || '';
+const tab = Astro.url.searchParams.get('tab');
+const categoriaActiva: Categoria = tab === 'reconciliation' || tab === 'missing-load' || tab === 'assigned'
+  ? tab
+  : 'assigned';
 const cliente = db();
 
 const { data: gruposData, error: gruposError } = cicloSeleccionado
@@ -38,20 +72,37 @@ const { data: gruposData, error: gruposError } = cicloSeleccionado
 
 if (gruposError) throw new Error(`No se pudieron obtener los grupos: ${gruposError.message}`);
 
+const { data: incidenciasData, error: incidenciasError } = cicloSeleccionado
+  ? await cliente
+    .from('import_issues')
+    .select('id,razon,fila,plan,grupo,clave_asignatura,nombre_asignatura,docente,import_runs!inner(tipo)')
+    .eq('cuatrimestre_id', cuatrimestreId)
+    .eq('import_runs.tipo', 'asignaciones')
+    .order('id')
+  : { data: [], error: null };
+
+if (incidenciasError) throw new Error(`No se pudieron obtener las incidencias de conciliación: ${incidenciasError.message}`);
+
 const grupos = (gruposData || []).map((group: any): GroupRow => {
   const docente = Array.isArray(group.docentes) ? group.docentes[0] : group.docentes;
   const asignatura = Array.isArray(group.asignaturas) ? group.asignaturas[0] : group.asignaturas;
   const docenteNombre = [docente?.nombre, docente?.apellidos].filter(Boolean).join(' ').trim();
+  const grupo = group.grupo_normalizado || group.clave || '';
+  const plan = group.plan_normalizado || '';
 
   return {
     id: group.id,
-    docenteId: docenteNombre ? group.docente_id : null,
+    docenteId: group.docente_id ?? null,
     docente: docenteNombre || null,
-    grupo: group.grupo_normalizado || group.clave || '—',
-    plan: group.plan_normalizado || '—',
+    docenteResuelto: Boolean(group.docente_id && docenteNombre),
+    asignaturaId: group.asignatura_id ?? null,
+    asignaturaResuelta: Boolean(group.asignatura_id && asignatura),
+    grupo: grupo || '—',
+    plan: plan || '—',
     grado: group.grado || null,
     clave: asignatura?.clave || '—',
     asignatura: asignatura?.nombre || '—',
+    identidad: identidadGrupo(cuatrimestreId, plan, group.grado, grupo),
     numAlumnos: Number(group.num_alumnos) || 0,
     inscritos: 0,
   };
@@ -89,35 +140,94 @@ if (cuatrimestreId && gruposPorId.size > 0) {
   }
 }
 
+const estudiantesPorIdentidad = new Map<string, Set<number>>();
+for (const group of grupos) {
+  const estudiantes = estudiantesPorGrupo.get(group.id);
+  if (!estudiantes) continue;
+  const inscritos = estudiantesPorIdentidad.get(group.identidad) || new Set<number>();
+  for (const estudianteId of estudiantes) inscritos.add(estudianteId);
+  estudiantesPorIdentidad.set(group.identidad, inscritos);
+}
+
 for (const group of grupos) {
   group.inscritos = inscripcionesError
     ? group.numAlumnos
-    : estudiantesPorGrupo.get(group.id)?.size || 0;
+    : estudiantesPorIdentidad.get(group.identidad)?.size || 0;
 }
 
 const termino = busqueda.toLocaleLowerCase('es-MX');
-const gruposFiltrados = termino
-  ? grupos.filter(group => [group.docente, group.grupo, group.plan, group.grado, group.clave, group.asignatura]
+function coincideBusqueda(group: GroupRow, motivo = ''): boolean {
+  return !termino || [group.docente, group.grupo, group.plan, group.grado, group.clave, group.asignatura, motivo]
     .filter(Boolean)
     .join(' ')
     .toLocaleLowerCase('es-MX')
-    .includes(termino))
-  : grupos;
+    .includes(termino);
+}
+
+const incidencias = (incidenciasData || []).map((issue: any): ImportIssueRow => ({
+  id: issue.id,
+  razon: issue.razon,
+  fila: issue.fila,
+  plan: issue.plan,
+  grupo: issue.grupo,
+  clave: issue.clave_asignatura,
+  asignatura: issue.nombre_asignatura,
+  docente: issue.docente,
+}));
+
+function coincideBusquedaIncidencia(issue: ImportIssueRow): boolean {
+  return !termino || [issue.razon, issue.plan, issue.grupo, issue.clave, issue.asignatura, issue.docente, issue.fila]
+    .filter(value => value !== null && value !== undefined && value !== '')
+    .join(' ')
+    .toLocaleLowerCase('es-MX')
+    .includes(termino);
+}
 
 const asignados = new Map<number, { nombre: string; grupos: GroupRow[] }>();
-const sinDocente: GroupRow[] = [];
-for (const group of gruposFiltrados) {
-  if (group.docenteId === null || !group.docente) {
-    sinDocente.push(group);
-    continue;
-  }
+for (const group of grupos.filter(group => group.asignaturaId !== null && group.asignaturaResuelta && group.docenteResuelto && coincideBusqueda(group))) {
+  if (group.docenteId === null || !group.docente) continue;
   const section = asignados.get(group.docenteId) || { nombre: group.docente, grupos: [] };
   section.grupos.push(group);
   asignados.set(group.docenteId, section);
 }
 
 const secciones = [...asignados.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-const cicloQuery = cicloSeleccionado ? `?cuatrimestre=${cicloSeleccionado.id}` : '';
+const filasPorIdentidad = new Map<string, GroupRow[]>();
+for (const group of grupos) {
+  const rows = filasPorIdentidad.get(group.identidad) || [];
+  rows.push(group);
+  filasPorIdentidad.set(group.identidad, rows);
+}
+
+const sinInformacionCarga: GroupRow[] = [];
+for (const rows of filasPorIdentidad.values()) {
+  const bases = rows.filter(group => group.asignaturaId === null);
+  const asignaciones = rows.filter(group => group.asignaturaId !== null);
+
+  if (asignaciones.length === 0) {
+    for (const base of bases.slice(0, 1)) {
+      sinInformacionCarga.push(base);
+    }
+    continue;
+  }
+}
+
+const sinInformacionCargaFiltrados = sinInformacionCarga.filter(group => coincideBusqueda(group));
+const incidenciasFiltradas = incidencias.filter(coincideBusquedaIncidencia);
+const gruposAsignadosVisibles = secciones.reduce((total, section) => total + section.grupos.length, 0);
+const gruposVisibles = categoriaActiva === 'assigned'
+  ? gruposAsignadosVisibles
+  : categoriaActiva === 'reconciliation'
+    ? incidenciasFiltradas.length
+    : sinInformacionCargaFiltrados.length;
+
+function rutaCategoria(categoria: Categoria, incluirBusqueda = true): string {
+  const params = new URLSearchParams();
+  if (cicloSeleccionado) params.set('cuatrimestre', String(cicloSeleccionado.id));
+  if (incluirBusqueda && busqueda) params.set('q', busqueda);
+  params.set('tab', categoria);
+  return `/admin/grupos-asignados?${params.toString()}`;
+}
 ---
 
 <LayoutAdmin titulo="Grupos asignados — Admin">
@@ -130,7 +240,7 @@ const cicloQuery = cicloSeleccionado ? `?cuatrimestre=${cicloSeleccionado.id}` :
       </div>
       <div class="rounded-xl bg-tup/10 px-4 py-3 text-right">
         <p class="text-xs uppercase tracking-wide text-tup/70">Grupos visibles</p>
-        <p class="text-2xl font-bold text-tup">{gruposFiltrados.length}</p>
+        <p class="text-2xl font-bold text-tup">{gruposVisibles}</p>
       </div>
     </div>
 
@@ -141,18 +251,26 @@ const cicloQuery = cicloSeleccionado ? `?cuatrimestre=${cicloSeleccionado.id}` :
           <select id="cuatrimestre" name="cuatrimestre" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" onchange="this.form.submit()">
             {cuatrimestres.map(c => <option value={c.id} selected={c.id === cuatrimestreId}>{c.clave}{c.nombre ? ` · ${c.nombre}` : ''}</option>)}
             {cuatrimestres.length === 0 && <option value="">No hay ciclos disponibles</option>}
-          </select>
-          {busqueda && <input type="hidden" name="q" value={busqueda} />}
-        </form>
+           </select>
+           {busqueda && <input type="hidden" name="q" value={busqueda} />}
+           <input type="hidden" name="tab" value={categoriaActiva} />
+         </form>
 
-        <form method="GET" class="flex flex-1 gap-3 lg:max-w-2xl">
-          <input type="hidden" name="cuatrimestre" value={cuatrimestreId || ''} />
-          <input type="search" name="q" value={busqueda} placeholder="Buscar docente, grupo, plan o asignatura..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
-          <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-          {busqueda && <a href={`/admin/grupos-asignados${cicloQuery}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>}
-        </form>
-      </div>
-    </div>
+         <form method="GET" class="flex flex-1 gap-3 lg:max-w-2xl">
+           <input type="hidden" name="cuatrimestre" value={cuatrimestreId || ''} />
+           <input type="hidden" name="tab" value={categoriaActiva} />
+           <input type="search" name="q" value={busqueda} placeholder="Buscar docente, grupo, plan o asignatura..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+           <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
+           {busqueda && <a href={rutaCategoria(categoriaActiva, false)} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>}
+         </form>
+       </div>
+     </div>
+
+     <nav aria-label="Categorías de grupos" class="mb-6 flex flex-wrap gap-2">
+       <a href={rutaCategoria('assigned')} class={`rounded-xl px-4 py-2.5 text-sm font-medium ${categoriaActiva === 'assigned' ? 'bg-tup text-white shadow-sm' : 'bg-white text-slate-600 shadow-tarjeta hover:bg-slate-50'}`}>Asignados</a>
+       <a href={rutaCategoria('reconciliation')} class={`rounded-xl px-4 py-2.5 text-sm font-medium ${categoriaActiva === 'reconciliation' ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-slate-600 shadow-tarjeta hover:bg-slate-50'}`}>Incidencias de conciliación</a>
+       <a href={rutaCategoria('missing-load')} class={`rounded-xl px-4 py-2.5 text-sm font-medium ${categoriaActiva === 'missing-load' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-600 shadow-tarjeta hover:bg-slate-50'}`}>Sin información de carga académica</a>
+     </nav>
 
     {inscripcionesError && (
       <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-6 text-sm text-amber-800">
@@ -160,7 +278,7 @@ const cicloQuery = cicloSeleccionado ? `?cuatrimestre=${cicloSeleccionado.id}` :
       </div>
     )}
 
-    {secciones.map(section => (
+    {categoriaActiva === 'assigned' && secciones.map(section => (
       <section class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-6">
         <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <h2 class="text-lg font-semibold text-slate-800">{section.nombre}</h2>
@@ -183,22 +301,40 @@ const cicloQuery = cicloSeleccionado ? `?cuatrimestre=${cicloSeleccionado.id}` :
       </section>
     ))}
 
-    {sinDocente.length > 0 && (
-      <section class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-6 border border-amber-200">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-100 bg-amber-50 px-5 py-4">
-          <div><h2 class="text-lg font-semibold text-amber-900">Sin docente asignado</h2><p class="text-xs text-amber-700 mt-1">Pendiente de conciliación de carga académica.</p></div>
-          <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">{sinDocente.length} grupos</span>
+    {categoriaActiva === 'missing-load' && sinInformacionCargaFiltrados.length > 0 && (
+      <section class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-6 border border-slate-200">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
+          <div><h2 class="text-lg font-semibold text-slate-800">Sin información de carga académica</h2><p class="text-xs text-slate-500 mt-1">Estos grupos no venían en el reporte de clases cargado. Es información pendiente, no un error de conciliación.</p></div>
+          <span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700">{sinInformacionCargaFiltrados.length} grupos</span>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-[760px] w-full text-sm">
-            <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Grupo</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Plan</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Grado</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Asignatura</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Inscritos</th></tr></thead>
-            <tbody class="divide-y">{sinDocente.map(group => (
+            <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Grupo</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Plan</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Grado</th><th class="text-center px-4 py-3 text-xs uppercase text-slate-600">Inscritos</th></tr></thead>
+            <tbody class="divide-y">{sinInformacionCargaFiltrados.map(group => (
+              <tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium text-slate-700">{group.grupo}</td><td class="px-4 py-3 text-slate-600">{group.plan}</td><td class="px-4 py-3 text-slate-600">{group.grado || '—'}</td><td class="px-4 py-3 text-center font-semibold text-slate-700">{group.inscritos}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </section>
+    )}
+
+    {categoriaActiva === 'reconciliation' && incidenciasFiltradas.length > 0 && (
+      <section class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-6 border border-amber-200">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-100 bg-amber-50 px-5 py-4">
+          <div><h2 class="text-lg font-semibold text-amber-900">Incidencias de conciliación</h2><p class="text-xs text-amber-700 mt-1">Registros pendientes del reporte de asignaciones importado.</p></div>
+          <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">{incidenciasFiltradas.length} incidencias</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-[1000px] w-full text-sm">
+            <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Fila</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Grupo</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Plan</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Asignatura</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Docente reportado</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Motivo</th></tr></thead>
+            <tbody class="divide-y">{incidenciasFiltradas.map(issue => (
               <tr class="hover:bg-amber-50/50">
-                <td class="px-4 py-3 font-medium text-slate-700">{group.grupo}</td>
-                <td class="px-4 py-3 text-slate-600">{group.plan}</td>
-                <td class="px-4 py-3 text-slate-600">{group.grado || '—'}</td>
-                <td class="px-4 py-3"><span class="font-mono text-xs text-tup">{group.clave}</span><span class="block text-slate-600">{group.asignatura}</span></td>
-                <td class="px-4 py-3 text-center font-semibold text-slate-700">{group.inscritos}</td>
+                <td class="px-4 py-3 text-slate-600">{issue.fila ?? '—'}</td>
+                <td class="px-4 py-3 font-medium text-slate-700">{issue.grupo || '—'}</td>
+                <td class="px-4 py-3 text-slate-600">{issue.plan || '—'}</td>
+                <td class="px-4 py-3"><span class="font-mono text-xs text-tup">{issue.clave || '—'}</span><span class="block text-slate-600">{issue.asignatura || '—'}</span></td>
+                <td class="px-4 py-3 text-slate-600">{issue.docente || 'No informado en el reporte'}</td>
+                <td class="px-4 py-3 text-slate-600">{issue.razon}</td>
               </tr>
             ))}</tbody>
           </table>
@@ -206,6 +342,6 @@ const cicloQuery = cicloSeleccionado ? `?cuatrimestre=${cicloSeleccionado.id}` :
       </section>
     )}
 
-    {gruposFiltrados.length === 0 && <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No hay grupos que coincidan con la búsqueda en este ciclo.</div>}
+    {gruposVisibles === 0 && <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No hay grupos que coincidan con la búsqueda en este ciclo.</div>}
   </div>
 </LayoutAdmin>

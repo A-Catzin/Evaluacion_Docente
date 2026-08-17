@@ -1,7 +1,8 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { db } from '../../lib/db';
+import { db, dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+import { fetchNativeStudentEvaluationScores } from '../../services/scoring';
 
 const cliente = db();
 const cuatrimestre = await obtenerCuatrimestreActivo();
@@ -11,13 +12,14 @@ const { count: autodiag } = await cliente.from('autodiagnosticos').select('*', {
 const { count: observaciones } = await cliente.from('observaciones').select('*', { count: 'exact', head: true });
 const { count: planeacionesAprobadas } = await cliente.from('planeaciones').select('*', { count: 'exact', head: true }).eq('estado', 'Aprobado');
 const { count: coordinacion } = await cliente.from('evaluacion_coordinacion').select('*', { count: 'exact', head: true });
-const { count: encuestas } = await cliente.from('encuesta_estudiantil_respuestas').select('*', { count: 'exact', head: true });
+const nativeScores = cuatrimestre ? await fetchNativeStudentEvaluationScores(dbAdmin(), cuatrimestre.id) : [];
+const encuestas = nativeScores.reduce((count, row) => count + row.respuestas_validas, 0);
 
 const instrumentos = [
   { nombre: 'Autoevaluación Docente', peso: '5%', total: autodiag || 0, reactivos: 24, escala: '1-5', ruta: '/docente/autodiagnostico', editar: '/admin/instrumentos/editar?inst=autodiagnostico', color: 'border-l-purple-500' },
   { nombre: 'Planeación Docente', peso: '15%', total: planeacionesAprobadas || 0, reactivos: 4, escala: '1-5', ruta: '/coordinador/planeaciones', editar: '/admin/instrumentos/editar?inst=planeacion', color: 'border-l-amber-500' },
   { nombre: 'Coordinación Académica', peso: '20%', total: coordinacion || 0, reactivos: 15, escala: '1-5', ruta: '/coordinador/captura/coordinacion', editar: '/admin/instrumentos/editar?inst=coordinacion', color: 'border-l-purple-500' },
-  { nombre: 'Encuesta Estudiantil', peso: '35%', total: encuestas || 0, reactivos: 10, escala: 'Automático (Saeko CSV)', ruta: null, editar: null, color: 'border-l-slate-400' },
+  { nombre: 'Encuesta Estudiantil', peso: '35%', total: encuestas, reactivos: 19, escala: 'Nativa 19 reactivos', ruta: null, editar: null, color: 'border-l-slate-400' },
 ];
 
 const observacionesGrupo = [

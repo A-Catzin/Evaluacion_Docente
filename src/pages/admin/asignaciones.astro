@@ -1,8 +1,9 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../services/docentes';
-import { db } from '../../lib/db';
+import { db, dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+import { fetchNativeStudentEvaluationScores } from '../../services/scoring';
 
 const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -16,8 +17,8 @@ const todos = await obtenerDocentes();
 const { data: evaluadores } = await cliente.from('usuarios').select('id,email,rol').in('rol', ['coordinador','observador']).order('email');
 
 // Docentes con evaluaciones
-const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
-const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
+const nativeScoreRows = await fetchNativeStudentEvaluationScores(dbAdmin(), cuatrimestreId);
+const evalsSet = new Set(nativeScoreRows.map((row) => row.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 
 // Cargar asignaciones existentes para el primer evaluador o el seleccionado

@@ -3,7 +3,7 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerCuatrimestres, obtenerCuatrimestreActivo } from '../../services/catalogos';
 import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
-import { calcFinalScore } from '../../services/scoring';
+import { aggregateNativeScoresByTeacher, fetchNativeStudentEvaluationScores, calcFinalScore, formatScore } from '../../services/scoring';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const pathname = Astro.url.pathname;
@@ -29,31 +29,41 @@ if (token && refresh) {
   }
 }
 
+interface ProgresoEENativa {
+  docente_id: number;
+  inscripciones_elegibles: number;
+  controles_enviados: number;
+  respuestas_nativas: number;
+}
+
+const { data: progresoEENativaData, error: progresoEENativaError } = await cliente.rpc('obtener_progreso_encuesta_estudiantil_nativa', { p_cuatrimestre_id: cuatrimestreId });
+if (progresoEENativaError) throw progresoEENativaError;
+const progresoEENativa = (progresoEENativaData || []) as ProgresoEENativa[];
+const nativeScoreRows = await fetchNativeStudentEvaluationScores(cliente, cuatrimestreId);
+const nativeScoresByTeacher = aggregateNativeScoresByTeacher(nativeScoreRows);
+
 // Usuarios pendientes de aprobacion
 const { count: pendientes } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
 
 const todos = await obtenerDocentes();
-const [{ data: eeIds }, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('encuesta_estudiantil').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('autodiagnosticos').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('observaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('planeaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId)]);
-const docsEvaluados = new Set([...(eeIds||[]),...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
+const [{ data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('autodiagnosticos').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('observaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('planeaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId)]);
+const docsEvaluados = new Set([...nativeScoreRows,...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
+const docsConActividadPuntuable = new Set(docsEvaluados);
+for (const p of progresoEENativa) if (p.controles_enviados > 0 || p.respuestas_nativas > 0) docsEvaluados.add(p.docente_id);
 const docentes = todos.filter(d => docsEvaluados.has(d.id));
+const docentesConActividadPuntuable = todos.filter(d => docsConActividadPuntuable.has(d.id));
 
 const ids = docentes.map(d => d.id);
 
-const [{ data: eeData }, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] = await Promise.all([
-  cliente.from('encuesta_estudiantil').select('docente_id,asignatura_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId),
+const [{ data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] = await Promise.all([
   cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
   cliente.from('planeaciones').select('docente_id,asignatura_id,puntaje_promedio').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false }),
   cliente.from('observaciones').select('docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId),
   cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
 ]);
 
-const eePorDocente = new Map<number, Map<number, number>>();
-for (const e of (eeData || [])) {
-  if (!eePorDocente.has(e.docente_id)) eePorDocente.set(e.docente_id, new Map());
-  eePorDocente.get(e.docente_id)!.set(e.asignatura_id, e.score_normalizado);
-}
 const coordMap = new Map<number, number>();
-for (const c of (coordData || [])) if (!coordMap.has(c.docente_id)) coordMap.set(c.docente_id, Math.round(c.score_normalizado));
+for (const c of (coordData || [])) if (!coordMap.has(c.docente_id) && c.score_normalizado != null) coordMap.set(c.docente_id, Number(c.score_normalizado));
 const planPorDocente = new Map<number, Map<number, number>>();
 for (const p of (planData || [])) {
   if (!planPorDocente.has(p.docente_id)) planPorDocente.set(p.docente_id, new Map());
@@ -62,12 +72,11 @@ for (const p of (planData || [])) {
 const obsPorDocente = new Map<number, number>();
 for (const o of (obsData || [])) {
   const r = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);
-  if (r.length === 0) continue;
-  const prom = Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100);
+  const prom = r.length ? Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100) : 0;
   if (!obsPorDocente.has(o.docente_id)) obsPorDocente.set(o.docente_id, prom);
 }
 const diagMap = new Map<number, number>();
-for (const d of (diagData || [])) if (!diagMap.has(d.docente_id)) diagMap.set(d.docente_id, Math.round((d.puntaje_total/120)*100));
+for (const d of (diagData || [])) if (!diagMap.has(d.docente_id) && d.puntaje_total != null) diagMap.set(d.docente_id, (Number(d.puntaje_total) / 120) * 100);
 
 const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId);
 const matPorDocente = new Map<number, Set<number>>();
@@ -78,38 +87,37 @@ for (const g of (gruposData || [])) {
 
 interface FilaDashboard {
   id: number; nombre: string; apellidos: string; email: string;
-  promEst: number; promObs: number; promCoord: number; promPlan: number; promAuto: number;
+  promEst: number | undefined; promObs: number | undefined; promCoord: number | undefined; promPlan: number | undefined; promAuto: number | undefined;
+  respuestasNativas: number;
   final360: number | null; cat360: string;
-  instrumentos: number; instrumentosEsperados: number; visible: boolean;
+  instrumentos: number;
 }
 const filasTodas: FilaDashboard[] = docentes.map(d => {
-  const eeMap = eePorDocente.get(d.id);
   const obsDoc = obsPorDocente.get(d.id);
   const planMap2 = planPorDocente.get(d.id);
   const materias = matPorDocente.get(d.id);
-  let sumEst = 0, sumObs = 0, sumPlan = 0, count = 0;
+  let sumPlan = 0, count = 0;
   if (materias) for (const asigId of materias) {
-    const est = eeMap?.get(asigId);
     const plan = planMap2?.get(asigId);
-    if (est || plan) count++;
-    if (est) sumEst += est;
-    if (plan) sumPlan += plan;
+    if (plan != null) count++;
+    if (plan != null) sumPlan += plan;
   }
-  const promEst = count > 0 ? Math.round(sumEst / count) : 0;
-  const promPlan = count > 0 ? Math.round(sumPlan / count) : 0;
-  const promObs = obsDoc || 0;
-  const promCoord = coordMap.get(d.id) || 0;
-  const promAuto = diagMap.get(d.id) || 0;
-   const fin = calcFinalScore({ ee: promEst, coord: promCoord, plan: promPlan, obs: promObs, auto: promAuto }, d.modalidad);
-   return {
-     id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email,
-     promEst, promObs, promCoord, promPlan, promAuto,
-     final360: fin.final || null,
-     cat360: fin.category,
-     instrumentos: fin.instrumentCount,
-     instrumentosEsperados: fin.expectedInstrumentCount,
-     visible: d.visible_dashboard !== false,
-   };
+  const promEst = nativeScoresByTeacher.get(d.id);
+  const promPlan = count > 0 ? sumPlan / count : undefined;
+  const promObs = obsDoc;
+  const promCoord = coordMap.get(d.id);
+  const promAuto = diagMap.get(d.id);
+  const progresoNativo = progresoEENativa.find((p) => p.docente_id === d.id);
+  const fin = calcFinalScore({ ee: promEst, coord: promCoord, plan: promPlan, obs: promObs, auto: promAuto }, d.modalidad);
+  const instrumentos = [promEst, promCoord, promPlan, promObs, promAuto].filter((score) => score != null).length;
+  return {
+    id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email,
+    promEst, promObs, promCoord, promPlan, promAuto,
+    respuestasNativas: progresoNativo?.respuestas_nativas || 0,
+    final360: fin.instrumentCount > 0 ? fin.final : null,
+    cat360: fin.category,
+    instrumentos,
+  };
 });
 
 // Filtro por búsqueda (server-side GET)
@@ -118,13 +126,14 @@ const filas = busqueda
   : filasTodas;
 
 const totalEvaluados = filas.filter(f => f.instrumentos > 0).length;
+const docentesConEENativaIniciada = filasTodas.filter(f => f.respuestasNativas > 0).length;
 const conFinal = filasTodas.filter(f => f.final360 !== null && (f.final360||0) > 0);
 const promInstitucional = conFinal.length > 0 ? Math.round(conFinal.reduce((s,f) => s + (f.final360||0), 0) / conFinal.length) : null;
 const sobresalientes = conFinal.filter(f => (f.final360||0) >= 80).length;
 const pctSobresaliente = conFinal.length > 0 ? Math.round((sobresalientes / conFinal.length) * 100) : 0;
 
-function avgInstrumento(vals: number[]): number {
-  const f = vals.filter(v => v > 0);
+function avgInstrumento(vals: Array<number | undefined>): number {
+  const f = vals.filter((v): v is number => v != null);
   return f.length > 0 ? Math.round(f.reduce((a,b)=>a+b,0) / f.length) : 0;
 }
 const avgEst = avgInstrumento(filasTodas.map(f => f.promEst));
@@ -134,10 +143,9 @@ const avgObs = avgInstrumento(filasTodas.map(f => f.promObs));
 const avgAuto = avgInstrumento(filasTodas.map(f => f.promAuto));
 
 const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bueno':0,'Aprobado':0,'A mejorar':0,'Insuficiente':0,'Parcial':0,'No iniciado':0};
-filasTodas.forEach(f => { catCounts[f.cat360]++; });
+filasTodas.filter(f => docsConActividadPuntuable.has(f.id)).forEach(f => { catCounts[f.cat360]++; });
 
-function fmt(n: number|null|undefined): string { return n != null ? Math.round(n).toString() : '—'; }
-function colorN(n: number|null|undefined): string { if (!n) return ''; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
+function colorN(n: number|null|undefined): string { if (n == null) return ''; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
 
 const cuatrimestreSel = cuatrimestres.find(c => c.id === cuatrimestreId) || cuatrimestre;
 
@@ -182,9 +190,10 @@ const accesosRapidos = [
       </form>
     </div>
 
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup mt-1">{totalEvaluados}</p><p class="text-xs text-slate-400 mt-1">de {docentes.length} visibles</p></div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup mt-1">{fmt(promInstitucional)}</p><p class="text-xs text-slate-400 mt-1">escala 0-100</p></div>
+    <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup mt-1">{totalEvaluados}</p><p class="text-xs text-slate-400 mt-1">de {docentesConActividadPuntuable.length} con actividad puntuable</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">EE nativa iniciada</p><p class="text-3xl font-bold text-tup mt-1">{docentesConEENativaIniciada}</p><p class="text-xs text-slate-400 mt-1">docentes con respuestas</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup mt-1">{formatScore(promInstitucional)}</p><p class="text-xs text-slate-400 mt-1">escala 0-100</p></div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Distinguidos</p><p class="text-3xl font-bold text-emerald-600 mt-1">{pctSobresaliente}%</p><p class="text-xs text-slate-400 mt-1">≥80 puntos</p></div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">A Mejorar</p><p class="text-3xl font-bold text-red-500 mt-1">{catCounts['A mejorar'] + catCounts['Insuficiente']}</p><p class="text-xs text-slate-400 mt-1">&lt;60 puntos</p></div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Pendientes</p><a href="/admin/usuarios?rol=pendiente" class="block"><p class="text-3xl font-bold text-amber-500 mt-1">{pendientes || 0}</p><p class="text-xs text-slate-400 mt-1">por aprobar</p></a></div>
@@ -212,7 +221,7 @@ const accesosRapidos = [
 
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       <div class="px-6 py-4 border-b flex items-center justify-between">
-        <h2 class="font-semibold text-slate-700">Docentes ({filas.length})</h2>
+        <h2 class="font-semibold text-slate-700">Docentes con actividad ({filas.length})</h2>
         {busqueda && (<span class="text-xs ">Filtrado: "{busqueda}"</span>)}
       </div>
       {filas.length === 0 ? (<div class="p-12 text-center ">No se encontraron docentes.</div>) : (
@@ -233,16 +242,16 @@ const accesosRapidos = [
           <tr class="hover:bg-slate-50">
             <td class="px-3 py-2 text-center font-medium">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</td>
             <td class="px-3 py-2 text-center text-slate-600 text-xs">{d.email}</td>
-            <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/{d.instrumentosEsperados}</span></td>
-            <td class="px-2 py-2 text-center {colorN(d.promEst)}">{fmt(d.promEst)}</td>
-            <td class="px-2 py-2 text-center {colorN(d.promCoord)}">{fmt(d.promCoord)}</td>
-            <td class="px-2 py-2 text-center {colorN(d.promPlan)}">{fmt(d.promPlan)}</td>
-            <td class="px-2 py-2 text-center {colorN(d.promObs)}">{fmt(d.promObs)}</td>
-            <td class="px-2 py-2 text-center {colorN(d.promAuto)}">{fmt(d.promAuto)}</td>
-            <td class="px-2 py-2 text-center font-bold {colorN(d.final360)}">{fmt(d.final360)}</td>
+            <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/5</span></td>
+            <td class={`px-2 py-2 text-center ${colorN(d.promEst)}`}>{formatScore(d.promEst)}</td>
+            <td class={`px-2 py-2 text-center ${colorN(d.promCoord)}`}>{formatScore(d.promCoord)}</td>
+            <td class={`px-2 py-2 text-center ${colorN(d.promPlan)}`}>{formatScore(d.promPlan)}</td>
+            <td class={`px-2 py-2 text-center ${colorN(d.promObs)}`}>{formatScore(d.promObs)}</td>
+            <td class={`px-2 py-2 text-center ${colorN(d.promAuto)}`}>{formatScore(d.promAuto)}</td>
+            <td class={`px-2 py-2 text-center font-bold ${colorN(d.final360)}`}>{formatScore(d.final360)}</td>
             <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{d.cat360}</span></td>
             <td class="px-2 py-2 text-center">
-              <button class="btn-ver-docente px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20" data-docente={JSON.stringify({id:d.id, nombre:d.nombre, apellidos:d.apellidos, promEst:d.promEst, promCoord:d.promCoord, promPlan:d.promPlan, promObs:d.promObs, promAuto:d.promAuto, final360:d.final360, cat360:d.cat360, instrumentos:d.instrumentos, instrumentosEsperados:d.instrumentosEsperados, visible:d.visible})}>📊 Ver</button>
+              <a href={`/admin/docentes/${d.id}${qs}`} class="px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20">Ver</a>
             </td>
           </tr>
         ))}</tbody></table></div>
@@ -250,117 +259,12 @@ const accesosRapidos = [
     </div>
   </div>
 
-  <!-- Modal individual -->
-  <div id="modal-docente" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm" onclick="if(event.target===this){var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')}">
-    <div class="bg-white rounded-3xl p-6 shadow-modal max-w-lg w-full mx-4 max-h-[90vh] overflow-auto animate-flotar-entrada">
-      <div class="flex items-center justify-between mb-4">
-        <h3 id="modal-docente-titulo" class="text-lg font-bold text-tup"></h3>
-        <div class="flex items-center gap-3">
-          <label class="flex items-center gap-2 text-xs text-slate-500">
-            <span id="toggle-label">Visible</span>
-            <span class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="toggle-visible" class="sr-only peer" />
-              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-            </span>
-          </label>
-          <button onclick="var m=document.getElementById('modal-docente');m.classList.add('hidden');m.classList.remove('flex')" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
-        </div>
-      </div>
-      <div id="modal-docente-body"></div>
-    </div>
-  </div>
 </LayoutAdmin>
 
 <script is:inline define:vars={{
   catJson: JSON.stringify(catCounts),
   avgJson: JSON.stringify([avgEst, avgCoord, avgPlan, avgObs, avgAuto]),
 }}>
-  // ── Modal individual ──
-  var currentDocenteId = null;
-  document.querySelectorAll('.btn-ver-docente').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var d = JSON.parse(this.dataset.docente);
-      currentDocenteId = d.id;
-      document.getElementById('modal-docente-titulo').textContent = d.nombre + ' ' + d.apellidos;
-      
-      // Toggle
-      var toggle = document.getElementById('toggle-visible');
-      toggle.checked = d.visible;
-      toggle.onchange = async function(){
-        var visible = toggle.checked;
-        toggle.disabled = true;
-        try {
-          await fetch('/api/admin/toggle-visibilidad-docente', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({docente_id: d.id, visible: visible})
-          });
-        } catch(e) { toggle.checked = !visible; }
-        toggle.disabled = false;
-      };
-
-      // Body
-      var html = '';
-       html += '<div class="mb-4"><span class="text-xs ">Progreso: </span><span class="text-sm font-medium">'+d.instrumentos+'/'+d.instrumentosEsperados+' instrumentos aplicables</span></div>';
-      
-      // Canvas para gráfica individual
-      html += '<div class="mb-4" style="height:180px"><canvas id="chart-individual" style="max-height:180px"></canvas></div>';
-      
-      // Scores en texto
-      html += '<div class="grid grid-cols-5 gap-2 text-center text-xs mb-4">';
-      html += '<div><span class="">Est.</span><br/><span class="font-bold '+(d.promEst>=80?'text-emerald-600':d.promEst>=60?'text-amber-600':d.promEst>0?'text-red-600':'text-slate-300')+'">'+(d.promEst||'—')+'</span></div>';
-      html += '<div><span class="">Coord.</span><br/><span class="font-bold '+(d.promCoord>=80?'text-emerald-600':d.promCoord>=60?'text-amber-600':d.promCoord>0?'text-red-600':'text-slate-300')+'">'+(d.promCoord||'—')+'</span></div>';
-      html += '<div><span class="">Plan.</span><br/><span class="font-bold '+(d.promPlan>=80?'text-emerald-600':d.promPlan>=60?'text-amber-600':d.promPlan>0?'text-red-600':'text-slate-300')+'">'+(d.promPlan||'—')+'</span></div>';
-      html += '<div><span class="">Obs.</span><br/><span class="font-bold '+(d.promObs>=80?'text-emerald-600':d.promObs>=60?'text-amber-600':d.promObs>0?'text-red-600':'text-slate-300')+'">'+(d.promObs||'—')+'</span></div>';
-      html += '<div><span class="">Auto.</span><br/><span class="font-bold '+(d.promAuto>=80?'text-emerald-600':d.promAuto>=60?'text-amber-600':d.promAuto>0?'text-red-600':'text-slate-300')+'">'+(d.promAuto||'—')+'</span></div>';
-      html += '</div>';
-      
-      var fin = d.final360 != null ? Math.round(d.final360) : null;
-      html += '<div class="flex items-center justify-between bg-blue-50 rounded-xl p-3"><span class="text-sm">Calificación final: <b>'+(fin||'—')+'</b></span><span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">'+d.cat360+'</span></div>';
-      html += '<div id="historial-'+d.id+'" class="mt-3 text-xs text-slate-400">Cargando historial...</div>';
-
-      document.getElementById('modal-docente-body').innerHTML = html;
-      
-      // Cargar historial
-      fetch('/api/admin/historial-docente?docente_id='+d.id).then(function(r){return r.json()}).then(function(h){
-        var hDiv = document.getElementById('historial-'+d.id);
-        if (!h || h.length === 0) { hDiv.innerHTML = ''; return; }
-        var hHtml = '<p class="text-xs font-semibold text-slate-500 mb-1 mt-2">📅 Historial por Cuatrimestre</p>';
-        hHtml += '<table class="w-full text-[10px]"><thead><tr class="bg-slate-50"><th class="px-1 py-1">Cuatri</th><th class="px-1 py-1">EE</th><th class="px-1 py-1">Coord</th><th class="px-1 py-1">Plan</th><th class="px-1 py-1">Obs</th><th class="px-1 py-1">Auto</th><th class="px-1 py-1">Final</th><th class="px-1 py-1">Cat</th></tr></thead><tbody>';
-        h.forEach(function(r){
-          hHtml += '<tr><td class="px-1 py-1 font-medium">'+r.clave+'</td><td class="px-1 py-1 text-center">'+(r.ee||0)+'</td><td class="px-1 py-1 text-center">'+(r.coord||0)+'</td><td class="px-1 py-1 text-center">'+(r.plan||0)+'</td><td class="px-1 py-1 text-center">'+(r.obs||0)+'</td><td class="px-1 py-1 text-center">'+(r.auto||0)+'</td><td class="px-1 py-1 text-center font-bold">'+r.final+'</td><td class="px-1 py-1 text-center">'+r.cat+'</td></tr>';
-        });
-        hHtml += '</tbody></table>';
-        hDiv.innerHTML = hHtml;
-      }).catch(function(){ document.getElementById('historial-'+d.id).innerHTML = ''; });
-      
-      var modal = document.getElementById('modal-docente');
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      
-      // Dibujar gráfica individual después de que el modal se muestra
-      setTimeout(function(){
-        var ctx = document.getElementById('chart-individual');
-        if (!ctx || typeof Chart === 'undefined') return;
-        new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: ['Est.','Coord.','Plan.','Obs.','Auto.'],
-            datasets: [{
-              data: [d.promEst||0, d.promCoord||0, d.promPlan||0, d.promObs||0, d.promAuto||0],
-              backgroundColor: ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316'],
-              borderRadius: 4, borderWidth: 0
-            }]
-          },
-          options: {
-            responsive: true, maintainAspectRatio: true,
-            scales: { y: { beginAtZero: true, max: 100, ticks: { font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } },
-            plugins: { legend: { display: false } }
-          }
-        });
-      }, 100);
-    });
-  });
-
   // ── Gráficos institucionales ──
   function initCharts() {
     if (typeof Chart === 'undefined') {

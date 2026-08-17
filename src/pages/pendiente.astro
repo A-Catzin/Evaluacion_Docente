@@ -1,22 +1,31 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { db } from '../lib/db';
+import { crearClienteConSesion } from '../lib/supabaseClient';
+import { obtenerDestinoInicio, resolverRolAutenticado } from '../lib/roles';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
 let email = '';
 let rolActual = '';
-if (token && refresh) {
-  try {
-    const cl = db();
-    const { data: s } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
-    if (s.user) {
-      email = s.user.email || '';
-      const { data: u } = await cl.from('usuarios').select('rol').eq('id', s.user.id).maybeSingle();
-      rolActual = u?.rol || '';
-      if (rolActual && rolActual !== 'pendiente') return Astro.redirect(rolActual==='superadmin'||rolActual==='coordinador'?'/admin/dashboard':rolActual==='docente'?'/docente/dashboard':rolActual==='observador'?'/observador/dashboard':'/');
-    }
-  } catch {}
+let userId = '';
+if (!token) {
+  return Astro.redirect('/auth?error=sesion');
+}
+
+try {
+  const client = crearClienteConSesion(token);
+  const { data, error } = await client.auth.getUser(token);
+  if (error || !data.user) return Astro.redirect('/auth?error=sesion');
+
+  userId = data.user.id;
+  email = data.user.email || '';
+  rolActual = await resolverRolAutenticado(client);
+  if (rolActual !== 'pendiente') return Astro.redirect(obtenerDestinoInicio(rolActual));
+} catch (error) {
+  console.error('[pendiente] role resolution failed', {
+    userId,
+    error: error instanceof Error ? error.message : 'unknown error',
+  });
+  return Astro.redirect('/auth?error=rol');
 }
 ---
 

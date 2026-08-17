@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { db } from '../../../lib/db';
-import { fetchBatchScoresPorDocente, calcFinalScore } from '../../../services/scoring';
+import { fetchBatchScoresPorDocente, calcFinalScore, formatScoreCsv } from '../../../services/scoring';
 
 export const GET: APIRoute = async ({ url, cookies }) => {
   const t = cookies.get('sb-access-token')?.value;
@@ -37,9 +37,9 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     const header = 'Nombre,Apellidos,Email,EE,Coordinación,Planeación,Observación,Autodiagnóstico,Final,Categoría,Instrumentos';
     const rows: string[] = [];
     for (const d of docentes || []) {
-      const scores = scoreMap.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
+      const scores = scoreMap.get(d.id) || {};
       const { final, instrumentCount, expectedInstrumentCount, category } = calcFinalScore(scores, d.modalidad);
-      rows.push(`"${d.nombre}","${d.apellidos}","${d.email}",${scores.ee || 0},${scores.coord || 0},${scores.plan || 0},${scores.obs || 0},${scores.auto || 0},${final || 0},"${category}",${instrumentCount}/${expectedInstrumentCount}`);
+      rows.push(`"${d.nombre}","${d.apellidos}","${d.email}",${formatScoreCsv(scores.ee)},${formatScoreCsv(scores.coord)},${formatScoreCsv(scores.plan)},${formatScoreCsv(scores.obs)},${formatScoreCsv(scores.auto)},${instrumentCount > 0 ? formatScoreCsv(final) : '—'},"${category}",${instrumentCount}/${expectedInstrumentCount}`);
     }
 
     const csv = [header, ...rows].join('\n');

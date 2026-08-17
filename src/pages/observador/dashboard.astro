@@ -2,6 +2,7 @@
 import LayoutObservador from '../../layouts/LayoutObservador.astro';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+import { fetchNativeStudentEvaluationScores } from '../../services/scoring';
 
 const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -30,8 +31,8 @@ if (token && refresh) {
 }
 
 // Docentes con evaluaciones (para observación)
-const { data: docs } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
-const docsEvaluados = new Set((docs || []).map(e => e.docente_id));
+const nativeScoreRows = await fetchNativeStudentEvaluationScores(cliente, cuatrimestreId);
+const docsEvaluados = new Set(nativeScoreRows.map((row) => row.docente_id));
 
 const { data: docentes } = await cliente.from('docentes').select('id,nombre,apellidos,email,campus,modalidad,visible_dashboard').eq('activo', true).order('apellidos');
 const lista = (docentes || []).filter(d => docsEvaluados.has(d.id) && d.visible_dashboard !== false && docentesAsignados.has(d.id));

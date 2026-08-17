@@ -1,7 +1,7 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../lib/db';
-import { calcFinalScore, fetchBatchScoresPorDocente } from '../../services/scoring';
+import { calcFinalScore, fetchBatchScoresPorDocente, fetchNativeStudentEvaluationScores, formatScore } from '../../services/scoring';
 
 const cl = dbAdmin();
 const [cuatrisRes, docsRes] = await Promise.all([
@@ -20,8 +20,8 @@ if (Astro.url.searchParams.has('cuatrimestre') && cuatrimestreId) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 }
 
-const [{ data: eeActivity }, { data: coordActivity }, { data: planActivity }, { data: obsActivity }, { data: autoActivity }] = await Promise.all([
-  cl.from('encuesta_estudiantil').select('docente_id').eq('cuatrimestre_id', cuatrimestreId),
+const [nativeScoreRows, { data: coordActivity }, { data: planActivity }, { data: obsActivity }, { data: autoActivity }] = await Promise.all([
+  fetchNativeStudentEvaluationScores(cl, cuatrimestreId),
   cl.from('evaluacion_coordinacion').select('docente_id').eq('cuatrimestre_id', cuatrimestreId),
   cl.from('planeaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId),
   cl.from('observaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId),
@@ -30,7 +30,7 @@ const [{ data: eeActivity }, { data: coordActivity }, { data: planActivity }, { 
 
 const busqueda = (Astro.url.searchParams.get('q') || '').trim().toLowerCase();
 const docentesConActividad = new Set([
-  ...((eeActivity || []) as any[]),
+  ...nativeScoreRows,
   ...((coordActivity || []) as any[]),
   ...((planActivity || []) as any[]),
   ...((obsActivity || []) as any[]),
@@ -41,12 +41,12 @@ const scoresMap = await fetchBatchScoresPorDocente(cl, docentesBase.map((d) => d
 
 const cardsConResultados = docentesBase
   .map((d) => {
-    const scores = scoresMap.get(d.id) || { ee: 0, coord: 0, plan: 0, obs: 0, auto: 0 };
+    const scores = scoresMap.get(d.id) || {};
     const fin = calcFinalScore(scores, d.modalidad);
     return {
       ...d,
       ...scores,
-      final: fin.final || null,
+      final: fin.instrumentCount > 0 ? fin.final : null,
       category: fin.category,
       instruments: fin.instrumentCount,
       expected: fin.expectedInstrumentCount,
@@ -87,7 +87,7 @@ function miniClass(n: number | null | undefined): string {
 }
 
 function fmt(n: number | null | undefined): string {
-  return n != null && n > 0 ? Math.round(n).toString() : '—';
+  return formatScore(n);
 }
 ---
 

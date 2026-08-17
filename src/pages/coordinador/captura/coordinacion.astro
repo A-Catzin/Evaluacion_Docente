@@ -3,6 +3,7 @@ import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import { obtenerDocentes } from '../../../services/docentes';
 import { obtenerCuatrimestreActivo, obtenerCampus, obtenerCuatrimestres } from '../../../services/catalogos';
 import { db } from '../../../lib/db';
+import { fetchNativeStudentEvaluationScores } from '../../../services/scoring';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
@@ -12,9 +13,12 @@ const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestr
 const cuatrimestreClave = cuatrimestre?.clave || '26-2';
 
 const cliente = db();
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
 const todos = await obtenerDocentes();
-const { data: docsEval } = await cliente.from('encuesta_estudiantil').select('docente_id').limit(10000);
-const evalsSet = new Set((docsEval||[]).map(e=>e.docente_id));
+const nativeScoreRows = await fetchNativeStudentEvaluationScores(cliente, cuatrimestreId);
+const evalsSet = new Set(nativeScoreRows.map((row) => row.docente_id));
 const docentes = todos.filter(d => evalsSet.has(d.id));
 const campusList = await obtenerCampus();
 const CICLOS = ['26-2','26-3'];
