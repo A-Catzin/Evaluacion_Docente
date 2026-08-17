@@ -202,11 +202,11 @@ const accesosRapidos = [
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
         <h3 class="text-sm font-semibold text-slate-700 mb-4">Distribución por Categoría</h3>
-        <div class="flex justify-center" style="max-height:280px"><canvas id="chart-cat" style="max-height:280px"></canvas></div>
+        <div class="flex justify-center" style="max-height:280px"><canvas id="chart-cat" data-chart={JSON.stringify(catCounts)} style="max-height:280px"></canvas></div>
       </div>
       <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
         <h3 class="text-sm font-semibold text-slate-700 mb-4">Promedio por Instrumento</h3>
-        <div class="flex justify-center" style="max-height:280px"><canvas id="chart-barras" style="max-height:280px"></canvas></div>
+        <div class="flex justify-center" style="max-height:280px"><canvas id="chart-barras" data-chart={JSON.stringify([avgEst, avgCoord, avgPlan, avgObs, avgAuto])} style="max-height:280px"></canvas></div>
       </div>
     </div>
 
@@ -261,30 +261,15 @@ const accesosRapidos = [
 
 </LayoutAdmin>
 
-<script is:inline define:vars={{
-  catJson: JSON.stringify(catCounts),
-  avgJson: JSON.stringify([avgEst, avgCoord, avgPlan, avgObs, avgAuto]),
-}}>
-  // ── Gráficos institucionales ──
-  function initCharts() {
-    if (typeof Chart === 'undefined') {
-      var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
-      s.onload = drawCharts;
-      document.head.appendChild(s);
-    } else { drawCharts(); }
-  }
-
-  function drawCharts() {
-    var catData = JSON.parse(catJson);
-    var avgData = JSON.parse(avgJson);
-    var labels = Object.keys(catData);
-    var values = Object.values(catData);
-    var bgColors = ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316','#ef4444','#fbbf24','#94a3b8'];
-
-    // Barras horizontales — distribución por categoría
-    var ctxCat = document.getElementById('chart-cat');
+<script>
+  import Chart from 'chart.js/auto';
+  document.addEventListener('DOMContentLoaded', () => {
+    const ctxCat = document.getElementById('chart-cat');
     if (ctxCat) {
+      const catData = JSON.parse(ctxCat.dataset.chart || '{}');
+      const labels = Object.keys(catData);
+      const values = Object.values(catData);
+      const bgColors = ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316','#ef4444','#fbbf24','#94a3b8'];
       new Chart(ctxCat, {
         type: 'bar',
         data: { labels: labels, datasets: [{ data: values, backgroundColor: bgColors, borderRadius: 6, borderWidth: 0 }] },
@@ -297,8 +282,9 @@ const accesosRapidos = [
       });
     }
 
-    var ctxBarras = document.getElementById('chart-barras');
+    const ctxBarras = document.getElementById('chart-barras');
     if (ctxBarras) {
+      const avgData = JSON.parse(ctxBarras.dataset.chart || '[]');
       new Chart(ctxBarras, {
         type: 'bar',
         data: {
@@ -312,7 +298,5 @@ const accesosRapidos = [
         }
       });
     }
-  }
-
-  initCharts();
+  });
 </script>

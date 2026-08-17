@@ -253,10 +253,11 @@ export interface Turno {
 
 export interface Observacion {
   id: number; docente_id: number; evaluador_id: string;
+  instrument_version: 'escolarizado-v1' | 'virtual-v1' | 'ejecutivo-v1' | null;
   oferta_academica: string; cuatrimestre_grupo: string; ciclo: string; campus: string;
   cco1: number|null; cco2: number|null; cco3: number|null; cco4: number|null; cco5: number|null; cco6: number|null; cco7: number|null;
   cme1: number|null; cme2: number|null; cme3: number|null; cme4: number|null; cme5: number|null; cme6: number|null; cme7: number|null; cme8: number|null; cme9: number|null;
-  ccom1: number|null; ccom2: number|null; ccom3: number|null; ccom4: number|null;
+  ccom1: number|null; ccom2: number|null; ccom3: number|null; ccom4: number|null; ccom5: number|null;
   cso1: number|null; cso2: number|null; cso3: number|null; cso4: number|null;
   cge1: number|null; cge2: number|null; cge3: number|null; cge4: number|null; cge5: number|null; cge6: number|null; cge7: number|null;
   caf1: number|null; caf2: number|null;

@@ -234,7 +234,7 @@ function feedbackCards(text: string | null | undefined) {
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div class="lg:col-span-2 bg-white rounded-2xl p-6 shadow-tarjeta">
             <h3 class="text-sm font-semibold text-slate-700 mb-4">Mis Scores por Instrumento</h3>
-            <div style="max-height:220px"><canvas id="chart-docente" style="max-height:220px"></canvas></div>
+            <div style="max-height:220px"><canvas id="chart-docente" data-chart={JSON.stringify([scores.promEst, scores.promCoord, scores.promPlan, scores.promObs, scores.promAuto])} style="max-height:220px"></canvas></div>
           </div>
           <div class="bg-white rounded-2xl p-6 shadow-tarjeta flex flex-col items-center justify-center text-center">
             <p class="text-xs text-slate-400 uppercase mb-2">Calificación Final</p>
@@ -423,26 +423,17 @@ function feedbackCards(text: string | null | undefined) {
   </div>
 </LayoutDocente>
 
-<script is:inline define:vars={{
-  chartJson: JSON.stringify([scores.promEst, scores.promCoord, scores.promPlan, scores.promObs, scores.promAuto]),
-}}>
-  function initChart() {
-    if (typeof Chart === 'undefined') {
-      var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
-      s.onload = drawChart;
-      document.head.appendChild(s);
-    } else { drawChart(); }
-  }
-  function drawChart() {
-    var data = JSON.parse(chartJson);
-    var ctx = document.getElementById('chart-docente');
+<script>
+  import Chart from 'chart.js/auto';
+  document.addEventListener('DOMContentLoaded', () => {
+    const ctx = document.getElementById('chart-docente');
     if (!ctx) return;
+    const data = JSON.parse(ctx.dataset.chart || '[]');
     new Chart(ctx, {
       type: 'bar',
       data: {
         labels: ['Est.','Coord.','Plan.','Obs.','Auto.'],
-        datasets: [{ data: data, backgroundColor: ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316'], borderRadius: 6, borderWidth: 0 }]
+        datasets: [{ data, backgroundColor: ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316'], borderRadius: 6, borderWidth: 0 }]
       },
       options: {
         responsive: true, maintainAspectRatio: true,
@@ -450,6 +441,5 @@ function feedbackCards(text: string | null | undefined) {
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return Number(context.raw).toFixed(1); } } } }
       }
     });
-  }
-  initChart();
+  });
 </script>

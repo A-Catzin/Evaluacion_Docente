@@ -2,6 +2,7 @@
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../../lib/db';
 import { fetchCuatrimestreScores, fetchNativeStudentEvaluationScores, calcFinalScore, formatScore, OBSERVATION_SELECT } from '../../../services/scoring';
+import { OBSERVATION_INSTRUMENT_DEFINITIONS, OBSERVATION_STORAGE_SECTIONS, getObservationQuestion, isObservationInstrumentVersion, type ObservationInstrumentVersion } from '../../../lib/observationDefinitions';
 
 const COORD_SECTION_DEFS = [
   { code: 'A', title: 'Cumplimiento Académico', fields: ['a1', 'a2', 'a3'] },
@@ -16,17 +17,6 @@ const PLAN_CRITERIA = [
   { field: 'criterio_secuencia', label: 'Secuencia didáctica' },
   { field: 'criterio_recursos', label: 'Recursos y materiales' },
   { field: 'criterio_evaluacion', label: 'Sistema de evaluación' },
-] as const;
-
-const OBS_SECTION_DEFS = [
-  { code: 'A', title: 'Cognitivas', fields: ['cco1', 'cco2', 'cco3', 'cco4', 'cco5', 'cco6', 'cco7'] },
-  { code: 'B', title: 'Metacognitivas', fields: ['cme1', 'cme2', 'cme3', 'cme4', 'cme5', 'cme6', 'cme7', 'cme8', 'cme9'] },
-  { code: 'C', title: 'Comunicativas', fields: ['ccom1', 'ccom2', 'ccom3', 'ccom4'] },
-  { code: 'D', title: 'Sociales', fields: ['cso1', 'cso2', 'cso3', 'cso4'] },
-  { code: 'E', title: 'Gestión de la enseñanza', fields: ['cge1', 'cge2', 'cge3', 'cge4', 'cge5', 'cge6', 'cge7'] },
-  { code: 'F', title: 'Afectivas', fields: ['caf1', 'caf2'] },
-  { code: 'G', title: 'Tecno-pedagógicas', fields: ['ctepe1', 'ctepe2', 'ctepe3', 'ctepe4', 'ctepe5', 'ctepe6', 'ctepe7'] },
-  { code: 'H', title: 'Normativas', fields: ['cno1', 'cno2', 'cno3', 'cno4', 'cno5'] },
 ] as const;
 
 const AUTO_FIELDS = Array.from({ length: 24 }, (_, i) => `r${i + 1}`);
@@ -93,10 +83,10 @@ const [feedbackRes, eeRes, coordRes, planRes, obsRes, autoRes, preguntasRes] = a
     ? cl.from('evaluacion_coordinacion').select('id,docente_id,asignatura_id,campus,ciclo,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3,puntos_obtenidos,score_normalizado,categoria,comentarios,fecha_evaluacion').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
     : Promise.resolve({ data: [] }),
   cuatrimestreId
-    ? cl.from('planeaciones').select('id,docente_id,asignatura_id,grupo,campus,turno,modalidad,proyecto,laboratorio,visitas,estado,criterio_alineacion,criterio_secuencia,criterio_recursos,criterio_evaluacion,puntaje_promedio,comentario_retroalimentacion,comentario_interno,fecha_subida,fecha_evaluacion').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('fecha_evaluacion', { ascending: false })
+    ? cl.from('planeaciones').select('id,docente_id,asignatura_id,grupo,campus,turno,modalidad,proyecto,laboratorio,visitas,estado,criterio_alineacion,criterio_secuencia,criterio_recursos,criterio_evaluacion,evaluacion_detalle,no_aplica_count,observaciones_generales,puntaje_promedio,comentario_retroalimentacion,comentario_interno,fecha_subida,fecha_evaluacion').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('fecha_evaluacion', { ascending: false })
     : Promise.resolve({ data: [] }),
   cuatrimestreId
-    ? cl.from('observaciones').select(`id,docente_id,asignatura_id,grupo_id_fk,oferta_academica,cuatrimestre_grupo,ciclo,campus,${OBSERVATION_SELECT},obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,comentario_docente,comentario_evaluador,fecha_observacion`).eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
+    ? cl.from('observaciones').select(`id,docente_id,asignatura_id,grupo_id_fk,oferta_academica,cuatrimestre_grupo,ciclo,campus,instrument_version,${OBSERVATION_SELECT},ccom5,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,comentario_docente,comentario_evaluador,fecha_observacion`).eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
     : Promise.resolve({ data: [] }),
   cuatrimestreId
     ? cl.from('autodiagnosticos').select('id,docente_id,cuatrimestre_id,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12,r13,r14,r15,r16,r17,r18,r19,r20,r21,r22,r23,r24,puntaje_total,nivel_desempeno,comentarios,fecha_respuesta').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
@@ -138,6 +128,12 @@ for (const p of preguntaRows) {
   preguntaMap.get(p.instrumento)!.push(p);
 }
 for (const arr of preguntaMap.values()) arr.sort((a, b) => a.orden - b.orden);
+
+const planCategoryLabels = new Map(
+  preguntaRows
+    .filter((p) => typeof p.seccion === 'string' && p.seccion.startsWith('cat_'))
+    .map((p) => [p.seccion, p.texto] as const)
+);
 
 function fmt(n: number | null | undefined): string {
   return formatScore(n);
@@ -188,6 +184,86 @@ function buildItems(instrument: string, fields: readonly string[], row: any) {
   }));
 }
 
+function planningState(value: unknown): { label: string; className: string } {
+  const score = value && typeof value === 'object' && 'score' in value ? (value as { score?: unknown }).score : value;
+  if (score === 2 || score === '2') return { label: '2 / 2', className: 'bg-emerald-100 text-emerald-700' };
+  if (score === 1 || score === '1') return { label: '1 / 2', className: 'bg-amber-100 text-amber-700' };
+  if (score === 0 || score === '0') return { label: '0 / 2', className: 'bg-red-50 text-red-700' };
+  if (score === 'na') return { label: 'No aplica', className: 'bg-slate-100 text-slate-600' };
+  if (score == null) return { label: 'Sin registro', className: 'bg-slate-100 text-slate-500' };
+  return { label: `Valor registrado: ${String(score)}`, className: 'bg-slate-100 text-slate-600' };
+}
+
+function buildPlanningRubric(row: any) {
+  const detail = row.evaluacion_detalle;
+  if (detail !== null && typeof detail === 'object' && !Array.isArray(detail)) {
+    const values = detail as Record<string, unknown>;
+    const keys = [...new Set([...planCategoryLabels.keys(), ...Object.keys(values)])];
+    return {
+      current: true,
+      items: keys.map((key) => ({ key, label: planCategoryLabels.get(key) || key, state: planningState(values[key]) })),
+    };
+  }
+
+  return {
+    current: false,
+    items: PLAN_CRITERIA.map((criterion) => ({ key: criterion.field, label: criterion.label, state: planningState(row[criterion.field]) })),
+  };
+}
+
+function observationState(value: unknown): { label: string; className: string; kind: 'scored' | 'na' | 'missing' | 'other' } {
+  if (value === 0 || value === '0') return { label: 'No aplica', className: 'bg-slate-100 text-slate-600', kind: 'na' };
+  if (value == null) return { label: 'Sin registro', className: 'bg-slate-100 text-slate-500', kind: 'missing' };
+  const numeric = Number(value);
+  if (Number.isInteger(numeric) && numeric >= 1 && numeric <= 5) {
+    return { label: `${numeric} / 5`, className: 'bg-blue-50 text-blue-700', kind: 'scored' };
+  }
+  return { label: `Valor registrado: ${String(value)}`, className: 'bg-slate-100 text-slate-600', kind: 'other' };
+}
+
+function buildObservationSections(row: any) {
+  const storedVersion: ObservationInstrumentVersion | null = isObservationInstrumentVersion(row.instrument_version)
+    ? row.instrument_version
+    : null;
+  const sections = storedVersion
+    ? OBSERVATION_INSTRUMENT_DEFINITIONS[storedVersion].sections.map((section) => ({
+      code: section.code,
+      title: section.title,
+      fields: section.fields,
+    }))
+    // Historical records did not persist their instrument version. Use the
+    // canonical school rubric as a reference without inferring a modality.
+    : OBSERVATION_STORAGE_SECTIONS.map((section) => ({
+      code: section.code,
+      title: section.title,
+      fields: section.fields.map((key) => ({
+        key,
+        text: getObservationQuestion('escolarizado-v1', key) || 'Texto de pregunta no disponible para esta versión.',
+      })),
+    }));
+
+  return sections.map((section) => {
+    const items = section.fields.map((field) => {
+      const state = observationState(row[field.key]);
+      return {
+        field: field.key,
+        state,
+        question: field.text,
+      };
+    });
+    return {
+      code: section.code,
+      title: section.title,
+      items,
+      counts: {
+        scored: items.filter((item) => item.state.kind === 'scored').length,
+        na: items.filter((item) => item.state.kind === 'na').length,
+        missing: items.filter((item) => item.state.kind === 'missing').length,
+      },
+    };
+  });
+}
+
 function seriesLabel(series: any): string {
   const asig = series.asignatura_id ? asigMap.get(series.asignatura_id) : null;
   const clave = asig?.clave || '';
@@ -227,10 +303,9 @@ const planRecords = planRows.map((row) => ({
   title: seriesLabel(row),
   meta: [row.grupo ? `Grupo ${row.grupo}` : null, row.modalidad || null, row.estado || null, row.fecha_evaluacion ? fmtDate(row.fecha_evaluacion) : null].filter(Boolean).join(' · '),
   score: row.puntaje_promedio != null ? Number(row.puntaje_promedio) : null,
-  criteria: buildItems('planeacion', PLAN_CRITERIA.map((item) => item.field), row).map((item, index) => ({
-    ...item,
-    label: PLAN_CRITERIA[index].label,
-  })),
+  rubric: buildPlanningRubric(row),
+  noAplicaCount: Number(row.no_aplica_count || 0),
+  generalObservations: row.observaciones_generales || null,
   feedback: row.comentario_retroalimentacion || null,
   internal: row.comentario_interno || null,
 }));
@@ -240,12 +315,10 @@ const obsRecords = obsRows.map((row) => ({
   title: seriesLabel(row),
   meta: [row.grupo_id_fk ? `Grupo ${groupLabel(row.grupo_id_fk)}` : null, row.campus || null, row.ciclo || null, row.fecha_observacion ? fmtDate(row.fecha_observacion) : null].filter(Boolean).join(' · '),
   score: row.score_normalizado != null ? Number(row.score_normalizado) : null,
-  sections: OBS_SECTION_DEFS.map((section) => ({
-    code: section.code,
-    title: section.title,
-    score: avgPctRaw(row, section.fields),
-  })),
-  items: buildItems('observacion', OBS_SECTION_DEFS.flatMap((section) => section.fields), row),
+  instrumentVersion: isObservationInstrumentVersion(row.instrument_version)
+    ? row.instrument_version
+    : 'escolarizado-v1 · referencia histórica',
+  sections: buildObservationSections(row),
   comments: [row.comentario_docente, row.comentario_evaluador].filter(Boolean).join(' · ') || null,
 }));
 
@@ -345,11 +418,11 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
       <div class="bg-white rounded-3xl p-6 shadow-tarjeta">
         <h2 class="text-lg font-bold text-tup mb-4">Scores por instrumento</h2>
-        <div class="h-[260px]"><canvas id="chart-barras" class="max-h-[260px]"></canvas></div>
+        <div class="h-[260px]"><canvas id="chart-barras" class="max-h-[260px]" data-labels={JSON.stringify(['Estudiantil', 'Coordinación', 'Planeación', 'Observación', 'Autodiagnóstico'])} data-scores={JSON.stringify([currentScores.ee || 0, currentScores.coord || 0, currentScores.plan || 0, currentScores.obs || 0, currentScores.auto || 0])}></canvas></div>
       </div>
       <div class="bg-white rounded-3xl p-6 shadow-tarjeta">
         <h2 class="text-lg font-bold text-tup mb-4">Radar 360</h2>
-        <div class="h-[260px]"><canvas id="chart-radar" class="max-h-[260px]"></canvas></div>
+        <div class="h-[260px]"><canvas id="chart-radar" class="max-h-[260px]" data-labels={JSON.stringify(['Estudiantil', 'Coordinación', 'Planeación', 'Observación', 'Autodiagnóstico'])} data-scores={JSON.stringify([currentScores.ee || 0, currentScores.coord || 0, currentScores.plan || 0, currentScores.obs || 0, currentScores.auto || 0])}></canvas></div>
       </div>
     </div>
 
@@ -508,25 +581,32 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
                     <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeClass(record.estado)}`}>{record.estado}</span>
                   </div>
                 </div>
-                <div class="mt-5 overflow-x-auto">
-                  <table class="w-full text-sm">
-                    <thead>
-                      <tr class="bg-slate-50 text-slate-500">
-                        <th class="px-3 py-2 text-left text-xs uppercase">Criterio</th>
-                        <th class="px-3 py-2 text-center text-xs uppercase">Score</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y">
-                      {record.criteria.map((item: any) => (
-                        <tr>
-                          <td class="px-3 py-2 text-slate-700">{item.label}</td>
-                          <td class={`px-3 py-2 text-center font-semibold ${scoreClass(item.score)}`}>{fmt(item.score)}</td>
+                <details class="mt-5 rounded-2xl border border-slate-200 overflow-hidden">
+                  <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-tup bg-slate-50">
+                    Detalles de rúbrica <span class="text-slate-400 font-normal">({record.rubric.current ? 'instrumento actual' : 'criterios heredados'})</span>
+                  </summary>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                      <thead>
+                        <tr class="bg-slate-50 text-slate-500">
+                          <th class="px-3 py-2 text-left text-xs uppercase">Criterio</th>
+                          <th class="px-3 py-2 text-center text-xs uppercase">Estado</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody class="divide-y">
+                        {record.rubric.items.map((item: any) => (
+                          <tr>
+                            <td class="px-3 py-2 text-slate-700"><span class="text-xs text-slate-400 mr-2">{item.key}</span>{item.label}</td>
+                            <td class="px-3 py-2 text-center"><span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${item.state.className}`}>{item.state.label}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
+                  {record.rubric.current && <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-wider text-slate-400 mb-2">No aplica</p><p class="text-slate-600">{record.noAplicaCount} criterios registrados como no aplicables.</p></div>}
+                  {record.generalObservations && <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Observaciones generales</p><p class="text-slate-600 italic">“{record.generalObservations}”</p></div>}
                   {record.feedback && <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Retroalimentación</p><p class="text-slate-600 italic">“{record.feedback}”</p></div>}
                   {record.internal && <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Comentario interno</p><p class="text-slate-600 italic">“{record.internal}”</p></div>}
                 </div>
@@ -557,35 +637,41 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
                     <p class="text-xs text-slate-400">Observación</p>
                   </div>
                 </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                  {record.sections.map((section: any) => (
-                    <div class="rounded-2xl bg-slate-50 p-3 text-center">
-                      <p class="text-[11px] uppercase tracking-wider text-slate-400">{section.code}</p>
-                      <p class={`text-xl font-bold mt-1 ${scoreClass(section.score)}`}>{fmt(section.score)}</p>
-                      <p class="text-[11px] text-slate-500 mt-1">{section.title}</p>
-                    </div>
-                  ))}
-                </div>
-                <div class="mt-5 overflow-x-auto">
-                  <table class="w-full text-sm">
-                    <thead>
-                      <tr class="bg-slate-50 text-slate-500">
-                        <th class="px-3 py-2 text-left text-xs uppercase">Sección</th>
-                        <th class="px-3 py-2 text-left text-xs uppercase">Reactivo</th>
-                        <th class="px-3 py-2 text-center text-xs uppercase">Score</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y">
-                      {record.items.map((item: any) => (
-                        <tr>
-                          <td class="px-3 py-2 text-xs text-slate-400">{item.section || '—'}</td>
-                          <td class="px-3 py-2 text-slate-700">{item.label}</td>
-                          <td class={`px-3 py-2 text-center font-semibold ${scoreClass(item.score)}`}>{fmt(item.score)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <details class="mt-5 rounded-2xl border border-slate-200 overflow-hidden">
+                  <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-tup bg-slate-50">
+                    Detalles de rúbrica <span class="text-slate-400 font-normal">({record.instrumentVersion || 'registro histórico sin versión'})</span>
+                  </summary>
+                  <div class="p-4 space-y-4">
+                    {record.sections.map((section: any) => (
+                      <section class="rounded-2xl border border-slate-100 overflow-hidden">
+                        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-slate-50">
+                          <h4 class="font-semibold text-slate-700">{section.code}. {section.title}</h4>
+                          <p class="text-xs text-slate-500">{section.counts.scored} calificados · {section.counts.na} no aplica · {section.counts.missing} sin registro</p>
+                        </div>
+                        <div class="overflow-x-auto">
+                          <table class="w-full text-sm">
+                            <thead>
+                              <tr class="text-slate-500">
+                                <th class="px-3 py-2 text-left text-xs uppercase">Campo</th>
+                                <th class="px-3 py-2 text-left text-xs uppercase">Reactivo</th>
+                                <th class="px-3 py-2 text-center text-xs uppercase">Estado</th>
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                              {section.items.map((item: any) => (
+                                <tr>
+                                  <td class="px-3 py-2 font-mono text-xs text-slate-500">{item.field}</td>
+                                  <td class="px-3 py-2 text-slate-700">{item.question}</td>
+                                  <td class="px-3 py-2 text-center"><span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${item.state.className}`}>{item.state.label}</span></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </details>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
                   {record.comments && <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Comentarios</p><p class="text-slate-600 italic">“{record.comments}”</p></div>}
                 </div>
@@ -689,15 +775,14 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
   </div>
 </LayoutAdmin>
 
-<script is:inline define:vars={{
-  chartLabels: JSON.stringify(['Estudiantil', 'Coordinación', 'Planeación', 'Observación', 'Autodiagnóstico']),
-  chartScores: JSON.stringify([currentScores.ee || 0, currentScores.coord || 0, currentScores.plan || 0, currentScores.obs || 0, currentScores.auto || 0]),
-}}>
-  function drawCharts() {
-    var labels = JSON.parse(chartLabels);
-    var scores = JSON.parse(chartScores);
+<script>
+  import Chart from 'chart.js/auto';
+  document.addEventListener('DOMContentLoaded', () => {
+    const ctxBar = document.getElementById('chart-barras');
+    const ctxRadar = document.getElementById('chart-radar');
+    const labels = JSON.parse(ctxBar?.dataset.labels || '[]');
+    const scores = JSON.parse(ctxBar?.dataset.scores || '[]');
 
-    var ctxBar = document.getElementById('chart-barras');
     if (ctxBar) {
       new Chart(ctxBar, {
         type: 'bar',
@@ -717,7 +802,6 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
       });
     }
 
-    var ctxRadar = document.getElementById('chart-radar');
     if (ctxRadar) {
       new Chart(ctxRadar, {
         type: 'radar',
@@ -733,14 +817,5 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
         },
       });
     }
-  }
-
-  if (typeof Chart === 'undefined') {
-    var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
-    s.onload = drawCharts;
-    document.head.appendChild(s);
-  } else {
-    drawCharts();
-  }
+  });
 </script>

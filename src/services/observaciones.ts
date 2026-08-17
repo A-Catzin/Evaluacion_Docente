@@ -1,7 +1,11 @@
 import { db } from '../lib/db';
+import { isObservationInstrumentVersion } from '../lib/observationDefinitions';
 import type { Observacion } from '../types/supabase';
 
 export async function enviarObservacion(data: Partial<Observacion>): Promise<Observacion> {
+  if (!isObservationInstrumentVersion(data.instrument_version)) {
+    throw new Error('Versión de instrumento no válida');
+  }
   const { data: result, error } = await db().from('observaciones').insert(data).select().single();
   if (error) {
     if (error.code === '23505') throw new Error('Ya existe una observación para este docente en este ciclo');
