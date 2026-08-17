@@ -1,7 +1,16 @@
 import type { APIRoute } from 'astro';
 import { db } from '../../../lib/db';
 import { isObservationInstrumentVersion } from '../../../lib/observationDefinitions';
-import { buildObservationSchema, mapObservationNotes } from '../../../lib/validation/apiSchemas';
+import {
+  MAX_COMENTARIO_LONGITUD,
+  MAX_NOTA_SECCION_LONGITUD,
+  validarCamposDeTextoLibreConLimites,
+} from '../../../lib/moderation';
+import {
+  buildObservationSchema,
+  mapObservationNotes,
+  SECTION_NOTES,
+} from '../../../lib/validation/apiSchemas';
 import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -36,9 +45,26 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       );
     }
 
+    const noteFields = Object.values(SECTION_NOTES);
+    const limites: Record<string, number> = {
+      comentario_docente: MAX_COMENTARIO_LONGITUD,
+      comentario_evaluador: MAX_COMENTARIO_LONGITUD,
+    };
+    for (const field of noteFields) {
+      limites[field] = MAX_NOTA_SECCION_LONGITUD;
+    }
+    const moderacion = validarCamposDeTextoLibreConLimites(parseResult.data, limites);
+    if (!moderacion.valido) {
+      return new Response(
+        JSON.stringify({ error: moderacion.error, code: 'comment_rejected' }),
+        { status: 400, headers: JSON_HEADERS },
+      );
+    }
+
     const datos: Record<string, unknown> = {
       evaluador_id: s.user.id,
       ...parseResult.data,
+      ...moderacion.valores,
     };
 
     const { data, error } = await cl.from('observaciones').insert(datos).select().single();

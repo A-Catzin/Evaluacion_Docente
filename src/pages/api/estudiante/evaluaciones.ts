@@ -1,5 +1,11 @@
 import type { APIRoute } from 'astro';
 import { AuthError, requireRole } from '../../../lib/auth';
+import { validarComentarioOpcional } from '../../../lib/moderation';
+import {
+  checkRequestBodySize,
+  MAX_EVALUACION_BODY_BYTES,
+  verificarLimiteEnviosEstudiante,
+} from '../../../lib/rateLimit';
 import { EstudianteEvaluacionSchema } from '../../../lib/validation/apiSchemas';
 import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
@@ -18,15 +24,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   let client;
+  let userId: string;
   try {
     const auth = await requireRole(cookies, ['estudiante']);
     client = auth.client;
+    userId = auth.user.id;
   } catch (error) {
     if (error instanceof AuthError) return error.response;
     console.error('[student evaluations] authentication failed', {
       message: error instanceof Error ? error.message : 'unknown error',
     });
     return json({ error: 'No fue posible verificar la sesión', code: 'session_validation_failed' }, 502);
+  }
+
+  const sizeCheck = checkRequestBodySize(request, MAX_EVALUACION_BODY_BYTES);
+  if (!sizeCheck.ok) {
+    return json({ error: sizeCheck.error, code: 'payload_too_large' }, 413);
   }
 
   let body: unknown;
@@ -36,19 +49,46 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return json({ error: 'La solicitud no es válida', code: 'invalid_request' }, 400);
   }
 
-      const parseResult = EstudianteEvaluacionSchema.safeParse(body);
-      if (!parseResult.success) {
-        return json({
-          error: 'Completa las 19 respuestas con valores válidos',
-          code: 'invalid_answers',
-          detalles: formatZodFieldErrors(parseResult.error),
-        }, 400);
-      }
+  const parseResult = EstudianteEvaluacionSchema.safeParse(body);
+  if (!parseResult.success) {
+    return json({
+      error: 'Completa las 19 respuestas con valores válidos',
+      code: 'invalid_answers',
+      detalles: formatZodFieldErrors(parseResult.error),
+    }, 400);
+  }
 
-      const { grupo_id, respuestas, comentario } = parseResult.data;
-      const comment = comentario?.trim() || null;
+  const { grupo_id, respuestas, comentario } = parseResult.data;
+
+  const moderacion = validarComentarioOpcional(comentario, 500);
+  if (!moderacion.valido) {
+    return json({ error: moderacion.error, code: 'comment_rejected' }, 400);
+  }
+  const comment = moderacion.valorNormalizado;
 
   try {
+    // Verificar límite de frecuencia usando la tabla de control de envíos.
+    const { data: perfil, error: perfilError } = await client
+      .from('usuarios')
+      .select('entidad_id')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!perfilError && perfil?.entidad_id) {
+      const { data: grupo } = await client
+        .from('grupos')
+        .select('cuatrimestre_id')
+        .eq('id', grupo_id)
+        .maybeSingle();
+      const rateCheck = await verificarLimiteEnviosEstudiante(client, {
+        estudianteId: perfil.entidad_id,
+        grupoId: grupo_id,
+        cuatrimestreId: grupo?.cuatrimestre_id ?? null,
+      });
+      if (!rateCheck.permitido) {
+        return json({ error: rateCheck.razon, code: 'rate_limited' }, 429);
+      }
+    }
+
     const { data, error } = await client.rpc('enviar_encuesta_estudiante', {
       p_grupo_id: grupo_id,
       p_respuestas: respuestas,

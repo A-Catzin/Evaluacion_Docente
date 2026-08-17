@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { db } from '../../../lib/db';
+import { validarComentarioOpcional } from '../../../lib/moderation';
 import { estaHabilitadoR2, subirArchivo } from '../../../lib/storage';
 
 const BUCKET_PLANEACIONES = 'planeaciones';
@@ -44,17 +45,23 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       pdfUrl = urlData.publicUrl;
     }
 
-    // Guardar en BD
-    const asignaturaId = parseInt(formData.get('asignatura_id') as string);
-    const cuatrimestreId = parseInt(formData.get('cuatrimestre_id') as string);
-    if (isNaN(asignaturaId) || isNaN(cuatrimestreId)) return new Response(JSON.stringify({ error: 'Asignatura o cuatrimestre inválido' }), { status: 400 });
-    
-    // Validar que el docente esté vinculado a esta asignatura via grupos
-    const { data: vinc } = await cl.from('grupos').select('id').eq('docente_id', u.entidad_id).eq('asignatura_id', asignaturaId).limit(1);
-    if (!vinc || vinc.length === 0) return new Response(JSON.stringify({ error: 'No estás asignado a esta materia' }), { status: 403 });
-    
-    const { error: dbError } = await cl.from('planeaciones').insert({
-      docente_id: u.entidad_id,
+        const comentarioRaw = formData.get('comentario') as string | null;
+        const moderacion = validarComentarioOpcional(comentarioRaw, 500);
+        if (!moderacion.valido) {
+          return new Response(JSON.stringify({ error: moderacion.error, code: 'comment_rejected' }), { status: 400 });
+        }
+
+        // Guardar en BD
+        const asignaturaId = parseInt(formData.get('asignatura_id') as string);
+        const cuatrimestreId = parseInt(formData.get('cuatrimestre_id') as string);
+        if (isNaN(asignaturaId) || isNaN(cuatrimestreId)) return new Response(JSON.stringify({ error: 'Asignatura o cuatrimestre inválido' }), { status: 400 });
+
+        // Validar que el docente esté vinculado a esta asignatura via grupos
+        const { data: vinc } = await cl.from('grupos').select('id').eq('docente_id', u.entidad_id).eq('asignatura_id', asignaturaId).limit(1);
+        if (!vinc || vinc.length === 0) return new Response(JSON.stringify({ error: 'No estás asignado a esta materia' }), { status: 403 });
+
+        const { error: dbError } = await cl.from('planeaciones').insert({
+          docente_id: u.entidad_id,
       cuatrimestre_id: cuatrimestreId,
       asignatura_id: asignaturaId,
       grupo: formData.get('grupo') as string,
@@ -64,7 +71,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       visitas: formData.get('visitas') as string,
       url_pdf: pdfUrl,
       nombre_archivo: path.split('/').pop() || 'planeacion.pdf',
-      comentario_docente: (formData.get('comentario') as string) || null,
+      comentario_docente: moderacion.valorNormalizado,
       campus: formData.get('campus') as string,
       turno: formData.get('turno') as string,
     });

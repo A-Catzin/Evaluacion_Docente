@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { AuthError, requireRole } from '../../../lib/auth';
+import { validarComentarioOpcional } from '../../../lib/moderation';
 import { CoordinacionEvaluacionSchema } from '../../../lib/validation/apiSchemas';
 import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
@@ -26,8 +27,16 @@ JSON.stringify({ error: 'Datos de evaluación no válidos', detalles: formatZodF
     }
     const { docente_id, cuatrimestre_id, ciclo, campus, comentarios, ...answers } = parseResult.data;
 
+    const moderacion = validarComentarioOpcional(comentarios, 500);
+    if (!moderacion.valido) {
+      return new Response(
+        JSON.stringify({ error: moderacion.error, code: 'comment_rejected' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
     const { data, error } = await cl.from('evaluacion_coordinacion').insert({
-      docente_id, cuatrimestre_id, evaluador_id: userId, ciclo, campus, comentarios,
+      docente_id, cuatrimestre_id, evaluador_id: userId, ciclo, campus, comentarios: moderacion.valorNormalizado,
       ...answers,
     }).select('puntos_obtenidos,score_normalizado').single();
 

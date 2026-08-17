@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { AuthError, requireRole } from '../../../lib/auth';
+import { validarComentarioOpcional } from '../../../lib/moderation';
 import { AutodiagnosticoSchema } from '../../../lib/validation/apiSchemas';
 import { formatZodFieldErrors } from '../../../lib/validation/errors';
 
@@ -30,6 +31,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           );
         }
         const { cuatrimestre_id, nombre, apellido_paterno, apellido_materno, campus, oferta_academica, turno, modalidad, reactivos, comentarios } = parseResult.data;
+
+        const moderacion = validarComentarioOpcional(comentarios, 500);
+        if (!moderacion.valido) {
+          return new Response(
+            JSON.stringify({ error: moderacion.error, code: 'comment_rejected' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
 
     // 1. Crear o actualizar docente
     let docenteId = usuario.entidad_id;
@@ -83,7 +92,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     else if (promedio >= 75) nivel = 'Satisfactorio';
     else if (promedio >= 60) nivel = 'En Desarrollo';
     insert.nivel_desempeno = nivel;
-    if (comentarios) insert.comentarios = comentarios;
+    if (moderacion.valorNormalizado) insert.comentarios = moderacion.valorNormalizado;
 
     const { data: resultado, error: errDiag } = await cliente.from('autodiagnosticos').insert(insert).select('puntaje_total,nivel_desempeno').single();
     if (errDiag) {

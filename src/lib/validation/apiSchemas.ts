@@ -3,6 +3,7 @@ import {
   OBSERVATION_INSTRUMENT_DEFINITIONS,
   type ObservationInstrumentVersion,
 } from '../observationDefinitions';
+import { MAX_COMENTARIO_LONGITUD, MAX_NOTA_SECCION_LONGITUD } from '../moderation';
 
 const REACTIVOS_ESTUDIANTE_COUNT = 19;
 
@@ -19,7 +20,7 @@ export const EstudianteEvaluacionSchema = z.object({
       message: 'respuestas debe tener 19 enteros; la primera entre 1 y 6 y el resto entre 1 y 4',
     },
   ),
-  comentario: z.string().max(2000).optional().nullable(),
+  comentario: z.string().max(MAX_COMENTARIO_LONGITUD).optional().nullable(),
 });
 
 const COORDINACION_REACTIVOS = [
@@ -35,7 +36,7 @@ export const CoordinacionEvaluacionSchema = z.object({
   cuatrimestre_id: z.number().int().positive(),
   ciclo: z.string().min(1),
   campus: z.string().min(1),
-  comentarios: z.string().optional().nullable(),
+  comentarios: z.string().max(MAX_COMENTARIO_LONGITUD).optional().nullable(),
 }).extend(
   Object.fromEntries(
     COORDINACION_REACTIVOS.map((key) => [
@@ -55,7 +56,7 @@ export const AutodiagnosticoSchema = z.object({
   turno: z.string().min(1),
   modalidad: z.string().min(1),
   reactivos: z.array(z.number().int()).length(24),
-  comentarios: z.string().optional().nullable(),
+  comentarios: z.string().max(MAX_COMENTARIO_LONGITUD).optional().nullable(),
 });
 
 export const ToggleVisibilidadSchema = z.object({
@@ -73,7 +74,7 @@ export const ImportFormSchema = z.object({
 });
 
 const OBSERVATION_TEXT_FIELDS = ['comentario_docente', 'comentario_evaluador'] as const;
-const SECTION_NOTES: Record<string, string> = {
+export const SECTION_NOTES: Record<string, string> = {
   obs_cco: 'obs_cognitivas',
   obs_cme: 'obs_metacognitivas',
   obs_ccom: 'obs_comunicativas',
@@ -115,12 +116,12 @@ export function buildObservationSchema(version: ObservationInstrumentVersion) {
   }
 
   for (const field of OBSERVATION_TEXT_FIELDS) {
-    shape[field] = z.string().nullable().optional();
+    shape[field] = z.string().max(MAX_COMENTARIO_LONGITUD).nullable().optional();
   }
 
   for (const field of noteFields) {
     const storageKey = SECTION_NOTES[field] ?? field;
-    shape[storageKey] = z.string().nullable().optional();
+    shape[storageKey] = z.string().max(MAX_NOTA_SECCION_LONGITUD).nullable().optional();
   }
 
   return z.object(shape).strict();
