@@ -6,7 +6,10 @@
  * varios campos de texto en un solo paso.
  */
 
-import { moderarComentario, type ResultadoModeracion } from '../features/moderacion/blacklist';
+import {
+ moderarComentario,
+ type ResultadoModeracion,
+} from "../features/moderacion/blacklist";
 
 /** Longitud máxima por defecto para comentarios cortos de texto libre. */
 export const MAX_COMENTARIO_LONGITUD = 500;
@@ -15,9 +18,9 @@ export const MAX_COMENTARIO_LONGITUD = 500;
 export const MAX_NOTA_SECCION_LONGITUD = 1000;
 
 export interface ValidacionComentario {
-  valido: boolean;
-  error?: string;
-  valorNormalizado: string | null;
+ valido: boolean;
+ error?: string;
+ valorNormalizado: string | null;
 }
 
 /**
@@ -30,27 +33,27 @@ export interface ValidacionComentario {
  * - En otro caso → válido, valor normalizado con `.trim()`.
  */
 export function validarComentarioOpcional(
-  texto: string | null | undefined,
-  maxLength = MAX_COMENTARIO_LONGITUD,
+ texto: string | null | undefined,
+ maxLength = MAX_COMENTARIO_LONGITUD,
 ): ValidacionComentario {
-  if (texto === null || texto === undefined || texto.trim().length === 0) {
-    return { valido: true, valorNormalizado: null };
-  }
+ if (texto === null || texto === undefined || texto.trim().length === 0) {
+  return { valido: true, valorNormalizado: null };
+ }
 
-  if (texto.length > maxLength) {
-    return {
-      valido: false,
-      error: `El comentario no debe superar los ${maxLength} caracteres`,
-      valorNormalizado: texto,
-    };
-  }
+ if (texto.length > maxLength) {
+  return {
+   valido: false,
+   error: `El comentario no debe superar los ${maxLength} caracteres`,
+   valorNormalizado: texto,
+  };
+ }
 
-  const resultado: ResultadoModeracion = moderarComentario(texto);
-  if (!resultado.aprobado) {
-    return { valido: false, error: resultado.motivo, valorNormalizado: texto };
-  }
+ const resultado: ResultadoModeracion = moderarComentario(texto);
+ if (!resultado.aprobado) {
+  return { valido: false, error: resultado.motivo, valorNormalizado: texto };
+ }
 
-  return { valido: true, valorNormalizado: texto.trim() };
+ return { valido: true, valorNormalizado: texto.trim() };
 }
 
 /**
@@ -59,21 +62,21 @@ export function validarComentarioOpcional(
  * @returns Un mapa con los valores normalizados, o el primer error encontrado.
  */
 export function validarCamposDeTextoLibre(
-  body: Record<string, unknown>,
-  campos: string[],
-  maxLength = MAX_COMENTARIO_LONGITUD,
+ body: Record<string, unknown>,
+ campos: string[],
+ maxLength = MAX_COMENTARIO_LONGITUD,
 ): { valido: boolean; error?: string; valores: Record<string, string | null> } {
-  const valores: Record<string, string | null> = {};
-  for (const campo of campos) {
-    const raw = body[campo];
-    const texto = typeof raw === 'string' ? raw : null;
-    const resultado = validarComentarioOpcional(texto, maxLength);
-    if (!resultado.valido) {
-      return { valido: false, error: `[${campo}] ${resultado.error}`, valores };
-    }
-    valores[campo] = resultado.valorNormalizado;
+ const valores: Record<string, string | null> = {};
+ for (const campo of campos) {
+  const raw = body[campo];
+  const texto = typeof raw === "string" ? raw : null;
+  const resultado = validarComentarioOpcional(texto, maxLength);
+  if (!resultado.valido) {
+   return { valido: false, error: `[${campo}] ${resultado.error}`, valores };
   }
-  return { valido: true, valores };
+  valores[campo] = resultado.valorNormalizado;
+ }
+ return { valido: true, valores };
 }
 
 /**
@@ -83,18 +86,18 @@ export function validarCamposDeTextoLibre(
  * @param limites Mapa campo → longitud máxima.
  */
 export function validarCamposDeTextoLibreConLimites(
-  body: Record<string, unknown>,
-  limites: Record<string, number>,
+ body: Record<string, unknown>,
+ limites: Record<string, number>,
 ): { valido: boolean; error?: string; valores: Record<string, string | null> } {
-  const valores: Record<string, string | null> = {};
-  for (const [campo, maxLength] of Object.entries(limites)) {
-    const raw = body[campo];
-    const texto = typeof raw === 'string' ? raw : null;
-    const resultado = validarComentarioOpcional(texto, maxLength);
-    if (!resultado.valido) {
-      return { valido: false, error: `[${campo}] ${resultado.error}`, valores };
-    }
-    valores[campo] = resultado.valorNormalizado;
+ const valores: Record<string, string | null> = {};
+ for (const [campo, maxLength] of Object.entries(limites)) {
+  const raw = body[campo];
+  const texto = typeof raw === "string" ? raw : null;
+  const resultado = validarComentarioOpcional(texto, maxLength);
+  if (!resultado.valido) {
+   return { valido: false, error: `[${campo}] ${resultado.error}`, valores };
   }
-  return { valido: true, valores };
+  valores[campo] = resultado.valorNormalizado;
+ }
+ return { valido: true, valores };
 }

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { db } from '../../../lib/db';
+import { refrescarResultadosAgregados } from '../../../services/calificaciones';
 
 /**
  * API: GET /api/admin/refrescar-resultados
@@ -34,9 +35,9 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
     }
 
     // Ejecutar refresh de la MV
-    const { error } = await cliente.rpc('refrescar_resultados');
-
-    if (error) {
+    try {
+      await refrescarResultadosAgregados(cliente);
+    } catch (error) {
       console.error('[API Refresh] Error al refrescar MV:', error);
     }
 

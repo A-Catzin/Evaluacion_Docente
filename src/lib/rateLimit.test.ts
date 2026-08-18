@@ -1,18 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 import {
   checkRequestBodySize,
   MAX_EVALUACION_BODY_BYTES,
   MAX_IMPORT_FILE_BYTES,
   verificarLimiteEnviosEstudiante,
-} from './rateLimit';
+} from "./rateLimit";
 
 function createMockRequest(contentLength?: number): Request {
   const headers = new Headers();
-  if (contentLength !== undefined) headers.set('content-length', String(contentLength));
-  return new Request('http://localhost/api/test', {
-    method: 'POST',
+  if (contentLength !== undefined)
+    headers.set("content-length", String(contentLength));
+  return new Request("http://localhost/api/test", {
+    method: "POST",
     headers,
-    body: '{}',
+    body: "{}",
   });
 }
 
@@ -41,12 +42,15 @@ function createMockSupabaseClient(scenarios: MockScenario[] = []): any {
     {},
     {
       get(_, prop) {
-        if (prop === 'maybeSingle') {
+        if (prop === "maybeSingle") {
           const scenario = nextScenario();
-          return async () => ({ data: scenario.maybeSingle ?? null, error: null });
+          return async () => ({
+            data: scenario.maybeSingle ?? null,
+            error: null,
+          });
         }
 
-        if (prop === 'then') {
+        if (prop === "then") {
           return (resolve: (value: unknown) => void) => {
             const scenario = nextScenario();
             const result = {
@@ -68,47 +72,62 @@ function createMockSupabaseClient(scenarios: MockScenario[] = []): any {
   };
 }
 
-describe('rateLimit', () => {
-  describe('checkRequestBodySize', () => {
-    it('permite requests dentro del límite', () => {
+describe("rateLimit", () => {
+  describe("checkRequestBodySize", () => {
+    it("permite requests dentro del límite", () => {
       const request = createMockRequest(MAX_EVALUACION_BODY_BYTES - 1);
-      const resultado = checkRequestBodySize(request, MAX_EVALUACION_BODY_BYTES);
+      const resultado = checkRequestBodySize(
+        request,
+        MAX_EVALUACION_BODY_BYTES,
+      );
       expect(resultado.ok).toBe(true);
       expect(resultado.size).toBe(MAX_EVALUACION_BODY_BYTES - 1);
     });
 
-    it('rechaza requests que superan el límite', () => {
+    it("rechaza requests que superan el límite", () => {
       const request = createMockRequest(MAX_EVALUACION_BODY_BYTES + 1);
-      const resultado = checkRequestBodySize(request, MAX_EVALUACION_BODY_BYTES);
+      const resultado = checkRequestBodySize(
+        request,
+        MAX_EVALUACION_BODY_BYTES,
+      );
       expect(resultado.ok).toBe(false);
       expect(resultado.size).toBe(MAX_EVALUACION_BODY_BYTES + 1);
       expect(resultado.error).toContain(`${MAX_EVALUACION_BODY_BYTES}`);
     });
 
-    it('permite requests sin Content-Length', () => {
+    it("permite requests sin Content-Length", () => {
       const request = createMockRequest(undefined);
-      const resultado = checkRequestBodySize(request, MAX_EVALUACION_BODY_BYTES);
+      const resultado = checkRequestBodySize(
+        request,
+        MAX_EVALUACION_BODY_BYTES,
+      );
       expect(resultado.ok).toBe(true);
       expect(resultado.size).toBeUndefined();
     });
 
-    it('rechaza Content-Length no numérico', () => {
-      const headers = new Headers({ 'content-length': 'invalid' });
-      const request = new Request('http://localhost', { method: 'POST', headers });
-      const resultado = checkRequestBodySize(request, MAX_EVALUACION_BODY_BYTES);
+    it("rechaza Content-Length no numérico", () => {
+      const headers = new Headers({ "content-length": "invalid" });
+      const request = new Request("http://localhost", {
+        method: "POST",
+        headers,
+      });
+      const resultado = checkRequestBodySize(
+        request,
+        MAX_EVALUACION_BODY_BYTES,
+      );
       expect(resultado.ok).toBe(true);
     });
   });
 
-  describe('constantes', () => {
-    it('define los límites esperados', () => {
+  describe("constantes", () => {
+    it("define los límites esperados", () => {
       expect(MAX_EVALUACION_BODY_BYTES).toBe(50 * 1024);
       expect(MAX_IMPORT_FILE_BYTES).toBe(25 * 1024 * 1024);
     });
   });
 
-  describe('verificarLimiteEnviosEstudiante', () => {
-    it('permite el envío cuando no hay registros previos', async () => {
+  describe("verificarLimiteEnviosEstudiante", () => {
+    it("permite el envío cuando no hay registros previos", async () => {
       const client = createMockSupabaseClient([
         { maybeSingle: null },
         { count: 0 },
@@ -122,7 +141,7 @@ describe('rateLimit', () => {
       expect(resultado.permitido).toBe(true);
     });
 
-    it('rechaza un envío duplicado para el mismo grupo', async () => {
+    it("rechaza un envío duplicado para el mismo grupo", async () => {
       const client = createMockSupabaseClient([{ maybeSingle: { id: 1 } }]);
       const resultado = await verificarLimiteEnviosEstudiante(client, {
         estudianteId: 1,
@@ -130,10 +149,10 @@ describe('rateLimit', () => {
         cuatrimestreId: 100,
       });
       expect(resultado.permitido).toBe(false);
-      expect(resultado.razon).toContain('Ya enviaste');
+      expect(resultado.razon).toContain("Ya enviaste");
     });
 
-    it('rechaza cuando se supera el límite de envíos recientes', async () => {
+    it("rechaza cuando se supera el límite de envíos recientes", async () => {
       const client = createMockSupabaseClient([
         { maybeSingle: null },
         { count: 10 },
@@ -145,11 +164,11 @@ describe('rateLimit', () => {
         maxPerWindow: 10,
       });
       expect(resultado.permitido).toBe(false);
-      expect(resultado.razon).toContain('Demasiados envíos recientes');
+      expect(resultado.razon).toContain("Demasiados envíos recientes");
       expect(resultado.enviosRecientes).toBe(10);
     });
 
-    it('rechaza cuando se supera el límite por ciclo', async () => {
+    it("rechaza cuando se supera el límite por ciclo", async () => {
       const client = createMockSupabaseClient([
         { maybeSingle: null },
         { count: 1 },
@@ -162,10 +181,10 @@ describe('rateLimit', () => {
         maxPerCiclo: 200,
       });
       expect(resultado.permitido).toBe(false);
-      expect(resultado.razon).toContain('Límite de evaluaciones alcanzado');
+      expect(resultado.razon).toContain("Límite de evaluaciones alcanzado");
     });
 
-    it('no verifica total por ciclo si no se proporciona cuatrimestreId', async () => {
+    it("no verifica total por ciclo si no se proporciona cuatrimestreId", async () => {
       const client = createMockSupabaseClient([
         { maybeSingle: null },
         { count: 0 },

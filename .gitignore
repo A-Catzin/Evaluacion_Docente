@@ -31,7 +31,10 @@ pnpm-debug.log*
 .obsidian/
 
 # sensitive local data
-supabase/migrations/
+supabase/migrations/*
+!supabase/migrations/036_evaluacion_estudiantil_nativa_puntaje.sql
+!supabase/migrations/037_observacion_instrument_version.sql
+!supabase/migrations/038_calificaciones_finales_y_snapshot.sql
 openspec/
 src/supabase/
 .atl/

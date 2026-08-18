@@ -2,6 +2,10 @@ import type { APIRoute } from 'astro';
 import { db } from '../../../lib/db';
 import { validarComentarioOpcional } from '../../../lib/moderation';
 import { estaHabilitadoR2, subirArchivo } from '../../../lib/storage';
+import {
+  logRecalcError,
+  recalcularCalificacionDocente,
+} from '../../../services/calificaciones';
 
 const BUCKET_PLANEACIONES = 'planeaciones';
 
@@ -81,11 +85,19 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ error: 'Error al guardar: ' + dbError.message }), { status: 400 });
     }
 
+    try {
+      await recalcularCalificacionDocente(cl, u.entidad_id, cuatrimestreId);
+    } catch (recalcError) {
+      logRecalcError(u.entidad_id, cuatrimestreId, recalcError);
+    }
+
     // Notificar a coordinadores del docente
     try {
       const { notificarCoordinadoresDocente } = await import('../../../services/notificaciones');
       await notificarCoordinadoresDocente(u.entidad_id, cuatrimestreId, 'Nueva planeación recibida', `El docente ha subido una planeación para la asignatura.`, '/coordinador/planeaciones');
-    } catch {}
+    } catch (err) {
+      console.error('[Planeacion Subir] Error notificando coordinadores:', err);
+    }
 
     return new Response(JSON.stringify({ success: true }), { status: 201 });
   } catch (err) {

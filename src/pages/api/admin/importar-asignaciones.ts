@@ -576,6 +576,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       .from("import_runs")
       .update({ filas_leidas: records.length - 1 })
       .eq("id", run.id);
+    // TODO(Paso 2 mejora futura): después de importar asignaciones se podría
+    // recalcular en batch las calificaciones finales de los docentes afectados
+    // usando recalcularCalificacionDocente() desde src/services/calificaciones.
     await finishImportRun(client, run.id, summary);
     return json({
       success: true,

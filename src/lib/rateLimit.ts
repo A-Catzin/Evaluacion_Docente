@@ -10,7 +10,7 @@
  *   respetaría entre invocaciones.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Límite por defecto para el body de la evaluación estudiantil (50 KB). */
 export const MAX_EVALUACION_BODY_BYTES = 50 * 1024;
@@ -30,8 +30,11 @@ export interface BodySizeCheck {
  * Si el header no está presente devuelve `ok: true` y deja que el endpoint
  * decida si necesita leer el stream para medirlo.
  */
-export function checkRequestBodySize(request: Request, maxBytes: number): BodySizeCheck {
-  const contentLength = request.headers.get('content-length');
+export function checkRequestBodySize(
+  request: Request,
+  maxBytes: number,
+): BodySizeCheck {
+  const contentLength = request.headers.get("content-length");
   if (contentLength) {
     const size = parseInt(contentLength, 10);
     if (!Number.isNaN(size) && size > maxBytes) {
@@ -93,31 +96,36 @@ export async function verificarLimiteEnviosEstudiante(
   try {
     // 1. Duplicado exacto.
     const duplicateQuery = client
-      .from('encuesta_control_envio')
-      .select('id')
-      .eq('estudiante_id', estudianteId)
-      .eq('grupo_id', grupoId);
+      .from("encuesta_control_envio")
+      .select("id")
+      .eq("estudiante_id", estudianteId)
+      .eq("grupo_id", grupoId);
 
     const { data: existente, error: duplicateError } = cuatrimestreId
-      ? await duplicateQuery.eq('cuatrimestre_id', cuatrimestreId).maybeSingle()
+      ? await duplicateQuery.eq("cuatrimestre_id", cuatrimestreId).maybeSingle()
       : await duplicateQuery.maybeSingle();
 
     if (duplicateError) {
-      console.error('[rateLimit] error verificando duplicado', duplicateError);
+      console.error("[rateLimit] error verificando duplicado", duplicateError);
     } else if (existente) {
-      return { permitido: false, razon: 'Ya enviaste una evaluación para este grupo' };
+      return {
+        permitido: false,
+        razon: "Ya enviaste una evaluación para este grupo",
+      };
     }
 
     // 2. Ventana de tiempo.
-    const since = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
+    const since = new Date(
+      Date.now() - windowMinutes * 60 * 1000,
+    ).toISOString();
     const { count: enviosRecientes, error: windowError } = await client
-      .from('encuesta_control_envio')
-      .select('*', { count: 'exact', head: true })
-      .eq('estudiante_id', estudianteId)
-      .gte('created_at', since);
+      .from("encuesta_control_envio")
+      .select("*", { count: "exact", head: true })
+      .eq("estudiante_id", estudianteId)
+      .gte("created_at", since);
 
     if (windowError) {
-      console.error('[rateLimit] error contando envíos recientes', windowError);
+      console.error("[rateLimit] error contando envíos recientes", windowError);
     } else if (enviosRecientes !== null && enviosRecientes >= maxPerWindow) {
       return {
         permitido: false,
@@ -129,13 +137,16 @@ export async function verificarLimiteEnviosEstudiante(
     // 3. Total por ciclo.
     if (cuatrimestreId) {
       const { count: totalCiclo, error: cycleError } = await client
-        .from('encuesta_control_envio')
-        .select('*', { count: 'exact', head: true })
-        .eq('estudiante_id', estudianteId)
-        .eq('cuatrimestre_id', cuatrimestreId);
+        .from("encuesta_control_envio")
+        .select("*", { count: "exact", head: true })
+        .eq("estudiante_id", estudianteId)
+        .eq("cuatrimestre_id", cuatrimestreId);
 
       if (cycleError) {
-        console.error('[rateLimit] error contando envíos del ciclo', cycleError);
+        console.error(
+          "[rateLimit] error contando envíos del ciclo",
+          cycleError,
+        );
       } else if (totalCiclo !== null && totalCiclo >= maxPerCiclo) {
         return {
           permitido: false,
@@ -147,7 +158,7 @@ export async function verificarLimiteEnviosEstudiante(
 
     return { permitido: true };
   } catch (error) {
-    console.error('[rateLimit] error inesperado', error);
+    console.error("[rateLimit] error inesperado", error);
     return { permitido: true };
   }
 }
