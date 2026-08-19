@@ -1,69 +1,127 @@
-import type { APIRoute } from 'astro';
-import { db } from '../../../lib/db';
-import { fetchBatchScoresPorDocente, calcFinalScore, formatScoreCsv } from '../../../services/scoring';
+import type { APIRoute } from "astro";
+import { db } from "../../../lib/db";
+import { formatScoreCsv } from "../../../services/scoring";
+import {
+  rowToCalificacion,
+  type CalificacionFinal,
+} from "../../../services/calificaciones";
 
 export const GET: APIRoute = async ({ url, cookies }) => {
-  const t = cookies.get('sb-access-token')?.value;
-  const r = cookies.get('sb-refresh-token')?.value;
-  if (!t || !r) return new Response('No autorizado', { status: 401 });
+  const t = cookies.get("sb-access-token")?.value;
+  const r = cookies.get("sb-refresh-token")?.value;
+  if (!t || !r) return new Response("No autorizado", { status: 401 });
 
   try {
     const cl = db();
-    const { data: s } = await cl.auth.setSession({ access_token: t, refresh_token: r });
-    if (!s.user) return new Response('Sesión inválida', { status: 401 });
-    const { data: u } = await cl.from('usuarios').select('rol').eq('id', s.user.id).maybeSingle();
-    if (!u || u.rol !== 'superadmin') return new Response('Solo superadmin', { status: 403 });
+    const { data: s } = await cl.auth.setSession({
+      access_token: t,
+      refresh_token: r,
+    });
+    if (!s.user) return new Response("Sesión inválida", { status: 401 });
+    const { data: u } = await cl
+      .from("usuarios")
+      .select("rol")
+      .eq("id", s.user.id)
+      .maybeSingle();
+    if (!u || u.rol !== "superadmin")
+      return new Response("Solo superadmin", { status: 403 });
 
-    const { data: cuatrisOrdenados } = await cl.from('cuatrimestres').select('id,clave').order('id');
+    const { data: cuatrisOrdenados } = await cl
+      .from("cuatrimestres")
+      .select("id,clave")
+      .order("id");
     const cuatris = cuatrisOrdenados || [];
 
-    const cicloInicioParam = parseInt(url.searchParams.get('ciclo_inicio') || '') || cuatris[0]?.id || 0;
-    const cicloFinParam = parseInt(url.searchParams.get('ciclo_fin') || '') || cuatris[cuatris.length - 1]?.id || 0;
-    const idxInicio = cuatris.findIndex(c => c.id === cicloInicioParam);
-    const idxFin = cuatris.findIndex(c => c.id === cicloFinParam);
-    const rangeOk = idxInicio >= 0 && idxFin >= 0 && idxInicio <= idxFin && (idxFin - idxInicio) <= 2;
+    const cicloInicioParam =
+      parseInt(url.searchParams.get("ciclo_inicio") || "") ||
+      cuatris[0]?.id ||
+      0;
+    const cicloFinParam =
+      parseInt(url.searchParams.get("ciclo_fin") || "") ||
+      cuatris[cuatris.length - 1]?.id ||
+      0;
+    const idxInicio = cuatris.findIndex((c) => c.id === cicloInicioParam);
+    const idxFin = cuatris.findIndex((c) => c.id === cicloFinParam);
+    const rangeOk =
+      idxInicio >= 0 &&
+      idxFin >= 0 &&
+      idxInicio <= idxFin &&
+      idxFin - idxInicio <= 2;
 
-    if (!rangeOk) return new Response(JSON.stringify({ error: 'Rango inválido: el ciclo final debe ser igual o posterior al inicial y con diferencia máxima de 2.' }), { status: 400 });
+    if (!rangeOk)
+      return new Response(
+        JSON.stringify({
+          error:
+            "Rango inválido: el ciclo final debe ser igual o posterior al inicial y con diferencia máxima de 2.",
+        }),
+        { status: 400 },
+      );
 
-    const cicloIdsValid = cuatris.slice(idxInicio, idxFin + 1).map(c => c.id);
-    const claves = cuatris.map(c => c.clave);
+    const cicloIdsValid = cuatris.slice(idxInicio, idxFin + 1).map((c) => c.id);
+    const claves = cuatris.map((c) => c.clave);
 
-    const { data: allDocs } = await cl.from('docentes').select('id,nombre,apellidos,email,campus,modalidad').eq('activo', true).order('apellidos');
+    const { data: allDocs } = await cl
+      .from("docentes")
+      .select("id,nombre,apellidos,email,campus,modalidad")
+      .eq("activo", true)
+      .order("apellidos");
     if (!allDocs?.length) {
-      return new Response(JSON.stringify({ cuatrimestres: claves, docentes: [] }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ cuatrimestres: claves, docentes: [] }),
+        {
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const allDocIds = allDocs.map(d => d.id);
+    const allDocIds = allDocs.map((d) => d.id);
 
-    const scoresPorCiclo = new Map<number, Map<number, { final: number; category: string; instrumentCount: number }>>();
+    const { data: califRows, error: califError } = await cl
+      .from("calificaciones_finales")
+      .select("*")
+      .in("docente_id", allDocIds)
+      .in("cuatrimestre_id", cicloIdsValid);
 
-    for (const cid of cicloIdsValid) {
-      const batchScores = await fetchBatchScoresPorDocente(cl, allDocIds, cid);
-      const finalMap = new Map<number, { final: number; category: string; instrumentCount: number }>();
-      for (const docId of allDocIds) {
-        const scores = batchScores.get(docId) || {};
-        const docente = allDocs?.find(d => d.id === docId);
-        finalMap.set(docId, calcFinalScore(scores, docente?.modalidad));
+    if (califError) {
+      console.error(
+        "[reporte-general-admin] Error al leer calificaciones_finales:",
+        califError,
+      );
+      return new Response(
+        JSON.stringify({ error: "Error al leer calificaciones" }),
+        { status: 500 },
+      );
+    }
+
+    const califPorDocenteCiclo = new Map<
+      number,
+      Map<number, CalificacionFinal>
+    >();
+    for (const row of (califRows || []) as Record<string, unknown>[]) {
+      const cal = rowToCalificacion(row);
+      if (!califPorDocenteCiclo.has(cal.docente_id)) {
+        califPorDocenteCiclo.set(cal.docente_id, new Map());
       }
-      scoresPorCiclo.set(cid, finalMap);
+      califPorDocenteCiclo.get(cal.docente_id)!.set(cal.cuatrimestre_id, cal);
     }
 
-    const resultDocentes = allDocs.flatMap(d => {
+    const resultDocentes = allDocs.flatMap((d) => {
       const puntajesPorCiclo: Record<string, number | null> = {};
       let sumFinal = 0;
       let countFinal = 0;
       let tieneEnRango = false;
 
-      for (const cid of cuatris.map(c => c.id)) {
-        const fin = scoresPorCiclo.get(cid)?.get(d.id);
+      for (const cid of cuatris.map((c) => c.id)) {
+        const cal = califPorDocenteCiclo.get(d.id)?.get(cid);
         if (!cicloIdsValid.includes(cid)) {
           puntajesPorCiclo[cid] = null;
           continue;
         }
 
-        puntajesPorCiclo[cid] = fin && fin.instrumentCount > 0 ? fin.final : null;
+        puntajesPorCiclo[cid] =
+          cal && cal.num_instrumentos_completados > 0
+            ? cal.calificacion_final
+            : null;
         if (puntajesPorCiclo[cid] != null) {
           tieneEnRango = true;
           sumFinal += puntajesPorCiclo[cid]!;
@@ -73,52 +131,61 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 
       if (!tieneEnRango) return [];
 
-      const promedioAnual = countFinal > 0 ? Math.round(sumFinal / countFinal) : null;
+      const promedioAnual =
+        countFinal > 0 ? Math.round(sumFinal / countFinal) : null;
 
       return {
         id: d.id,
         nombre: d.nombre,
         apellidos: d.apellidos,
         email: d.email,
-        campus: d.campus || '',
-        modalidad: d.modalidad || '',
+        campus: d.campus || "",
+        modalidad: d.modalidad || "",
         puntajes: puntajesPorCiclo,
         promedio_anual: promedioAnual,
       };
     });
 
-    const format = url.searchParams.get('format') || 'json';
+    const format = url.searchParams.get("format") || "json";
 
-    if (format === 'csv') {
-      const header = ['Nombre', 'Email', 'Campus', ...claves, 'Promedio anual'].join(',');
-      const rows = resultDocentes.map(d => {
+    if (format === "csv") {
+      const header = [
+        "Nombre",
+        "Email",
+        "Campus",
+        ...claves,
+        "Promedio anual",
+      ].join(",");
+      const rows = resultDocentes.map((d) => {
         const cols = [
-          `"${[d.nombre, d.apellidos].filter(Boolean).join(' ')}"`,
+          `"${[d.nombre, d.apellidos].filter(Boolean).join(" ")}"`,
           `"${d.email}"`,
           `"${d.campus}"`,
-          ...cuatris.map(c => formatScoreCsv(d.puntajes[c.id])),
+          ...cuatris.map((c) => formatScoreCsv(d.puntajes[c.id])),
           formatScoreCsv(d.promedio_anual),
         ];
-        return cols.join(',');
+        return cols.join(",");
       });
-      const csv = [header, ...rows].join('\n');
-      const filename = `reporte_general_admin_${claves.join('_')}.csv`;
+      const csv = [header, ...rows].join("\n");
+      const filename = `reporte_general_admin_${claves.join("_")}.csv`;
       return new Response(csv, {
         headers: {
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${filename}"`,
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${filename}"`,
         },
       });
     }
 
     return new Response(
       JSON.stringify({
-        cuatrimestres: cuatris.map(c => ({ id: c.id, clave: c.clave })),
+        cuatrimestres: cuatris.map((c) => ({ id: c.id, clave: c.clave })),
         docentes: resultDocentes,
       }),
-      { headers: { 'Content-Type': 'application/json' } }
+      { headers: { "Content-Type": "application/json" } },
     );
   } catch {
-    return new Response(JSON.stringify({ error: 'Error interno' }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Error interno" }), {
+      status: 500,
+    });
   }
 };

@@ -45,7 +45,9 @@ function toNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function rowToCalificacion(row: Record<string, unknown>): CalificacionFinal {
+export function rowToCalificacion(
+  row: Record<string, unknown>,
+): CalificacionFinal {
   return {
     id: Number(row.id),
     docente_id: Number(row.docente_id),
@@ -220,6 +222,102 @@ export async function refrescarResultadosAgregados(
   }
 }
 
+type TablaInstrumentoDocente =
+  | "evaluacion_coordinacion"
+  | "observaciones"
+  | "planeaciones"
+  | "autodiagnosticos"
+  | "encuesta_estudiantil_respuestas";
+
+const TABLAS_INSTRUMENTOS: TablaInstrumentoDocente[] = [
+  "evaluacion_coordinacion",
+  "observaciones",
+  "planeaciones",
+  "autodiagnosticos",
+  "encuesta_estudiantil_respuestas",
+];
+
+async function obtenerDocentesConGrupos(
+  client: SupabaseClient,
+  cuatrimestreId: number,
+): Promise<number[]> {
+  const { data, error } = await client
+    .from("grupos")
+    .select("docente_id")
+    .eq("cuatrimestre_id", cuatrimestreId)
+    .not("docente_id", "is", null);
+
+  if (error) {
+    throw new Error(`Error al leer grupos: ${error.message}`);
+  }
+
+  const ids = new Set<number>();
+  for (const row of (data || []) as { docente_id: number | null }[]) {
+    if (row.docente_id != null) ids.add(row.docente_id);
+  }
+  return [...ids].sort((a, b) => a - b);
+}
+
+async function obtenerDocentesConInstrumentos(
+  client: SupabaseClient,
+  cuatrimestreId: number,
+): Promise<number[]> {
+  const ids = new Set<number>();
+  for (const tabla of TABLAS_INSTRUMENTOS) {
+    const { data, error } = await client
+      .from(tabla)
+      .select("docente_id")
+      .eq("cuatrimestre_id", cuatrimestreId)
+      .not("docente_id", "is", null);
+
+    if (error) {
+      throw new Error(`Error al leer ${tabla}: ${error.message}`);
+    }
+    for (const row of (data || []) as { docente_id: number | null }[]) {
+      if (row.docente_id != null) ids.add(row.docente_id);
+    }
+  }
+  return [...ids].sort((a, b) => a - b);
+}
+
+export async function recalcularCalificacionesCuatrimestre(
+  client: SupabaseClient,
+  cuatrimestreId: number,
+  options?: {
+    refrescarAgregados?: boolean;
+    soloDocentesConInstrumentos?: boolean;
+  },
+): Promise<{ recalculados: number; errores: number }> {
+  const docenteIds = options?.soloDocentesConInstrumentos
+    ? await obtenerDocentesConInstrumentos(client, cuatrimestreId)
+    : await obtenerDocentesConGrupos(client, cuatrimestreId);
+
+  let recalculados = 0;
+  let errores = 0;
+  for (const docenteId of docenteIds) {
+    try {
+      await recalcularCalificacionDocente(client, docenteId, cuatrimestreId);
+      recalculados += 1;
+    } catch (error) {
+      logRecalcError(docenteId, cuatrimestreId, error);
+      errores += 1;
+    }
+  }
+
+  if (options?.refrescarAgregados) {
+    try {
+      await refrescarResultadosAgregados(client);
+    } catch (error) {
+      console.error(
+        `[Recálculo batch] Falló refrescarResultadosAgregados(cuatrimestre=${cuatrimestreId}):`,
+        error,
+      );
+    }
+  }
+
+  return { recalculados, errores };
+}
+
 /**
  * Auxiliar para que los endpoints reporten errores de recálculo sin ocultar
  * el éxito de la operación principal.
@@ -234,7 +332,3 @@ export function logRecalcError(
     error,
   );
 }
-
-// Re-exportar utilidades puras que los consumidores puedan necesitar.
-export { calcFinalScore, normalizarModalidad, obtenerPerfilModalidad };
-export type { InstrumentScores };

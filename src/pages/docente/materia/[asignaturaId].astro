@@ -2,6 +2,7 @@
 import LayoutDocente from '../../../layouts/LayoutDocente.astro';
 import { db } from '../../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
+import { obtenerCalificacionDocente } from '../../../services/calificaciones';
 import { fetchNativeStudentEvaluationScores, formatScore } from '../../../services/scoring';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
@@ -33,6 +34,10 @@ if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id) {
 const asignaturaId = parseInt(Astro.params.asignaturaId || '');
 if (!asignaturaId) return Astro.redirect(`/docente/materias${currentSearch}`);
 const materiasUrl = `/docente/materias?cuatrimestre=${cuatrimestreId}`;
+
+const calificacionFinal = entidadId
+  ? await obtenerCalificacionDocente(cl, entidadId, cuatrimestreId)
+  : null;
 
 const { data: docente } = await cl.from('docentes').select('nombre,apellidos,modalidad').eq('id', entidadId).maybeSingle();
 const { data: materia } = await cl.from('asignaturas').select('id,clave,nombre').eq('id', asignaturaId).maybeSingle();
@@ -71,7 +76,7 @@ const cuatri = cuatrimestres.find(c => c.id === cuatrimestreId) || cuatrimestreA
       <p class="text-slate-500">{docente?.nombre?.toUpperCase()} {docente?.apellidos?.toUpperCase()} · {cuatri?.clave || ''}</p>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
         <p class="text-xs uppercase text-slate-400 font-semibold">Encuesta estudiantil de la materia</p>
         <p class="text-3xl font-bold text-tup mt-2">{formatScore(eeAvg)}</p>
@@ -86,6 +91,11 @@ const cuatri = cuatrimestres.find(c => c.id === cuatrimestreId) || cuatrimestreA
         <p class="text-xs uppercase text-slate-400 font-semibold">Grupos</p>
         <p class="text-3xl font-bold text-tup mt-2">{(grupos||[]).length}</p>
         <p class="text-xs text-slate-500 mt-1">{(grupos||[]).map(g => g.clave).join(', ') || '—'}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
+        <p class="text-xs uppercase text-slate-400 font-semibold">Calificación final global</p>
+        <p class="text-3xl font-bold text-tup mt-2">{formatScore(calificacionFinal?.calificacion_final)}</p>
+        <p class="text-xs text-slate-500 mt-1">{calificacionFinal?.categoria_final || '—'}</p>
       </div>
     </div>
 

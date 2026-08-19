@@ -410,6 +410,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       }
     }
 
+    // No se recalculan calificaciones aquí: esta importación solo crea/actualiza
+    // estudiantes, grupos base e inscripciones. No modifica docentes ni
+    // instrumentos de evaluación. El recálculo se dispara desde importar-asignaciones.
     return json({
       success: true,
       cycle: { id: cycle.id, clave: cycle.clave },

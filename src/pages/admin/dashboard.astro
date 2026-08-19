@@ -1,9 +1,8 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerCuatrimestres, obtenerCuatrimestreActivo } from '../../services/catalogos';
-import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
-import { aggregateNativeScoresByTeacher, fetchNativeStudentEvaluationScores, calcFinalScore, formatScore } from '../../services/scoring';
+import { formatScore } from '../../services/scoring';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const pathname = Astro.url.pathname;
@@ -39,102 +38,60 @@ interface ProgresoEENativa {
 const { data: progresoEENativaData, error: progresoEENativaError } = await cliente.rpc('obtener_progreso_encuesta_estudiantil_nativa', { p_cuatrimestre_id: cuatrimestreId });
 if (progresoEENativaError) throw progresoEENativaError;
 const progresoEENativa = (progresoEENativaData || []) as ProgresoEENativa[];
-const nativeScoreRows = await fetchNativeStudentEvaluationScores(cliente, cuatrimestreId);
-const nativeScoresByTeacher = aggregateNativeScoresByTeacher(nativeScoreRows);
-
 // Usuarios pendientes de aprobacion
 const { count: pendientes } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
 
-const todos = await obtenerDocentes();
-const [{ data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('autodiagnosticos').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('observaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('planeaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId)]);
-const docsEvaluados = new Set([...nativeScoreRows,...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
-const docsConActividadPuntuable = new Set(docsEvaluados);
-for (const p of progresoEENativa) if (p.controles_enviados > 0 || p.respuestas_nativas > 0) docsEvaluados.add(p.docente_id);
-const docentes = todos.filter(d => docsEvaluados.has(d.id));
-const docentesConActividadPuntuable = todos.filter(d => docsConActividadPuntuable.has(d.id));
-
-const ids = docentes.map(d => d.id);
-
-const [{ data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] = await Promise.all([
-  cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
-  cliente.from('planeaciones').select('docente_id,asignatura_id,puntaje_promedio').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false }),
-  cliente.from('observaciones').select('docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId),
-  cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
-]);
-
-const coordMap = new Map<number, number>();
-for (const c of (coordData || [])) if (!coordMap.has(c.docente_id) && c.score_normalizado != null) coordMap.set(c.docente_id, Number(c.score_normalizado));
-const planPorDocente = new Map<number, Map<number, number>>();
-for (const p of (planData || [])) {
-  if (!planPorDocente.has(p.docente_id)) planPorDocente.set(p.docente_id, new Map());
-  if (!planPorDocente.get(p.docente_id)!.has(p.asignatura_id)) planPorDocente.get(p.docente_id)!.set(p.asignatura_id, p.puntaje_promedio);
-}
-const obsPorDocente = new Map<number, number>();
-for (const o of (obsData || [])) {
-  const r = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);
-  const prom = r.length ? Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100) : 0;
-  if (!obsPorDocente.has(o.docente_id)) obsPorDocente.set(o.docente_id, prom);
-}
-const diagMap = new Map<number, number>();
-for (const d of (diagData || [])) if (!diagMap.has(d.docente_id) && d.puntaje_total != null) diagMap.set(d.docente_id, (Number(d.puntaje_total) / 120) * 100);
-
-const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId);
-const matPorDocente = new Map<number, Set<number>>();
-for (const g of (gruposData || [])) {
-  if (!matPorDocente.has(g.docente_id)) matPorDocente.set(g.docente_id, new Set());
-  matPorDocente.get(g.docente_id)!.add(g.asignatura_id);
-}
+// Scores ya calculados; leemos la vista materializada para listados grandes.
+const { data: aggData, error: aggError } = await cliente
+  .from('resultados_agregados')
+  .select('*')
+  .eq('cuatrimestre_id', cuatrimestreId);
+if (aggError) throw aggError;
 
 interface FilaDashboard {
   id: number; nombre: string; apellidos: string; email: string;
-  promEst: number | undefined; promObs: number | undefined; promCoord: number | undefined; promPlan: number | undefined; promAuto: number | undefined;
+  promEst: number | null; promObs: number | null; promCoord: number | null; promPlan: number | null; promAuto: number | null;
   respuestasNativas: number;
   final360: number | null; cat360: string;
   instrumentos: number;
 }
-const filasTodas: FilaDashboard[] = docentes.map(d => {
-  const obsDoc = obsPorDocente.get(d.id);
-  const planMap2 = planPorDocente.get(d.id);
-  const materias = matPorDocente.get(d.id);
-  let sumPlan = 0, count = 0;
-  if (materias) for (const asigId of materias) {
-    const plan = planMap2?.get(asigId);
-    if (plan != null) count++;
-    if (plan != null) sumPlan += plan;
-  }
-  const promEst = nativeScoresByTeacher.get(d.id);
-  const promPlan = count > 0 ? sumPlan / count : undefined;
-  const promObs = obsDoc;
-  const promCoord = coordMap.get(d.id);
-  const promAuto = diagMap.get(d.id);
-  const progresoNativo = progresoEENativa.find((p) => p.docente_id === d.id);
-  const fin = calcFinalScore({ ee: promEst, coord: promCoord, plan: promPlan, obs: promObs, auto: promAuto }, d.modalidad);
-  const instrumentos = [promEst, promCoord, promPlan, promObs, promAuto].filter((score) => score != null).length;
-  return {
-    id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email,
-    promEst, promObs, promCoord, promPlan, promAuto,
-    respuestasNativas: progresoNativo?.respuestas_nativas || 0,
-    final360: fin.instrumentCount > 0 ? fin.final : null,
-    cat360: fin.category,
-    instrumentos,
-  };
-});
+
+const filasTodas: FilaDashboard[] = (aggData || [])
+  .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
+  .map((row: any) => {
+    const progresoNativo = progresoEENativa.find((p) => p.docente_id === Number(row.docente_id));
+    return {
+      id: Number(row.docente_id),
+      nombre: String(row.docente_nombre ?? ''),
+      apellidos: String(row.docente_apellidos ?? ''),
+      email: String(row.docente_email ?? ''),
+      promEst: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
+      promCoord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
+      promPlan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
+      promObs: row.score_observacion != null ? Number(row.score_observacion) : null,
+      promAuto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
+      respuestasNativas: progresoNativo?.respuestas_nativas || 0,
+      final360: Number(row.calificacion_final),
+      cat360: String(row.categoria_final ?? 'No iniciado'),
+      instrumentos: Number(row.num_instrumentos_completados || 0),
+    };
+  });
 
 // Filtro por búsqueda (server-side GET)
 const filas = busqueda
   ? filasTodas.filter(f => `${f.nombre} ${f.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || f.apellidos.toLowerCase().includes(busqueda.toLowerCase()) || f.email.toLowerCase().includes(busqueda.toLowerCase()))
   : filasTodas;
 
-const totalEvaluados = filas.filter(f => f.instrumentos > 0).length;
+const totalEvaluados = filas.length;
 const docentesConEENativaIniciada = filasTodas.filter(f => f.respuestasNativas > 0).length;
-const conFinal = filasTodas.filter(f => f.final360 !== null && (f.final360||0) > 0);
-const promInstitucional = conFinal.length > 0 ? Math.round(conFinal.reduce((s,f) => s + (f.final360||0), 0) / conFinal.length) : null;
-const sobresalientes = conFinal.filter(f => (f.final360||0) >= 80).length;
+const conFinal = filasTodas.filter(f => (f.final360 || 0) > 0);
+const promInstitucional = conFinal.length > 0 ? Math.round(conFinal.reduce((s,f) => s + (f.final360 || 0), 0) / conFinal.length) : null;
+const sobresalientes = conFinal.filter(f => (f.final360 || 0) >= 80).length;
 const pctSobresaliente = conFinal.length > 0 ? Math.round((sobresalientes / conFinal.length) * 100) : 0;
 
-function avgInstrumento(vals: Array<number | undefined>): number {
-  const f = vals.filter((v): v is number => v != null);
-  return f.length > 0 ? Math.round(f.reduce((a,b)=>a+b,0) / f.length) : 0;
+function avgInstrumento(vals: Array<number | null>): number {
+  const f = vals.filter((v): v is number => v != null && Number.isFinite(v));
+  return f.length > 0 ? Math.round(f.reduce((a,b) => a + b, 0) / f.length) : 0;
 }
 const avgEst = avgInstrumento(filasTodas.map(f => f.promEst));
 const avgCoord = avgInstrumento(filasTodas.map(f => f.promCoord));
@@ -143,7 +100,7 @@ const avgObs = avgInstrumento(filasTodas.map(f => f.promObs));
 const avgAuto = avgInstrumento(filasTodas.map(f => f.promAuto));
 
 const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bueno':0,'Aprobado':0,'A mejorar':0,'Insuficiente':0,'Parcial':0,'No iniciado':0};
-filasTodas.filter(f => docsConActividadPuntuable.has(f.id)).forEach(f => { catCounts[f.cat360]++; });
+filasTodas.forEach(f => { catCounts[f.cat360] = (catCounts[f.cat360] || 0) + 1; });
 
 function colorN(n: number|null|undefined): string { if (n == null) return ''; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
 

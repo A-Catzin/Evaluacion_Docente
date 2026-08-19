@@ -3,7 +3,7 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { db } from '../../lib/db';
 import type { RolUsuario } from '../../types/supabase';
 import { obtenerCuatrimestreActivo } from '../../services/catalogos';
-import { fetchCuatrimestreScores, calcFinalScore } from '../../services/scoring';
+
 
 type FiltroRol = RolUsuario | 'estudiante';
 
@@ -24,7 +24,7 @@ interface FilaUsuario {
   nombre: string; apellidos: string;
   campus?: string; materias?: string; plan?: string; coordinador?: string;
   modalidad?: string;
-  nivel_desempeno?: string; categoria_360?: string; final_360?: number;
+  categoria_360?: string; final_360?: number;
   prom_estudiantil?: number; prom_observacion?: number;
   prom_coordinador?: number; prom_planeacion?: number; prom_autodiagnostico?: number;
   turno?: string;
@@ -124,10 +124,22 @@ try {
   } else {
     let query = cliente.from('usuarios').select('id, email, rol, entidad_id, rol_solicitado');
     if (rolFiltro) query = query.eq('rol', rolFiltro as RolUsuario);
-    const { data: usuarios, error } = await query.order('email');
-    if (error) throw error;
+        const { data: usuarios, error } = await query.order('email');
+        if (error) throw error;
 
-    for (const u of (usuarios || [])) {
+        // Precargar calificaciones finales de docentes para evitar N+1.
+        const docenteEntidadIds = (usuarios || [])
+          .filter((u: any) => u.rol === 'docente' && u.entidad_id)
+          .map((u: any) => Number(u.entidad_id));
+        const { data: calData } = await cliente
+          .from('calificaciones_finales')
+          .select('*')
+          .eq('cuatrimestre_id', cuatrimestreId)
+          .in('docente_id', docenteEntidadIds.length ? docenteEntidadIds : [-1]);
+        const calMap = new Map<number, any>();
+        for (const row of calData || []) calMap.set(Number(row.docente_id), row);
+    
+        for (const u of (usuarios || [])) {
       const fila: FilaUsuario = { id: u.id, email: u.email, rol: u.rol, nombre: '', apellidos: '', rol_solicitado: u.rol_solicitado };
 
       if (u.entidad_id && u.rol === 'docente') {
@@ -143,25 +155,17 @@ try {
       }
 
       if (u.rol === 'docente' && u.entidad_id) {
-        const nativeScores = await fetchCuatrimestreScores(cliente, u.entidad_id, cuatrimestreId);
-        const nativeFinal = calcFinalScore(nativeScores, fila.modalidad);
-        fila.categoria_360 = nativeFinal.category;
-        fila.final_360 = nativeFinal.instrumentCount > 0 ? nativeFinal.final : undefined;
-        fila.prom_estudiantil = nativeScores.ee;
-        const { data: planData } = await cliente.from('planeaciones').select('puntaje_promedio').eq('docente_id', u.entidad_id).eq('estado','Aprobado').order('fecha_evaluacion', { ascending: false }).limit(1).maybeSingle();
-        if (planData?.puntaje_promedio) fila.prom_planeacion = planData.puntaje_promedio;
-        const { data: obsData } = await cliente.from('observaciones').select('*').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
-        if (obsData) {
-          const r = [obsData.cco1,obsData.cco2,obsData.cco3,obsData.cco4,obsData.cco5,obsData.cco6,obsData.cco7,obsData.cme1,obsData.cme2,obsData.cme3,obsData.cme4,obsData.cme5,obsData.cme6,obsData.cme7,obsData.cme8,obsData.cme9,obsData.ccom1,obsData.ccom2,obsData.ccom3,obsData.ccom4,obsData.cso1,obsData.cso2,obsData.cso3,obsData.cso4,obsData.cge1,obsData.cge2,obsData.cge3,obsData.cge4,obsData.cge5,obsData.cge6,obsData.cge7,obsData.caf1,obsData.caf2,obsData.ctepe1,obsData.ctepe2,obsData.ctepe3,obsData.ctepe4,obsData.ctepe5,obsData.ctepe6,obsData.ctepe7,obsData.cno1,obsData.cno2,obsData.cno3,obsData.cno4,obsData.cno5].filter(v => v);
-          if (r.length > 0) fila.prom_observacion = Math.round((r.reduce((a,b) => a+b, 0) / (r.length * 5)) * 100);
+        const cal = calMap.get(Number(u.entidad_id));
+        const instrumentCount = cal ? Number(cal.num_instrumentos_completados || 0) : 0;
+        if (cal && instrumentCount > 0) {
+          fila.categoria_360 = String(cal.categoria_final ?? 'No iniciado');
+          fila.final_360 = Number(cal.calificacion_final);
         }
-        const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('score_normalizado').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
-        if (coordData?.score_normalizado) fila.prom_coordinador = Math.round(coordData.score_normalizado);
-        const { data: diag } = await cliente.from('autodiagnosticos').select('puntaje_total,nivel_desempeno').eq('docente_id', u.entidad_id).order('id', { ascending: false }).limit(1).maybeSingle();
-        if (diag) {
-          fila.prom_autodiagnostico = Math.round((diag.puntaje_total / 120) * 100);
-          fila.nivel_desempeno = diag.nivel_desempeno || '—';
-        }
+        fila.prom_estudiantil = cal?.score_encuesta_estudiantil != null ? Number(cal.score_encuesta_estudiantil) : undefined;
+        fila.prom_coordinador = cal?.score_coordinacion != null ? Number(cal.score_coordinacion) : undefined;
+        fila.prom_planeacion = cal?.score_planeacion != null ? Number(cal.score_planeacion) : undefined;
+        fila.prom_observacion = cal?.score_observacion != null ? Number(cal.score_observacion) : undefined;
+        fila.prom_autodiagnostico = cal?.score_autoevaluacion != null ? Number(cal.score_autoevaluacion) : undefined;
         if (!fila.campus) fila.campus = '—';
         if (!fila.turno) fila.turno = '—';
         fila.coordinador = '—';

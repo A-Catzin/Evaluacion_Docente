@@ -4,6 +4,7 @@ import {
   obtenerCalificacionDocente,
   obtenerCalificacionesPorCuatrimestre,
   recalcularCalificacionDocente,
+  recalcularCalificacionesCuatrimestre,
   refrescarResultadosAgregados,
 } from './calificaciones';
 import { OBSERVATION_FIELDS } from './scoring';
@@ -34,6 +35,11 @@ class MockQueryBuilder {
 
   in(field: string, values: unknown[]) {
     this.filters.push({ method: 'in', args: [field, values] });
+    return this;
+  }
+
+  not(field: string, operator: string, value: unknown) {
+    this.filters.push({ method: 'not', args: [field, operator, value] });
     return this;
   }
 
@@ -102,28 +108,69 @@ function resolveTable(builder: MockQueryBuilder) {
     return { data: { modalidad: 'Escolarizada' }, error: null };
   }
 
+  if (table === 'grupos' && operation === 'select') {
+    const ids = nextGrupos.length ? nextGrupos : [1];
+    return {
+      data: ids.map((id) => ({ docente_id: id })),
+      error: null,
+    };
+  }
+
   if (table === 'evaluacion_coordinacion' && operation === 'select') {
-    return { data: [{ score_normalizado: 90 }], error: null };
+    const ids = nextInstrumentos.evaluacion_coordinacion ?? [1];
+    return {
+      data: ids.map((id) => ({ docente_id: id, score_normalizado: 90 })),
+      error: null,
+    };
   }
 
   if (table === 'planeaciones' && operation === 'select') {
-    return { data: [{ puntaje_promedio: 70 }], error: null };
+    const ids = nextInstrumentos.planeaciones ?? [1];
+    return {
+      data: ids.map((id) => ({ docente_id: id, puntaje_promedio: 70 })),
+      error: null,
+    };
   }
 
   if (table === 'observaciones' && operation === 'select') {
-    const row = Object.fromEntries(
+    const ids = nextInstrumentos.observaciones ?? [1];
+    const obsRow = Object.fromEntries(
       OBSERVATION_FIELDS.map((field) => [field, 4]),
     );
-    return { data: [row], error: null };
+    return {
+      data: ids.map((id) => ({ docente_id: id, ...obsRow })),
+      error: null,
+    };
   }
 
   if (table === 'autodiagnosticos' && operation === 'select') {
-    return { data: [{ puntaje_total: 120 }], error: null };
+    const ids = nextInstrumentos.autodiagnosticos ?? [1];
+    return {
+      data: ids.map((id) => ({ docente_id: id, puntaje_total: 120 })),
+      error: null,
+    };
+  }
+
+  if (table === 'encuesta_estudiantil_respuestas' && operation === 'select') {
+    const ids = nextInstrumentos.encuesta_estudiantil_respuestas ?? [1];
+    return {
+      data: ids.map((id) => ({ docente_id: id })),
+      error: null,
+    };
   }
 
   if (table === 'calificaciones_finales' && operation === 'upsert') {
-    capturedUpsertPayload = payload;
     const p = payload as Record<string, unknown>;
+    if (
+      nextUpsertErrorForDocenteId != null &&
+      p.docente_id === nextUpsertErrorForDocenteId
+    ) {
+      return {
+        data: null,
+        error: { message: 'Upsert simulado fallido', code: '99999' },
+      };
+    }
+    capturedUpsertPayload = payload;
     return {
       data: {
         id: 42,
@@ -157,6 +204,17 @@ let capturedSnapshotInsert: unknown = null;
 let capturedUpsertPayload: unknown = null;
 let nextSnapshot: Record<string, unknown> | null = null;
 let nextCalificacionFinal: Record<string, unknown> | null = null;
+
+type InstrumentTable =
+  | 'evaluacion_coordinacion'
+  | 'observaciones'
+  | 'planeaciones'
+  | 'autodiagnosticos'
+  | 'encuesta_estudiantil_respuestas';
+
+let nextGrupos: number[] = [];
+let nextInstrumentos: Partial<Record<InstrumentTable, number[]>> = {};
+let nextUpsertErrorForDocenteId: number | null = null;
 
 function resolveSnapshot(builder: MockQueryBuilder) {
   if (nextSnapshot) return nextSnapshot;
@@ -229,6 +287,9 @@ describe('calificaciones', () => {
     capturedUpsertPayload = null;
     nextSnapshot = null;
     nextCalificacionFinal = null;
+    nextGrupos = [];
+    nextInstrumentos = {};
+    nextUpsertErrorForDocenteId = null;
   });
 
   describe('recalcularCalificacionDocente', () => {
@@ -337,6 +398,70 @@ describe('calificaciones', () => {
     it('llama a la RPC correspondiente', async () => {
       const client = createMockClient();
       await refrescarResultadosAgregados(client);
+      expect(client.rpc).toHaveBeenCalledWith('refrescar_resultados_agregados');
+    });
+  });
+
+  describe('recalcularCalificacionesCuatrimestre', () => {
+    it('recalcula todos los docentes con grupos cuando soloDocentesConInstrumentos es false', async () => {
+      nextGrupos = [10, 20, 30];
+      const client = createMockClient();
+      const result = await recalcularCalificacionesCuatrimestre(
+client,
+10,
+{ refrescarAgregados: false, soloDocentesConInstrumentos: false },
+      );
+
+      expect(result.recalculados).toBe(3);
+      expect(result.errores).toBe(0);
+      expect(client.rpc).not.toHaveBeenCalledWith(
+'refrescar_resultados_agregados',
+      );
+    });
+
+    it('solo recalcula docentes con instrumentos cuando soloDocentesConInstrumentos es true', async () => {
+      nextGrupos = [10, 20, 30];
+      nextInstrumentos = {
+evaluacion_coordinacion: [20],
+observaciones: [30],
+planeaciones: [],
+autodiagnosticos: [],
+encuesta_estudiantil_respuestas: [],
+      };
+      const client = createMockClient();
+      const result = await recalcularCalificacionesCuatrimestre(
+client,
+10,
+{ refrescarAgregados: false, soloDocentesConInstrumentos: true },
+      );
+
+      expect(result.recalculados).toBe(2);
+      expect(result.errores).toBe(0);
+    });
+
+    it('maneja errores individuales sin detener el batch', async () => {
+      nextGrupos = [10, 20, 30];
+      nextUpsertErrorForDocenteId = 20;
+      const client = createMockClient();
+      const result = await recalcularCalificacionesCuatrimestre(
+client,
+10,
+      );
+
+      expect(result.recalculados).toBe(2);
+      expect(result.errores).toBe(1);
+    });
+
+    it('refresca resultados agregados cuando refrescarAgregados es true', async () => {
+      nextGrupos = [10];
+      const client = createMockClient();
+      const result = await recalcularCalificacionesCuatrimestre(
+client,
+10,
+{ refrescarAgregados: true },
+      );
+
+      expect(result.recalculados).toBe(1);
       expect(client.rpc).toHaveBeenCalledWith('refrescar_resultados_agregados');
     });
   });

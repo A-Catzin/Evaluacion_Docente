@@ -2,7 +2,7 @@
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
-import { fetchBatchScoresPorDocente, calcFinalScore, formatScore } from '../../services/scoring';
+import { formatScore } from '../../services/scoring';
 
 const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -34,33 +34,56 @@ if (modo === 'individual') {
   const asigIds = new Set((asigs || []).map(a => a.docente_id));
   const ids = [...asigIds];
 
-    const { data: docentes } = ids.length
-      ? await cliente.from('docentes').select('id,nombre,apellidos,email,modalidad').in('id', ids).order('apellidos')
-      : { data: [] };
+  // Scores ya calculados; usamos la vista materializada para listados grandes.
+  const { data: aggData, error: aggError } = ids.length
+    ? await cliente
+        .from('resultados_agregados')
+        .select('*')
+        .eq('cuatrimestre_id', cuatrimestreId)
+        .in('docente_id', ids)
+    : { data: [], error: null };
+  if (aggError) throw aggError;
 
-  const scoreMap = ids.length
-    ? await fetchBatchScoresPorDocente(cliente, ids, cuatrimestreId)
-    : new Map<number, any>();
+  const { data: annualData, error: annualError } = ids.length
+    ? await cliente
+        .from('resultados_agregados')
+        .select('docente_id,cuatrimestre_id,calificacion_final,num_instrumentos_completados')
+        .in('docente_id', ids)
+    : { data: [], error: null };
+  if (annualError) throw annualError;
 
   const anualMap = new Map<number, { sum: number; count: number }>();
-  if (ids.length) {
-    for (const c of cuatrimestres) {
-      const cScores = await fetchBatchScoresPorDocente(cliente, ids, c.id);
-      for (const docId of ids) {
-        const sc = cScores.get(docId) || {};
-        const docente = (docentes || []).find((d: any) => d.id === docId);
-        const { final, instrumentCount } = calcFinalScore(sc, docente?.modalidad);
-        if (instrumentCount > 0) {
-          const acc = anualMap.get(docId) || { sum: 0, count: 0 };
-          acc.sum += final;
-          acc.count++;
-          anualMap.set(docId, acc);
-        }
-      }
+  for (const row of (annualData || [])) {
+    if (Number(row.num_instrumentos_completados || 0) > 0) {
+      const docId = Number(row.docente_id);
+      const acc = anualMap.get(docId) || { sum: 0, count: 0 };
+      acc.sum += Number(row.calificacion_final);
+      acc.count++;
+      anualMap.set(docId, acc);
     }
   }
 
-  individualData = { docentes: docentes || [], scoreMap, anualMap };
+  individualData = {
+    docentes: (aggData || [])
+      .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
+      .map((row: any) => ({
+        id: Number(row.docente_id),
+        nombre: String(row.docente_nombre ?? ''),
+        apellidos: String(row.docente_apellidos ?? ''),
+        email: String(row.docente_email ?? ''),
+        modalidad: String(row.modalidad_snapshot ?? ''),
+        ee: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
+        coord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
+        plan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
+        obs: row.score_observacion != null ? Number(row.score_observacion) : null,
+        auto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
+        final: Number(row.calificacion_final),
+        category: String(row.categoria_final ?? ''),
+        instrumentCount: Number(row.num_instrumentos_completados || 0),
+      }))
+      .sort((a: any, b: any) => a.apellidos.localeCompare(b.apellidos)),
+    anualMap,
+  };
 }
 
 let generalData: any = null;
@@ -78,33 +101,49 @@ if (modo === 'general') {
       : { data: [] };
     const allDocIds = [...new Set((asigs || []).map(a => a.docente_id))];
 
-    const { data: docentes } = allDocIds.length
-      ? await cliente.from('docentes').select('id,nombre,apellidos,email,campus,modalidad').in('id', allDocIds).order('apellidos')
-      : { data: [] };
+    // Scores ya calculados; usamos la vista materializada para listados grandes.
+    const { data: aggData, error: aggError } = allDocIds.length
+      ? await cliente
+          .from('resultados_agregados')
+          .select('*')
+          .in('docente_id', allDocIds)
+          .in('cuatrimestre_id', cicloIds)
+      : { data: [], error: null };
+    if (aggError) throw aggError;
 
-    const scoresPorCiclo = new Map<number, Map<number, any>>();
-    for (const cid of cicloIds) {
-      scoresPorCiclo.set(cid, await fetchBatchScoresPorDocente(cliente, allDocIds, cid));
+    const docenteMap = new Map<number, any>();
+    for (const row of (aggData || [])) {
+      const id = Number(row.docente_id);
+      if (!docenteMap.has(id)) {
+        docenteMap.set(id, {
+          id,
+          nombre: String(row.docente_nombre ?? ''),
+          apellidos: String(row.docente_apellidos ?? ''),
+          email: String(row.docente_email ?? ''),
+          campus: String(row.docente_campus ?? ''),
+          modalidad: String(row.modalidad_snapshot ?? ''),
+          puntajes: {},
+        });
+      }
+      const doc = docenteMap.get(id)!;
+      const cid = Number(row.cuatrimestre_id);
+      doc.puntajes[cid] = Number(row.num_instrumentos_completados || 0) > 0
+        ? Number(row.calificacion_final)
+        : null;
     }
 
     generalData = {
       cicloIds,
       cuatrisSeleccionados: cuatrimestres.filter(c => cicloIds.includes(c.id)),
-      docentes: (docentes || []).map(d => {
-        const puntajes: Record<number, number | null> = {};
-        let sumFinal = 0, countFinal = 0;
-        for (const cid of cicloIds) {
-          const sc = scoresPorCiclo.get(cid)?.get(d.id) || {};
-          const { final, instrumentCount } = calcFinalScore(sc, d.modalidad);
-          puntajes[cid] = instrumentCount > 0 ? final : null;
-          if (puntajes[cid] != null) { sumFinal += puntajes[cid]!; countFinal++; }
-        }
-        return {
-          ...d,
-          puntajes,
-          promedioAnual: countFinal > 0 ? Math.round(sumFinal / countFinal) : null,
-        };
-      }),
+      docentes: [...docenteMap.values()]
+        .map((d: any) => {
+          const vals = cicloIds.map(cid => d.puntajes[cid]).filter((v: any) => v != null) as number[];
+          return {
+            ...d,
+            promedioAnual: vals.length ? Math.round(vals.reduce((a: number, b: number) => a + b, 0) / vals.length) : null,
+          };
+        })
+        .sort((a: any, b: any) => a.apellidos.localeCompare(b.apellidos)),
     };
   }
 }
@@ -173,21 +212,19 @@ if (modo === 'general') {
                 <th class="text-center px-2 py-3 text-xs uppercase bg-tup/10 text-tup">Prom. anual</th>
               </tr></thead>
               <tbody class="divide-y">
-                {individualData?.docentes?.map((d: any) => {
-                  const scores = individualData.scoreMap.get(d.id) || {};
-                  const { final, instrumentCount, category } = calcFinalScore(scores, d.modalidad);
+{individualData?.docentes?.map((d: any) => {
                   const anual = individualData.anualMap.get(d.id);
                   const anualAvg = anual && anual.count > 0 ? Math.round(anual.sum / anual.count) : null;
                   return (
                     <tr class="hover:bg-slate-50">
                       <td class="px-3 py-2"><p class="font-medium text-xs">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</p><p class="text-[10px] text-slate-400">{d.email}</p></td>
-                      <td class={"px-2 py-2 text-center font-medium " + colorN(scores.ee)}>{fmt(scores.ee)}</td>
-                      <td class={"px-2 py-2 text-center font-medium " + colorN(scores.coord)}>{fmt(scores.coord)}</td>
-                      <td class={"px-2 py-2 text-center font-medium " + colorN(scores.plan)}>{fmt(scores.plan)}</td>
-                      <td class={"px-2 py-2 text-center font-medium " + colorN(scores.obs)}>{fmt(scores.obs)}</td>
-                      <td class={"px-2 py-2 text-center font-medium " + colorN(scores.auto)}>{fmt(scores.auto)}</td>
-                      <td class={"px-2 py-2 text-center font-bold " + colorN(final)}>{instrumentCount > 0 ? fmt(final) : '—'}</td>
-                      <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{category}</span></td>
+                      <td class={"px-2 py-2 text-center font-medium " + colorN(d.ee)}>{fmt(d.ee)}</td>
+                      <td class={"px-2 py-2 text-center font-medium " + colorN(d.coord)}>{fmt(d.coord)}</td>
+                      <td class={"px-2 py-2 text-center font-medium " + colorN(d.plan)}>{fmt(d.plan)}</td>
+                      <td class={"px-2 py-2 text-center font-medium " + colorN(d.obs)}>{fmt(d.obs)}</td>
+                      <td class={"px-2 py-2 text-center font-medium " + colorN(d.auto)}>{fmt(d.auto)}</td>
+                      <td class={"px-2 py-2 text-center font-bold " + colorN(d.final)}>{d.instrumentCount > 0 ? fmt(d.final) : '—'}</td>
+                      <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{d.category}</span></td>
                       <td class={"px-2 py-2 text-center font-bold bg-tup/5 " + colorN(anualAvg)}>{fmt(anualAvg)}</td>
                     </tr>
                   );

@@ -3,7 +3,7 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestres } from '../../services/catalogos';
-import { fetchCuatrimestreScores, fetchBatchScoresPorDocente, fetchNativeStudentEvaluationScores, calcFinalScore, formatScore } from '../../services/scoring';
+import { formatScore } from '../../services/scoring';
 
 const cliente = db();
 const token = Astro.cookies.get('sb-access-token')?.value;
@@ -12,9 +12,7 @@ if (token && refresh) await cliente.auth.setSession({ access_token: token, refre
 const todos = await obtenerDocentes();
 const cuatrimestres = (await obtenerCuatrimestres()).sort((a,b)=>a.id-b.id);
 
-const nativeScoreRows = await Promise.all(cuatrimestres.map((c) => fetchNativeStudentEvaluationScores(cliente, c.id)));
-const evalsSet = new Set(nativeScoreRows.flat().map((row) => row.docente_id));
-const docentes = todos.filter(d => evalsSet.has(d.id));
+const docentes = todos.filter(d => d.activo !== false);
 
 const modo = (Astro.url.searchParams.get('modo') || 'individual') as 'individual' | 'general';
 const cuatrimestreContext = Astro.url.searchParams.get('cuatrimestre');
@@ -27,14 +25,31 @@ const docente = docentes.find(d=>d.id===docenteSel);
 let historial: any[] = [];
 let totalCycles = 0, sumFinals = 0;
 if (modo === 'individual' && docenteSel) {
-  for (const c of cuatrimestres) {
-    const scores = await fetchCuatrimestreScores(cliente, docenteSel, c.id);
-    const { final, instrumentCount, expectedInstrumentCount, category } = calcFinalScore(scores, docente?.modalidad);
-    if (instrumentCount > 0) {
-      historial.push({ clave: c.clave, ee: scores.ee, coord: scores.coord, plan: scores.plan, obs: scores.obs, auto: scores.auto, final, cat: category, inst: instrumentCount, expected: expectedInstrumentCount });
-      totalCycles++;
-      sumFinals += final;
-    }
+  const { data: calData, error: calError } = await cliente
+    .from('calificaciones_finales')
+    .select('*')
+    .eq('docente_id', docenteSel)
+    .order('cuatrimestre_id', { ascending: true });
+  if (calError) throw calError;
+
+  for (const row of (calData || [])) {
+    const instCount = Number(row.num_instrumentos_completados || 0);
+    if (instCount === 0) continue;
+    const c = cuatrimestres.find((x) => x.id === row.cuatrimestre_id);
+    historial.push({
+      clave: c?.clave || '',
+      ee: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
+      coord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
+      plan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
+      obs: row.score_observacion != null ? Number(row.score_observacion) : null,
+      auto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
+      final: Number(row.calificacion_final),
+      cat: String(row.categoria_final ?? 'No iniciado'),
+      inst: instCount,
+      expected: Number(row.num_instrumentos_esperados || 0),
+    });
+    totalCycles++;
+    sumFinals += Number(row.calificacion_final);
   }
 }
 const annualAvg = totalCycles > 0 ? Math.round(sumFinals / totalCycles) : null;
@@ -56,11 +71,17 @@ if (modo === 'general') {
     const { data: allDocs } = await cliente.from('docentes').select('id,nombre,apellidos,email,campus,modalidad').eq('activo', true).order('apellidos');
 
     if (allDocs?.length) {
-      const allDocIds = allDocs.map(d => d.id);
+      const { data: calData, error: calError } = await cliente
+        .from('calificaciones_finales')
+        .select('*')
+        .in('cuatrimestre_id', cicloIdsGeneral)
+        .order('cuatrimestre_id', { ascending: true });
+      if (calError) throw calError;
 
-      const scoresPorCiclo = new Map<number, Map<number, any>>();
-      for (const cid of cicloIdsGeneral) {
-        scoresPorCiclo.set(cid, await fetchBatchScoresPorDocente(cliente, allDocIds, cid));
+      const calMap = new Map<number, Map<number, any>>();
+      for (const row of (calData || [])) {
+        if (!calMap.has(row.docente_id)) calMap.set(row.docente_id, new Map());
+        calMap.get(row.docente_id)!.set(row.cuatrimestre_id, row);
       }
 
       const filas = allDocs.flatMap(d => {
@@ -74,9 +95,10 @@ if (modo === 'general') {
             puntajes[c.id] = null;
             continue;
           }
-          const sc = scoresPorCiclo.get(c.id)?.get(d.id) || {};
-          const { final, instrumentCount } = calcFinalScore(sc, d.modalidad);
-          const valor = instrumentCount > 0 ? final : null;
+          const row = calMap.get(d.id)?.get(c.id);
+          const valor = row && Number(row.num_instrumentos_completados || 0) > 0
+            ? Number(row.calificacion_final)
+            : null;
           puntajes[c.id] = valor;
           if (valor != null) {
             tieneEnRango = true;

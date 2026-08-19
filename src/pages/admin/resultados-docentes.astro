@@ -1,13 +1,15 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../lib/db';
-import { calcFinalScore, fetchBatchScoresPorDocente, fetchNativeStudentEvaluationScores, formatScore } from '../../services/scoring';
+import { formatScore } from '../../services/scoring';
 
 const cl = dbAdmin();
-const [cuatrisRes, docsRes] = await Promise.all([
-  cl.from('cuatrimestres').select('id,clave,nombre,activo,cerrado').order('id', { ascending: true }),
-  cl.from('docentes').select('id,nombre,apellidos,email,campus,modalidad,visible_dashboard,activo').eq('activo', true).order('apellidos', { ascending: true }),
-]);
+const { data: cuatrisData, error: cuatrisError } = await cl
+  .from('cuatrimestres')
+  .select('id,clave,nombre,activo,cerrado')
+  .order('id', { ascending: true });
+if (cuatrisError) throw cuatrisError;
+const cuatrisRes = { data: cuatrisData };
 
 const cuatrimestres = (cuatrisRes.data || []).sort((a, b) => a.id - b.id);
 const activeCuatriId = cuatrimestres.find((c: any) => c.activo)?.id ?? cuatrimestres[cuatrimestres.length - 1]?.id ?? 0;
@@ -20,39 +22,35 @@ if (Astro.url.searchParams.has('cuatrimestre') && cuatrimestreId) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 }
 
-const [nativeScoreRows, { data: coordActivity }, { data: planActivity }, { data: obsActivity }, { data: autoActivity }] = await Promise.all([
-  fetchNativeStudentEvaluationScores(cl, cuatrimestreId),
-  cl.from('evaluacion_coordinacion').select('docente_id').eq('cuatrimestre_id', cuatrimestreId),
-  cl.from('planeaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId),
-  cl.from('observaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId),
-  cl.from('autodiagnosticos').select('docente_id').eq('cuatrimestre_id', cuatrimestreId),
-]);
-
 const busqueda = (Astro.url.searchParams.get('q') || '').trim().toLowerCase();
-const docentesConActividad = new Set([
-  ...nativeScoreRows,
-  ...((coordActivity || []) as any[]),
-  ...((planActivity || []) as any[]),
-  ...((obsActivity || []) as any[]),
-  ...((autoActivity || []) as any[]),
-].map((row) => row.docente_id));
-const docentesBase = ((docsRes.data || []) as any[]).filter((d) => docentesConActividad.has(d.id));
-const scoresMap = await fetchBatchScoresPorDocente(cl, docentesBase.map((d) => d.id), cuatrimestreId);
 
-const cardsConResultados = docentesBase
-  .map((d) => {
-    const scores = scoresMap.get(d.id) || {};
-    const fin = calcFinalScore(scores, d.modalidad);
-    return {
-      ...d,
-      ...scores,
-      final: fin.instrumentCount > 0 ? fin.final : null,
-      category: fin.category,
-      instruments: fin.instrumentCount,
-      expected: fin.expectedInstrumentCount,
-    };
-  })
-  .sort((a, b) => (b.final || 0) - (a.final || 0) || a.apellidos.localeCompare(b.apellidos));
+// Scores ya calculados; usamos la vista materializada para listados grandes.
+const { data: aggData, error: aggError } = await cl
+  .from('resultados_agregados')
+  .select('*')
+  .eq('cuatrimestre_id', cuatrimestreId);
+if (aggError) throw aggError;
+
+const cardsConResultados = (aggData || [])
+  .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
+  .map((row: any) => ({
+    id: Number(row.docente_id),
+    nombre: String(row.docente_nombre ?? ''),
+    apellidos: String(row.docente_apellidos ?? ''),
+    email: String(row.docente_email ?? ''),
+    campus: row.docente_campus,
+    modalidad: row.modalidad_snapshot,
+    ee: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
+    coord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
+    plan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
+    obs: row.score_observacion != null ? Number(row.score_observacion) : null,
+    auto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
+    final: Number(row.calificacion_final),
+    category: String(row.categoria_final ?? 'No iniciado'),
+    instruments: Number(row.num_instrumentos_completados || 0),
+    expected: Number(row.num_instrumentos_esperados || 0),
+  }))
+  .sort((a: any, b: any) => (b.final || 0) - (a.final || 0) || a.apellidos.localeCompare(b.apellidos));
 
 const cards = busqueda
   ? cardsConResultados.filter((d) => `${d.nombre} ${d.apellidos} ${d.email} ${d.campus || ''} ${d.modalidad || ''}`.toLowerCase().includes(busqueda))

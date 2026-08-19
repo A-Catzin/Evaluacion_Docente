@@ -394,9 +394,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       .from("import_runs")
       .update({ filas_leidas: records.length - 1 })
       .eq("id", run.id);
-    // TODO(Paso 2 mejora futura): después de importar docentes se podría
-    // recalcular en batch las calificaciones finales de los docentes activos
-    // usando recalcularCalificacionDocente() desde src/services/calificaciones.
+    // No se recalculan calificaciones aquí: esta importación no vincula
+    // docentes a grupos/instrumentos de un cuatrimestre específico.
+    // Cuando un docente importado reciba asignaciones, el endpoint
+    // importar-asignaciones recalculará su calificación en batch.
     await finishImportRun(client, run.id, summary);
     return json({
       success: true,

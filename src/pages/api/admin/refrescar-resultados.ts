@@ -1,6 +1,6 @@
-import type { APIRoute } from 'astro';
-import { db } from '../../../lib/db';
-import { refrescarResultadosAgregados } from '../../../services/calificaciones';
+import type { APIRoute } from "astro";
+import { db } from "../../../lib/db";
+import { refrescarResultadosAgregados } from "../../../services/calificaciones";
 
 /**
  * API: GET /api/admin/refrescar-resultados
@@ -12,15 +12,15 @@ import { refrescarResultadosAgregados } from '../../../services/calificaciones';
  * Redirige de vuelta al dashboard con el periodo seleccionado.
  */
 export const GET: APIRoute = async ({ url, cookies, redirect }) => {
-  const periodo = url.searchParams.get('periodo') || '';
+  const periodo = url.searchParams.get("periodo") || "";
 
   try {
     // Verificar sesión
-    const tokenAcceso = cookies.get('sb-access-token')?.value;
-    const tokenRefresco = cookies.get('sb-refresh-token')?.value;
+    const tokenAcceso = cookies.get("sb-access-token")?.value;
+    const tokenRefresco = cookies.get("sb-refresh-token")?.value;
 
     if (!tokenAcceso || !tokenRefresco) {
-      return redirect('/auth');
+      return redirect("/auth");
     }
 
     const cliente = db();
@@ -31,24 +31,24 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
       });
 
     if (errorSesion || !datosSesion.user) {
-      return redirect('/auth');
+      return redirect("/auth");
     }
 
     // Ejecutar refresh de la MV
     try {
       await refrescarResultadosAgregados(cliente);
     } catch (error) {
-      console.error('[API Refresh] Error al refrescar MV:', error);
+      console.error("[API Refresh] Error al refrescar MV:", error);
     }
 
     // Redirigir de vuelta al dashboard
     const destino = periodo
       ? `/admin/dashboard?periodo=${periodo}&refresco=ok`
-      : '/admin/dashboard?refresco=ok';
+      : "/admin/dashboard?refresco=ok";
 
     return redirect(destino);
   } catch (err) {
-    console.error('[API Refresh] Error inesperado:', err);
-    return redirect('/admin/dashboard?refresco=error');
+    console.error("[API Refresh] Error inesperado:", err);
+    return redirect("/admin/dashboard?refresco=error");
   }
 };

@@ -3,7 +3,6 @@ import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
-import { fetchNativeStudentEvaluationScores } from '../../services/scoring';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
@@ -34,10 +33,25 @@ if (userId) {
   docentesAsignados = new Set((asigs||[]).map(a=>a.docente_id));
 }
 
-// Filtrar solo docentes con evaluaciones (mismo filtro que /admin/docentes)
-const [nativeScoreRows, { data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([fetchNativeStudentEvaluationScores(cliente, cuatrimestreId), cliente.from('autodiagnosticos').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('observaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('planeaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId)]);
-const docsEvaluados = new Set([...nativeScoreRows,...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
-const docentes = todos.filter(d => docsEvaluados.has(d.id) && docentesAsignados.has(d.id));
+// Scores ya calculados; usamos la vista materializada para listados grandes.
+const asignadosIds = [...docentesAsignados];
+let aggData: any[] = [];
+if (asignadosIds.length > 0) {
+  const { data, error } = await cliente
+    .from('resultados_agregados')
+    .select('*')
+    .eq('cuatrimestre_id', cuatrimestreId)
+    .in('docente_id', asignadosIds);
+  if (error) throw error;
+  aggData = data || [];
+}
+
+const docentesEvaluados = new Set(
+  aggData
+    .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
+    .map((row: any) => Number(row.docente_id))
+);
+const docentes = todos.filter(d => docentesAsignados.has(d.id) && docentesEvaluados.has(d.id));
 
 // Obtener observaciones, planeaciones y evaluaciones de coordinación para este cuatrimestre
 const { data: obsData } = await cliente.from('observaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId);
@@ -48,7 +62,6 @@ const obsSet = new Set((obsData || []).map(o => o.docente_id));
 const planPendiente = new Set((planData || []).filter(p => p.estado === 'Pendiente').map(p => p.docente_id));
 const planEvaluada = new Set((planData || []).filter(p => p.estado !== 'Pendiente').map(p => p.docente_id));
 const coordSet = new Set((coordData || []).map(c => c.docente_id));
-const totalDocs = docentes.length;
 
 interface EstadoDocente {
   docente: { id: number; nombre: string; apellidos: string; email: string; modalidad: string };

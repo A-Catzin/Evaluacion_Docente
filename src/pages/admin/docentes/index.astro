@@ -1,9 +1,8 @@
 ---
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
-import { obtenerDocentes } from '../../../services/docentes';
 import { db } from '../../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
-import { aggregateNativeScoresByTeacher, fetchNativeStudentEvaluationScores, calcFinalScore, formatScore } from '../../../services/scoring';
+import { formatScore } from '../../../services/scoring';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const page = parseInt(Astro.url.searchParams.get('page')||'1');
@@ -26,93 +25,35 @@ if (token && refresh) {
   await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
 }
 
-interface ProgresoEENativa {
-  docente_id: number;
-  inscripciones_elegibles: number;
-  controles_enviados: number;
-  respuestas_nativas: number;
-}
-
-const { data: progresoEENativaData, error: progresoEENativaError } = await cliente.rpc('obtener_progreso_encuesta_estudiantil_nativa', { p_cuatrimestre_id: cuatrimestreId });
-if (progresoEENativaError) throw progresoEENativaError;
-const progresoEENativa = (progresoEENativaData || []) as ProgresoEENativa[];
-const nativeScoreRows = await fetchNativeStudentEvaluationScores(cliente, cuatrimestreId);
-const nativeScoresByTeacher = aggregateNativeScoresByTeacher(nativeScoreRows);
-
-const todos = await obtenerDocentes();
-const [{ data: adIds }, { data: obsIds }, { data: coordIds }, { data: planIds }] = await Promise.all([cliente.from('autodiagnosticos').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('observaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('evaluacion_coordinacion').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId), cliente.from('planeaciones').select('docente_id').limit(10000).eq('cuatrimestre_id', cuatrimestreId)]);
-const docsEvaluados = new Set([...nativeScoreRows,...(adIds||[]),...(obsIds||[]),...(coordIds||[]),...(planIds||[])].map(e=>e.docente_id));
-for (const p of progresoEENativa) if (p.controles_enviados > 0 || p.respuestas_nativas > 0) docsEvaluados.add(p.docente_id);
-const docentes = todos.filter(d => docsEvaluados.has(d.id));
-const docentesFiltrados = busqueda
-  ? docentes.filter(d => `${d.nombre} ${d.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || d.apellidos.toLowerCase().includes(busqueda.toLowerCase()) || d.email.toLowerCase().includes(busqueda.toLowerCase()))
-  : docentes;
-
-const ids = docentesFiltrados.map(d => d.id);
-
-// Batch queries — generales
-const [{ data: coordData }, { data: diagData }] = await Promise.all([
-  cliente.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
-  cliente.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
-]);
-
-const coordMap = new Map<number, number>(); for (const c of (coordData || [])) if (!coordMap.has(c.docente_id) && c.score_normalizado != null) coordMap.set(c.docente_id, Number(c.score_normalizado));
-const diagMap = new Map<number, number>(); for (const d of (diagData || [])) if (!diagMap.has(d.docente_id) && d.puntaje_total != null) diagMap.set(d.docente_id, (Number(d.puntaje_total) / 120) * 100);
-
-// Observaciones por docente+asignatura
-const { data: obsData } = await cliente.from('observaciones').select('docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId);
-// Observaciones por docente (general, no por materia)
-const obsPorDocente = new Map<number, number>();
-for (const o of (obsData || [])) {
-  const r = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);
-  const prom = r.length ? Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100) : 0;
-  if (!obsPorDocente.has(o.docente_id)) obsPorDocente.set(o.docente_id, prom);
-}
-
-// Grupos deduplicados por docente+asignatura+clave (colapsa inserts repetidos, preserva grupos distintos)
-const { data: gruposData } = await cliente.from('grupos').select('docente_id,asignatura_id,clave').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId);
-const grupoMap = new Map<number, { asignatura_id: number; clave_grupo: string }[]>();
-const seenGrupos = new Set<string>();
-for (const g of (gruposData || [])) {
-  const key = `${g.docente_id}|${g.asignatura_id}|${g.clave}`;
-  if (seenGrupos.has(key)) continue;
-  seenGrupos.add(key);
-  if (!grupoMap.has(g.docente_id)) grupoMap.set(g.docente_id, []);
-  grupoMap.get(g.docente_id)!.push({ asignatura_id: g.asignatura_id, clave_grupo: g.clave || '—' });
-}
-
-// Planeaciones por docente+asignatura
-const { data: planData } = await cliente.from('planeaciones').select('docente_id,asignatura_id,puntaje_promedio').in('docente_id', ids).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado').order('fecha_evaluacion', { ascending: false });
-const planPorDocente = new Map<number, Map<number, number>>();
-for (const p of (planData || [])) {
-  if (!planPorDocente.has(p.docente_id)) planPorDocente.set(p.docente_id, new Map());
-  if (!planPorDocente.get(p.docente_id)!.has(p.asignatura_id)) planPorDocente.get(p.docente_id)!.set(p.asignatura_id, p.puntaje_promedio);
-}
-
 function colorScore(n: number|null|undefined): string { if (n == null) return ''; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
 
-// Fila principal — promedio general de todas las materias
-const filas = docentesFiltrados.map(d => {
-  const obsDoc = obsPorDocente.get(d.id);
-  const planMap2 = planPorDocente.get(d.id);
-  
-  // Promedios generales de todas las materias
-  let sumPlan = 0, count = 0;
-  const grupos = grupoMap.get(d.id) || [];
-  for (const g of grupos) {
-    const plan = planMap2?.get(g.asignatura_id);
-    if (plan != null) count++;
-    if (plan != null) sumPlan += plan;
-  }
-  const promEst = nativeScoresByTeacher.get(d.id);
-  const promObs = obsDoc;
-  const promPlan = count > 0 ? sumPlan / count : undefined;
-  const promCoord = coordMap.get(d.id);
-  const promAuto = diagMap.get(d.id);
-  const fin = calcFinalScore({ ee: promEst, coord: promCoord, plan: promPlan, obs: promObs, auto: promAuto }, d.modalidad);
-  const instrumentos = [promEst, promCoord, promPlan, promObs, promAuto].filter((score) => score != null).length;
-  return { ...d, promObs, promCoord, promPlan, promAuto, promEst, final360: fin.instrumentCount > 0 ? fin.final : null, cat360: fin.category, instrumentos };
-});
+// Scores ya calculados; usamos la vista materializada para listados grandes.
+const { data: aggData, error: aggError } = await cliente
+  .from('resultados_agregados')
+  .select('*')
+  .eq('cuatrimestre_id', cuatrimestreId);
+if (aggError) throw aggError;
+
+const filasBase = (aggData || [])
+  .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
+  .map((row: any) => ({
+    id: Number(row.docente_id),
+    nombre: String(row.docente_nombre ?? ''),
+    apellidos: String(row.docente_apellidos ?? ''),
+    email: String(row.docente_email ?? ''),
+    promEst: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
+    promCoord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
+    promPlan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
+    promObs: row.score_observacion != null ? Number(row.score_observacion) : null,
+    promAuto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
+    final360: Number(row.calificacion_final),
+    cat360: String(row.categoria_final ?? 'No iniciado'),
+    instrumentos: Number(row.num_instrumentos_completados || 0),
+  }));
+
+const filas = busqueda
+  ? filasBase.filter(f => `${f.nombre} ${f.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || f.apellidos.toLowerCase().includes(busqueda.toLowerCase()) || f.email.toLowerCase().includes(busqueda.toLowerCase()))
+  : filasBase;
 
 // Paginación
 const totalFilas = filas.length;

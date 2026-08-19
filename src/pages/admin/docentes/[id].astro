@@ -1,7 +1,8 @@
 ---
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../../lib/db';
-import { fetchCuatrimestreScores, fetchNativeStudentEvaluationScores, calcFinalScore, formatScore, OBSERVATION_SELECT } from '../../../services/scoring';
+import { fetchNativeStudentEvaluationScores, formatScore, OBSERVATION_SELECT } from '../../../services/scoring';
+import { obtenerCalificacionDocente } from '../../../services/calificaciones';
 import { OBSERVATION_INSTRUMENT_DEFINITIONS, OBSERVATION_STORAGE_SECTIONS, getObservationQuestion, isObservationInstrumentVersion, type ObservationInstrumentVersion } from '../../../lib/observationDefinitions';
 
 const COORD_SECTION_DEFS = [
@@ -331,32 +332,51 @@ const autoRecords = autoRows.map((row) => ({
   comments: row.comentarios || null,
 }));
 
-const currentScores = await fetchCuatrimestreScores(cl, docenteId, cuatrimestreId);
-const currentFinal = calcFinalScore(currentScores, docente.modalidad);
+const currentCal = cuatrimestreId ? await obtenerCalificacionDocente(cl, docenteId, cuatrimestreId) : null;
+const currentScores = {
+  ee: currentCal?.score_encuesta_estudiantil ?? null,
+  coord: currentCal?.score_coordinacion ?? null,
+  plan: currentCal?.score_planeacion ?? null,
+  obs: currentCal?.score_observacion ?? null,
+  auto: currentCal?.score_autoevaluacion ?? null,
+};
+const currentFinal = {
+  final: currentCal?.calificacion_final ?? 0,
+  category: currentCal?.categoria_final ?? 'No iniciado',
+  instrumentCount: currentCal?.num_instrumentos_completados ?? 0,
+  expectedInstrumentCount: currentCal?.num_instrumentos_esperados ?? 0,
+};
+
+const { data: historialData, error: historialError } = await cl
+  .from('calificaciones_finales')
+  .select('*')
+  .eq('docente_id', docenteId)
+  .order('cuatrimestre_id', { ascending: true });
+if (historialError) throw historialError;
 
 const historial: { clave: string; final: number; cat: string; inst: number; expected: number; ee: number | null; coord?: number; plan?: number; obs?: number; auto?: number }[] = [];
 let sumFinals = 0;
 let bestCycle = { clave: '', final: 0 };
 
-for (const ciclo of cuatrimestres) {
-  const scores = await fetchCuatrimestreScores(cl, docenteId, ciclo.id);
-  const fin = calcFinalScore(scores, docente.modalidad);
-  if (fin.instrumentCount > 0) {
-    historial.push({
-      clave: ciclo.clave,
-      final: fin.final,
-      cat: fin.category,
-      inst: fin.instrumentCount,
-      expected: fin.expectedInstrumentCount,
-      ee: scores.ee ?? null,
-      coord: scores.coord,
-      plan: scores.plan,
-      obs: scores.obs,
-      auto: scores.auto,
-    });
-    sumFinals += fin.final;
-    if (fin.final > bestCycle.final) bestCycle = { clave: ciclo.clave, final: fin.final };
-  }
+for (const row of (historialData || [])) {
+  const instCount = Number(row.num_instrumentos_completados || 0);
+  if (instCount === 0) continue;
+  const ciclo = cuatrimestres.find((c) => c.id === row.cuatrimestre_id);
+  const final = Number(row.calificacion_final);
+  historial.push({
+    clave: ciclo?.clave || '',
+    final,
+    cat: String(row.categoria_final ?? 'No iniciado'),
+    inst: instCount,
+    expected: Number(row.num_instrumentos_esperados || 0),
+    ee: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
+    coord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
+    plan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
+    obs: row.score_observacion != null ? Number(row.score_observacion) : null,
+    auto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
+  });
+  sumFinals += final;
+  if (final > bestCycle.final) bestCycle = { clave: ciclo?.clave || '', final };
 }
 
 const cyclesEvaluated = historial.length;

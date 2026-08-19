@@ -2,7 +2,8 @@
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { db } from '../../lib/db';
-import { aggregateNativeScoresByTeacher, fetchNativeStudentEvaluationScores, calcFinalScore, formatScore } from '../../services/scoring';
+import { obtenerCalificacionDocente } from '../../services/calificaciones';
+import { formatScore } from '../../services/scoring';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -30,16 +31,14 @@ let docenteEmail = usuario?.email || '';
 
 // Buscar todos los docentes que corresponden a este usuario (por entidad_id, email, y nombre)
 let docenteIdsSet = new Set<number>();
-let docenteModalidad = 'Escolarizado';
 if (docenteId) {
   docenteIdsSet.add(docenteId);
   // Obtener nombre del docente vinculado para buscar coincidencias por nombre
-  const { data: miDoc } = await cl.from('docentes').select('nombre,apellidos,modalidad').eq('id', docenteId).maybeSingle();
+  const { data: miDoc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteId).maybeSingle();
   if (miDoc?.nombre && miDoc?.apellidos) {
     const { data: mismosNombres } = await cl.from('docentes').select('id').eq('nombre', miDoc.nombre).eq('apellidos', miDoc.apellidos);
     (mismosNombres||[]).forEach(d => docenteIdsSet.add(d.id));
   }
-  docenteModalidad = miDoc?.modalidad || docenteModalidad;
 }
 if (docenteEmail) {
   const { data: docsMatch } = await cl.from('docentes').select('id').eq('email', docenteEmail);
@@ -47,7 +46,24 @@ if (docenteEmail) {
 }
 const docenteIds: number[] = [...docenteIdsSet];
 
+// Calificación final precalculada para el docente principal y el ciclo activo.
+const docenteIdParaScore = docenteId || docenteIds[0] || null;
+const calificacionFinal = docenteIdParaScore
+  ? await obtenerCalificacionDocente(cl, docenteIdParaScore, cuatrimestreId)
+  : null;
+
 let scores = { promEst: undefined as number | undefined, promCoord: undefined as number | undefined, promPlan: undefined as number | undefined, promObs: undefined as number | undefined, promAuto: undefined as number | undefined, final360: null as number|null, cat360: 'No iniciado', instrumentos: 0, instrumentosEsperados: 5 };
+if (calificacionFinal) {
+  scores.promEst = calificacionFinal.score_encuesta_estudiantil ?? undefined;
+  scores.promCoord = calificacionFinal.score_coordinacion ?? undefined;
+  scores.promPlan = calificacionFinal.score_planeacion ?? undefined;
+  scores.promObs = calificacionFinal.score_observacion ?? undefined;
+  scores.promAuto = calificacionFinal.score_autoevaluacion ?? undefined;
+  scores.final360 = calificacionFinal.calificacion_final;
+  scores.cat360 = calificacionFinal.categoria_final;
+  scores.instrumentos = calificacionFinal.num_instrumentos_completados;
+  scores.instrumentosEsperados = calificacionFinal.num_instrumentos_esperados;
+}
 let nombreDocente = '';
 let diagInfo: any = null;
 let coordInfo: any = null;
@@ -95,21 +111,17 @@ const coordSecciones: Section[] = [
 const secCoordMap: Record<string, string[]> = {};
 (preguntasCoord||[]).forEach(p=>{const s=p.seccion||'';if(!secCoordMap[s])secCoordMap[s]=[];secCoordMap[s].push(p.texto);});
 coordSecciones.forEach(s=>{s.items = secCoordMap[s.keys[0].replace(/[0-9]/g,'').toUpperCase()] || s.items;});
-const eeCategorias = ['Asistencia','Organización','Actitud','Enseñanza','Dominio','Evaluación','Comunicación','Gestión','Tecnología','Satisfacción'];
-const eeCatKeys = ['prom_asistencia','prom_organizacion','prom_actitud','prom_ensenanza','prom_dominio','prom_evaluacion','prom_comunicacion','prom_gestion','prom_tecnologia','prom_satisfaccion'];
 const planeacionScoreMap: Record<string, string> = { '2': 'Satisfactorio', '1': 'Suficiente', '0': 'Insuficiente', na: 'No aplica' };
 
 if (docenteIds.length > 0) {
   const { data: doc } = await cl.from('docentes').select('nombre,apellidos').eq('id', docenteIds[0]).maybeSingle();
   if (doc) nombreDocente = `${doc.nombre.toUpperCase()} ${doc.apellidos.toUpperCase()}`;
 
-  const [nativeScoreRows, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, { data: matData }] = await Promise.all([
-    fetchNativeStudentEvaluationScores(cl, cuatrimestreId),
+  const [{ data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] = await Promise.all([
     cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
     cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado').order('fecha_subida', { ascending: false }),
     cl.from('observaciones').select('id,docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId),
     cl.from('autodiagnosticos').select('*').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
-    cl.from('grupos').select('asignatura_id').in('docente_id', docenteIds),
   ]);
 
   // Feedback
@@ -142,32 +154,6 @@ if (docenteIds.length > 0) {
     }
   }
 
-  scores.promEst = aggregateNativeScoresByTeacher(nativeScoreRows).get(docenteId || docenteIds[0]);
-
-  // Coord
-  scores.promCoord = coordData?.[0]?.score_normalizado != null ? Number(coordData[0].score_normalizado) : undefined;
-
-  // Plan promedio
-  const planScores = (planData||[]).map(p=>p.puntaje_promedio).filter((v): v is number => v != null);
-  scores.promPlan = planScores.length ? planScores.reduce((a,b)=>a+b,0)/planScores.length : undefined;
-
-  // Obs promedio
-  const obsScores: number[] = [];
-  for (const o of (obsData||[])) {
-    const r = [o.cco1,o.cco2,o.cco3,o.cco4,o.cco5,o.cco6,o.cco7,o.cme1,o.cme2,o.cme3,o.cme4,o.cme5,o.cme6,o.cme7,o.cme8,o.cme9,o.ccom1,o.ccom2,o.ccom3,o.ccom4,o.cso1,o.cso2,o.cso3,o.cso4,o.cge1,o.cge2,o.cge3,o.cge4,o.cge5,o.cge6,o.cge7,o.caf1,o.caf2,o.ctepe1,o.ctepe2,o.ctepe3,o.ctepe4,o.ctepe5,o.ctepe6,o.ctepe7,o.cno1,o.cno2,o.cno3,o.cno4,o.cno5].filter(v=>v);
-    obsScores.push(r.length ? Math.round((r.reduce((a,b)=>a+b,0)/(r.length*5))*100) : 0);
-  }
-  scores.promObs = obsScores.length ? obsScores.reduce((a,b)=>a+b,0)/obsScores.length : undefined;
-
-  // Auto
-  scores.promAuto = diagData?.[0]?.puntaje_total != null ? (Number(diagData[0].puntaje_total)/120)*100 : undefined;
-
-  // Final 360
-  const fin = calcFinalScore({ ee: scores.promEst, coord: scores.promCoord, plan: scores.promPlan, obs: scores.promObs, auto: scores.promAuto }, docenteModalidad);
-  scores.final360 = fin.instrumentCount > 0 ? fin.final : null;
-  scores.instrumentos = fin.instrumentCount;
-  scores.instrumentosEsperados = fin.expectedInstrumentCount;
-  scores.cat360 = fin.category;
 }
 
 function fmt(n:number|null|undefined):string{return formatScore(n);}

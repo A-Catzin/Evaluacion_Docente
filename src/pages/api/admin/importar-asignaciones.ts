@@ -5,6 +5,7 @@ import {
   json,
   saveImportIssues,
 } from "../../../lib/adminImport";
+import { recalcularCalificacionesCuatrimestre } from "../../../services/calificaciones";
 import {
   chunks,
   findColumn,
@@ -576,15 +577,32 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       .from("import_runs")
       .update({ filas_leidas: records.length - 1 })
       .eq("id", run.id);
-    // TODO(Paso 2 mejora futura): después de importar asignaciones se podría
-    // recalcular en batch las calificaciones finales de los docentes afectados
-    // usando recalcularCalificacionDocente() desde src/services/calificaciones.
     await finishImportRun(client, run.id, summary);
+
+    let recalculo: { recalculados: number; errores: number } | undefined;
+    try {
+      recalculo = await recalcularCalificacionesCuatrimestre(client, cycleId, {
+        refrescarAgregados: true,
+        soloDocentesConInstrumentos: false,
+      });
+      console.log(
+        `[Importar asignaciones] Recálculo completado para ciclo ${cycleId}:`,
+        recalculo,
+      );
+    } catch (error) {
+      console.error(
+        `[Importar asignaciones] Error durante recálculo de calificaciones:`,
+        error,
+      );
+      recalculo = { recalculados: 0, errores: 1 };
+    }
+
     return json({
       success: true,
       runId: run.id,
       cycle: { id: cycle.id, clave: cycle.clave },
       ...summary,
+      recalculo,
       reportUrl: `/api/admin/import-report?run_id=${run.id}`,
     });
   } catch (error) {
