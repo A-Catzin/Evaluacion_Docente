@@ -3,6 +3,7 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerCuatrimestres } from '../../services/catalogos';
 
 const cuatrimestres = await obtenerCuatrimestres();
+const cycleLabel = (cycle: { clave: string; nombre: string | null }) => cycle.nombre ? `${cycle.clave} - ${cycle.nombre}` : cycle.clave;
 ---
 
 <LayoutAdmin titulo="Cuatrimestres — Admin">
@@ -19,9 +20,13 @@ const cuatrimestres = await obtenerCuatrimestres();
       </form>
     </div>
 
+    <div class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+      <strong>Ciclos de prueba:</strong> sólo un superadmin puede marcar un ciclo cerrado o inactivo como prueba. Esa marca habilita el borrado permanente de sus datos operativos, no de los eventos de auditoría. Para cada acción se debe escribir la etiqueta exacta del ciclo.
+    </div>
+
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       <table class="w-full text-sm">
-        <thead><tr class="bg-slate-50 border-b"><th class="text-center px-3 py-3 text-xs uppercase">Clave</th><th class="text-center px-3 py-3 text-xs uppercase">Nombre</th><th class="text-center px-3 py-3 text-xs uppercase">Inicio</th><th class="text-center px-3 py-3 text-xs uppercase">Fin</th><th class="text-center px-3 py-3 text-xs uppercase">Estado</th><th class="text-center px-3 py-3 text-xs uppercase">Acciones</th></tr></thead>
+        <thead><tr class="bg-slate-50 border-b"><th class="text-center px-3 py-3 text-xs uppercase">Clave</th><th class="text-center px-3 py-3 text-xs uppercase">Nombre</th><th class="text-center px-3 py-3 text-xs uppercase">Inicio</th><th class="text-center px-3 py-3 text-xs uppercase">Fin</th><th class="text-center px-3 py-3 text-xs uppercase">Estado</th><th class="text-center px-3 py-3 text-xs uppercase">Prueba</th><th class="text-center px-3 py-3 text-xs uppercase">Acciones</th></tr></thead>
         <tbody class="divide-y">
           {cuatrimestres.map(c => (
             <tr class="hover:bg-slate-50">
@@ -48,6 +53,13 @@ const cuatrimestres = await obtenerCuatrimestres();
                 )}
               </td>
               <td class="px-3 py-3 text-center">
+                {c.es_prueba ? (
+                  <span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-red-100 text-red-700">Prueba</span>
+                ) : (
+                  <span class="text-xs text-slate-400">No</span>
+                )}
+              </td>
+              <td class="px-3 py-3 text-center">
                 <div class="flex items-center justify-center gap-1 flex-wrap">
                   {!c.cerrado && !c.activo && (
                     <button class="btn-activar px-2 py-0.5 rounded-lg text-[10px] font-medium bg-emerald-50 text-emerald-600 hover:bg-emerald-100" data-id={c.id}>Activar</button>
@@ -58,12 +70,17 @@ const cuatrimestres = await obtenerCuatrimestres();
                   <button class="btn-editar text-[10px] text-tup hover:underline" data-id={c.id}>Editar</button>
                   <button class="btn-guardar text-[10px] text-emerald-600 hover:underline hidden" data-id={c.id}>Guardar</button>
                   <a href={`/api/admin/reporte-cuatrimestre?cuatrimestre_id=${c.id}`} class="text-[10px] text-blue-600 hover:underline">📊 Reporte</a>
-                  <button class="btn-eliminar text-[10px] text-red-500 hover:underline" data-id={c.id}>Eliminar</button>
+                  {!c.activo && !c.es_prueba && (
+                    <button class="btn-marcar-prueba text-[10px] text-amber-700 hover:underline" data-id={c.id} data-label={cycleLabel(c)}>Marcar como prueba</button>
+                  )}
+                  {c.es_prueba && !c.activo && (
+                    <button class="btn-eliminar-prueba text-[10px] font-medium text-red-700 hover:underline" data-id={c.id} data-label={cycleLabel(c)}>Eliminar ciclo de prueba</button>
+                  )}
                 </div>
               </td>
             </tr>
           ))}
-          {cuatrimestres.length === 0 && <tr><td colspan="6" class="text-center py-12 text-slate-400">No hay cuatrimestres.</td></tr>}
+          {cuatrimestres.length === 0 && <tr><td colspan="7" class="text-center py-12 text-slate-400">No hay cuatrimestres.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -93,10 +110,24 @@ const cuatrimestres = await obtenerCuatrimestres();
     if(res.ok){toast('Cerrado',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
   })});
 
-  document.querySelectorAll('.btn-eliminar').forEach(function(b){b.addEventListener('click',async function(){
-    if(!confirm('¿Eliminar este cuatrimestre?'))return;
-    var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',id:parseInt(this.dataset.id)})});
-    if(res.ok){toast('Eliminado',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
+  document.querySelectorAll('.btn-marcar-prueba').forEach(function(b){b.addEventListener('click',async function(){
+    var label=this.dataset.label;var confirmation=prompt('Esto habilita el borrado permanente de datos operativos de prueba.\n\nEscribe exactamente:\n'+label);
+    if(confirmation===null)return;
+    var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'mark_test',id:parseInt(this.dataset.id),confirmation:confirmation})});
+    if(res.ok){toast('Ciclo marcado como prueba',false);setTimeout(function(){location.reload()},500)}else{var d=await res.json();toast(d.error||'Error',true)}
+  })});
+
+  document.querySelectorAll('.btn-eliminar-prueba').forEach(function(b){b.addEventListener('click',async function(){
+    var id=parseInt(this.dataset.id),label=this.dataset.label;
+    var preview=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'test_delete_preview',id:id})});
+    var data=await preview.json();
+    if(!preview.ok){toast(data.error||'No fue posible preparar la eliminación',true);return}
+    var counts=data.summary&&data.summary.counts||{};var deletionLabels={calificacion_final_docente:'Calificaciones finales heredadas'};var lines=Object.keys(counts).filter(function(k){return counts[k]>0}).map(function(k){return (deletionLabels[k]||k)+': '+counts[k]}).join('\n')||'No hay filas operativas.';
+    var confirmation=prompt('ELIMINACIÓN PERMANENTE DE CICLO DE PRUEBA\n\nSe eliminarán datos operativos:\n'+lines+'\n\nLos eventos de auditoría se conservan como evidencia mínima.\n\nEscribe exactamente:\n'+label);
+    if(confirmation===null)return;
+    var res=await fetch('/api/admin/cuatrimestres',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete_test',id:id,confirmation:confirmation})});
+    var result=await res.json();
+    if(res.ok){var pending=result.storage_cleanup&&result.storage_cleanup.pending||0;toast(pending?'Ciclo eliminado; quedan '+pending+' archivos por limpiar':'Ciclo de prueba eliminado',pending>0,5000);setTimeout(function(){location.reload()},900)}else{toast(result.error||'Error',true)}
   })});
 
   document.querySelectorAll('.btn-editar').forEach(function(b){b.addEventListener('click',function(){

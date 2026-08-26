@@ -45,7 +45,7 @@ src/
 ├── services/            # Lógica de negocio: autodiagnostico, calificaciones, catalogos, docentes, estudiantes, instrumentos, notificaciones, observaciones, planeaciones, scoring, usuarios
 └── types/               # Tipos TypeScript (supabase.ts)
 supabase/
-└── migrations/          # Línea base y migraciones 030–040; 036–040 versionadas en repo (el resto se ignora por contener datos sensibles)
+└── migrations/          # Línea base y migraciones 030–048; 036–048 de esquema versionadas en repo
 ```
 
 ## Comandos
@@ -69,8 +69,9 @@ El directorio `supabase/migrations/` contiene migraciones de schema versionadas.
 - `038_calificaciones_finales_y_snapshot.sql`
 - `039_upsert_calificacion_final_security_definer.sql`
 - `040_audit_and_logical_restore_points.sql`
+- `041_audit_visibility_planning_history.sql` hasta `048_complete_test_cycle_fk_deletion.sql`
 
-Las migraciones que incluyen datos sensibles o de entornos específicos están ignoradas en `.gitignore` y no deben versionarse.
+Las migraciones de esquema son parte del contrato de despliegue y deben versionarse. Las que incluyan datos sensibles o de entornos específicos continúan ignoradas en `.gitignore`.
 
 ## Scores y reportes
 

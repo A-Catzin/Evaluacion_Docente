@@ -201,6 +201,26 @@ const COLOR_ROL: Record<string, string> = {
   docente: 'bg-emerald-50 text-emerald-700', estudiante: 'bg-cyan-50 text-cyan-700', observador: 'bg-amber-50 text-amber-700', pendiente: 'bg-orange-50 text-orange-700'
 };
 
+// Última importación de docentes
+const { data: ultimoRunDocentes } = await cliente
+  .from('import_runs')
+  .select('id,resumen,archivo_nombre,created_at,finished_at,estado')
+  .eq('tipo', 'docentes')
+  .eq('estado', 'completed')
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+const ultimoRunResumen = (ultimoRunDocentes?.resumen ?? {}) as Record<string, unknown>;
+const runLabels: Record<string, string> = {
+  rowsRead: 'Filas leídas',
+  matched: 'Coincidentes',
+  created: 'Creados',
+  updated: 'Actualizados',
+  skipped: 'Omitidos',
+  issues: 'Incidencias',
+};
+
 // Conteos
 const { count: totalDocs } = await cliente.from('docentes').select('*', { count: 'exact', head: true }).eq('activo', true);
 const { count: totalCoord } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'coordinador');
@@ -242,9 +262,38 @@ function buildPageUrl(p:number) {
           </a>
         ))}
       </div>
-    )}
+        )}
 
-    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
+        {ultimoRunDocentes && (
+          <div class="bg-white rounded-2xl p-5 shadow-tarjeta mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <div>
+                <p class="text-xs text-slate-400 uppercase tracking-wide">Última importación de docentes</p>
+                <p class="text-sm font-medium text-slate-700 mt-0.5">
+                  {ultimoRunDocentes.archivo_nombre || 'Archivo sin nombre'} · Run #{ultimoRunDocentes.id}
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <a href={`/admin/importar/reporte?run_id=${ultimoRunDocentes.id}`} class="inline-flex items-center rounded-xl bg-tup/10 text-tup px-3 py-2 text-xs font-semibold hover:bg-tup/20">
+                  Ver reporte
+                </a>
+                <a href={`/api/admin/import-report-pdf?run_id=${ultimoRunDocentes.id}`} class="inline-flex items-center rounded-xl border border-slate-200 text-slate-600 px-3 py-2 text-xs font-semibold hover:border-tup hover:text-tup">
+                  Descargar PDF
+                </a>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {Object.entries(ultimoRunResumen).map(([key, value]) => (
+                <div class="rounded-xl bg-slate-50 p-3">
+                  <p class="text-[11px] text-slate-500">{runLabels[key] || key}</p>
+                  <p class="text-xl font-bold text-slate-800 mt-1">{String(value)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex flex-wrap gap-3 items-center">
         {cuatrimestreId > 0 && <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />}
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 min-w-[200px] rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-tup" />

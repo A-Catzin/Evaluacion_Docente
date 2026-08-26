@@ -31,6 +31,7 @@ interface MockScenario {
  */
 function createMockSupabaseClient(scenarios: MockScenario[] = []): any {
   let callIndex = 0;
+  const gteColumns: string[] = [];
 
   function nextScenario(): MockScenario {
     const scenario = scenarios[callIndex] ?? {};
@@ -62,6 +63,13 @@ function createMockSupabaseClient(scenarios: MockScenario[] = []): any {
           };
         }
 
+        if (prop === "gte") {
+          return (column: string) => {
+            gteColumns.push(column);
+            return chain;
+          };
+        }
+
         return () => chain;
       },
     },
@@ -69,6 +77,7 @@ function createMockSupabaseClient(scenarios: MockScenario[] = []): any {
 
   return {
     from: () => chain,
+    gteColumns,
   };
 }
 
@@ -166,6 +175,22 @@ describe("rateLimit", () => {
       expect(resultado.permitido).toBe(false);
       expect(resultado.razon).toContain("Demasiados envíos recientes");
       expect(resultado.enviosRecientes).toBe(10);
+    });
+
+    it("usa fecha_envio como el timestamp canónico de los controles", async () => {
+      const client = createMockSupabaseClient([
+        { maybeSingle: null },
+        { count: 0 },
+        { count: 0 },
+      ]);
+
+      await verificarLimiteEnviosEstudiante(client, {
+        estudianteId: 1,
+        grupoId: 10,
+        cuatrimestreId: 100,
+      });
+
+      expect(client.gteColumns).toEqual(["fecha_envio"]);
     });
 
     it("rechaza cuando se supera el límite por ciclo", async () => {

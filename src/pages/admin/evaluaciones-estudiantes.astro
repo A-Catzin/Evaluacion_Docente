@@ -2,6 +2,17 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { requireRole } from '../../lib/auth';
 
+interface AuditCompletionSummaryRow {
+  docente_id: number;
+  docente_nombre: string;
+  asignatura_id: number;
+  asignatura_nombre: string;
+  grupo_id: number;
+  grupo_clave: string;
+  completed_count: number;
+  latest_completed_at: string | null;
+}
+
 const auth = await requireRole(Astro.cookies, ['superadmin']);
 const { data: cycles, error: cyclesError } = await auth.client
   .from('cuatrimestres')
@@ -21,8 +32,10 @@ const { data, error } = cuatrimestreId
   ? await auth.client.rpc('audit_completion_summary', { p_cuatrimestre_id: cuatrimestreId })
   : { data: [], error: null };
 if (error) throw error;
-const rows = data || [];
-const formatDate = (value: string) => new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+const rows = (data || []) as AuditCompletionSummaryRow[];
+const formatDate = (value: string | null) => value
+  ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  : 'Sin fecha registrada';
 ---
 
 <LayoutAdmin titulo="Entregas estudiantiles — Admin">
@@ -46,7 +59,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('es-MX', { dateSty
         <table class="w-full min-w-[760px] text-sm">
           <thead><tr class="border-b bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><th class="px-4 py-3">Docente</th><th class="px-4 py-3">Asignatura</th><th class="px-4 py-3">Grupo</th><th class="px-4 py-3 text-right">Entregas completadas</th><th class="px-4 py-3">Última entrega</th></tr></thead>
           <tbody class="divide-y divide-slate-100">
-            {rows.map((row: any) => <tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">{row.docente_nombre}</td><td class="px-4 py-3 text-slate-700">{row.asignatura_nombre}</td><td class="px-4 py-3 text-slate-700">{row.grupo_clave}</td><td class="px-4 py-3 text-right font-semibold text-tup">{row.completed_count}</td><td class="px-4 py-3 text-slate-600">{formatDate(row.latest_completed_at)}</td></tr>)}
+            {rows.map((row) => <tr class="hover:bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">{row.docente_nombre}</td><td class="px-4 py-3 text-slate-700">{row.asignatura_nombre}</td><td class="px-4 py-3 text-slate-700">{row.grupo_clave}</td><td class="px-4 py-3 text-right font-semibold text-tup">{row.completed_count}</td><td class="px-4 py-3 text-slate-600">{formatDate(row.latest_completed_at)}</td></tr>)}
           </tbody>
         </table>
       </div>

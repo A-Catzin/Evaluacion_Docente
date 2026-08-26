@@ -122,7 +122,7 @@ export async function verificarLimiteEnviosEstudiante(
       .from("encuesta_control_envio")
       .select("*", { count: "exact", head: true })
       .eq("estudiante_id", estudianteId)
-      .gte("created_at", since);
+      .gte("fecha_envio", since);
 
     if (windowError) {
       console.error("[rateLimit] error contando envíos recientes", windowError);

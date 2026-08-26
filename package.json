@@ -24,6 +24,7 @@
     "@supabase/supabase-js": "^2.105.3",
     "astro": "^4.16.18",
     "chart.js": "^4.5.1",
+    "pdfmake": "^0.3.11",
     "tailwindcss": "^3.4.17",
     "vercel": "^59.5.0",
     "ws": "^8.20.0",

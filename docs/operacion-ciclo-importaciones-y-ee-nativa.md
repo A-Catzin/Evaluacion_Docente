@@ -29,12 +29,82 @@ Este runbook es la referencia operativa del estado implementado. Permite prepara
 | 041 | Visibilidad agregada y envíos de planeación | Administración consulta entregas estudiantiles agrupadas; planeaciones conserva el primer y último envío del docente. Requiere 040 antes de aplicarse. |
 | 042 | Avisos institucionales | Avisos separados de las notificaciones personales, con alcance por rol/ciclo, RPCs y auditoría segura explícita. Requiere 040 antes de aplicarse. |
 | 043 | Escala nativa uniforme 1–5 | Elimina de forma destructiva los datos nativos heredados de prueba, aplica restricciones 1–5 y usa `native-19-v2`. |
+| 044 | Corrección de timestamp de entregas | Usa `fecha_envio` en el resumen administrativo de entregas. |
+| 045 | Corrección de tipos del resumen | Declara y convierte explícitamente los tipos devueltos por la RPC del resumen. |
+| 046 | Borrado duro seguro de ciclos de prueba | Añade `es_prueba`, vista previa, confirmación exacta validada en servidor, eliminación transaccional explícita y limpieza diferida de almacenamiento. Requiere 040–045. |
+| 047 | Diagnóstico seguro de borrado de prueba | Conserva los controles de 046 y devuelve códigos distintos para ciclo activo, sin marca, confirmación incorrecta y guardia de dependencias. Requiere 046. |
+| 048 | Clausura FK completa de borrado de prueba | Incluye `calificacion_final_docente` heredada, conserva el borrado explícito hijo-padre y restringe la lista aprobada al inventario FK vivo. Requiere 046–047. |
+| 049 | Borrado de prueba escalable con auditoría resumida | Agrega el índice de cadena de auditoría y suprime sólo eventos de fila dentro de la transacción validada de `delete_test_cycle`; conserva un resumen seguro al confirmar. Requiere 040 y 046–048. |
 
 Después de aplicar en un ambiente una migración que agregue o cambie RPC, recargue la caché de esquema de PostgREST:
 
 ```sql
 NOTIFY pgrst, 'reload schema';
 ```
+
+## Eliminar un ciclo de prueba
+
+El borrado duro no es una acción normal de administración. Sólo existe para datos de prueba y es permanente: elimina el ciclo y sus filas operativas asociadas. No hay restauración desde la aplicación.
+
+### Condiciones obligatorias
+
+1. Aplique las migraciones en orden, incluido `049_optimize_test_cycle_delete_audit.sql`. Nunca edite las migraciones ya aplicadas para incorporar este comportamiento.
+2. Inicie sesión como `superadmin` y cierre o desactive el ciclo. Un ciclo activo no se puede marcar ni eliminar como prueba.
+3. En `/admin/cuatrimestres`, use **Marcar como prueba** y escriba exactamente la etiqueta mostrada, por ejemplo `26-1 - Pruebas`.
+4. Use **Eliminar ciclo de prueba**, revise los conteos previos y escriba de nuevo esa misma etiqueta. La coincidencia se compara dentro de la RPC con la identidad actual guardada en la base; el cuadro de diálogo del navegador no autoriza por sí solo.
+
+### Dependencias revisadas
+
+`049` conserva el borrado explícito de `048`; no usa `ON DELETE CASCADE`. Antes de borrar, recorre las FK reales de `pg_constraint` desde `cuatrimestres`. Si aparece una relación que no está en la lista revisada o cuya condición de alcance no está definida, la transacción falla sin cambios.
+
+| Alcance | Filas operativas eliminadas cuando pertenecen al ciclo |
+| --- | --- |
+| Grupos y matrícula | `grupos`, `inscripciones`, `coordinador_docentes`, `import_runs`, `import_issues` |
+| Evaluación estudiantil | `encuesta_control_envio`, `encuesta_estudiantil_respuestas`, `encuesta_estudiantil` heredada |
+| Instrumentos y capturas | `evaluacion_coordinacion`, `evaluacion_planeacion`, `observacion_clase`, `autoevaluacion_docente`, `planeaciones`, `observaciones`, `autodiagnosticos` |
+| Resultados y comunicación | `docente_360_feedback`, `docente_modalidad_historica`, `calificacion_final_docente` heredada, `calificaciones_finales`, `institutional_notices` |
+| Auditoría y recuperación | `audit_events`, `change_sets` y `restore_points` se conservan. `change_sets.cuatrimestre_id` no es FK y `restore_points`/`audit_events` dependen de `change_sets`, no del ciclo. |
+
+Los catálogos compartidos (`docentes`, `estudiantes`, `asignaturas`, `instrumento_preguntas`, ofertas y usuarios) no se eliminan: pueden pertenecer a otros ciclos. La eliminación de las inscripciones, controles y respuestas del ciclo elimina los datos estudiantiles operativos de prueba sin borrar identidades reutilizables.
+
+### Auditoría y almacenamiento
+
+Antes de eliminar filas, la RPC escribe un único resumen seguro `test_cycle.deleted`: contiene ID y etiqueta del ciclo, conteos por tabla y que la auditoría fue retenida. No incluye respuestas, comentarios, identidades de estudiantes, correos ni rutas de archivo. `049` omite los eventos de fila sólo mientras borra el alcance validado de ese ciclo: usa un contexto privado de la transacción, vinculado al superadmin y al backend, que se elimina antes de retornar y expira al terminar la transacción. Los eventos append-only existentes tampoco se eliminan ni se modifican; esa retención es la evidencia mínima de que hubo una eliminación permanente.
+
+Los PDF de `planeaciones` y las imágenes de `institutional_notices` se registran como tareas de limpieza dentro de la misma transacción. El endpoint elimina únicamente referencias que coinciden exactamente con el prefijo R2 o Supabase Storage configurado. Si el proveedor falla o una URL no puede verificarse como propia, la base ya fue eliminada pero la tarea queda con estado pendiente o fallido para limpieza manual; no se borran objetos de rutas externas o ambiguas. Un superadmin puede reintentar sin exponer las rutas mediante `POST /api/admin/cuatrimestres` con `{"action":"retry_test_storage_cleanup","id":<id_del_ciclo_eliminado>}`.
+
+### Verificación funcional
+
+1. Cree un ciclo de prueba inactivo con grupos, una inscripción, una evaluación y, si corresponde, una planeación o aviso.
+2. Intente eliminarlo sin marcarlo: debe fallar. Intente marcarlo mientras está activo: debe fallar.
+3. Márquelo como prueba con una confirmación distinta: debe fallar. Repita con la etiqueta exacta: debe mostrarse como `Prueba`.
+4. Abra la eliminación: los conteos deben corresponder al ciclo elegido e incluir `Calificaciones finales heredadas` cuando exista `calificacion_final_docente`. Una confirmación distinta debe fallar aunque el cliente la envíe manualmente.
+5. Confirme con la etiqueta exacta y compruebe que el ciclo, grupos, matrícula, respuestas, instrumentos, resultados y filas heredadas del ciclo ya no existen.
+6. En `/admin/trazabilidad`, compruebe que permanece el evento seguro de resumen y que no se borraron eventos ni conjuntos de cambio previos.
+7. Revise `test_cycle_storage_cleanup` sólo mediante las RPC de superadmin si el endpoint informó archivos pendientes; resuelva los fallos sin asumir que una URL externa pertenece al bucket.
+
+### Diagnóstico de errores de eliminación
+
+La respuesta JSON de `POST /api/admin/cuatrimestres` conserva un mensaje seguro para la interfaz y un código estable para soporte. No muestra detalles de relaciones, datos operativos ni rutas de archivos.
+
+| Código | Acción segura |
+| --- | --- |
+| `test_cycle_active` | Cierre o desactive el ciclo y vuelva a cargar la página. |
+| `test_cycle_unmarked` | Márquelo como prueba usando la etiqueta exacta antes de intentar eliminarlo. |
+| `test_cycle_confirmation_mismatch` | Copie la etiqueta actual mostrada por la UI, incluidos espacios y nombre. |
+| `test_cycle_rpc_missing` | Aplique las migraciones pendientes, en especial 046–049, y recargue la caché de PostgREST. |
+| `test_cycle_dependency_guard` | No reintente ni elimine manualmente. Revise la clausura de FK y agregue una migración explícita para cualquier dependencia nueva. |
+| `test_cycle_retryable` (`503`) | Espere y reintente una sola vez. Un timeout, bloqueo temporal o conflicto de serialización revierte toda la transacción: no hubo eliminación parcial ni resumen durable. |
+| `test_cycle_failed` | Revise los logs protegidos del servidor con el momento de la solicitud; la transacción no debe haber eliminado parcialmente el ciclo. |
+
+### Despliegue compatible
+
+1. Verifique en el historial de migraciones del proyecto Supabase que 040–048 estén registradas. Si falta alguna, detenga el despliegue y reconcilie las migraciones en orden; no publique la UI contra una base sin esas RPC.
+2. Aplique solamente `049_optimize_test_cycle_delete_audit.sql` en la base de destino. No aplique 043 sin confirmar que su limpieza destructiva ya fue autorizada y ejecutada.
+3. Confirme que existe `idx_audit_events_integrity_order` sobre `(occurred_at DESC, event_id DESC)`, que `delete_test_cycle(integer,text)` fue reemplazada y que `NOTIFY pgrst, 'reload schema'` se ejecutó.
+4. Despliegue el código de aplicación que devuelve `test_cycle_retryable` con `503`. La base debe actualizarse antes o junto con la UI, nunca después.
+5. Como superadmin, abra el preview del ciclo grande restante, registre sus conteos y confirme la etiqueta exacta una sola vez. Si devuelve `503`, espere y vuelva a abrir el preview antes de reintentar; no ejecute `DELETE` manual ni aumente el timeout.
+6. Tras éxito, confirme que el ciclo y sus filas con alcance ya no existen, que `/admin/trazabilidad` contiene exactamente un nuevo `test_cycle.deleted` con el mismo ID y conteos, y que las tareas de `test_cycle_storage_cleanup` quedan visibles para procesar. Verifique que no se añadieron eventos por fila de ese borrado.
 
 ## Importar un ciclo
 
@@ -167,11 +237,12 @@ El botón **Descargar CSV para Excel** en `/admin/resultados-docentes` llama al 
 
 La importación Saeko ya no es un flujo operativo. `POST /api/admin/importar-saeko` responde `410 Gone` con el código `SAEKO_IMPORT_RETIRED`.
 
-`encuesta_estudiantil` se conserva como archivo de auditoría accesible sólo para superadmin. No debe eliminarse ni utilizarse para puntuación, progreso, reportes o pantallas activas.
+`encuesta_estudiantil` se conserva como archivo histórico accesible sólo para superadmin. No debe eliminarse ni utilizarse para puntuación, progreso, reportes o pantallas activas, excepto durante el borrado explícito de un ciclo inactivo marcado como prueba.
 
 ## Checklist de despliegue
 
 - [ ] Migraciones 030–040 aplicadas en el ambiente objetivo y registradas por el proceso de despliegue.
+- [ ] Migraciones 041–049 aplicadas y versionadas junto con el código que las consume.
 - [ ] Caché de esquema recargada después de nuevas RPC.
 - [ ] Ciclo seleccionado antes de cada importación.
 - [ ] Reportes e incidencias de importación revisados.

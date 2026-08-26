@@ -14,7 +14,10 @@ import {
   normalizeText,
   parseCsv,
 } from "../../../lib/importCsv";
-import { startImportAudit, type ImportAudit } from "../../../lib/auditChangeSet";
+import {
+  startImportAudit,
+  type ImportAudit,
+} from "../../../lib/auditChangeSet";
 
 type Issue = Record<string, unknown>;
 
@@ -77,7 +80,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return json({ error: "Archivo CSV requerido" }, 400);
     if (file.size > 25 * 1024 * 1024)
       return json({ error: "El archivo no debe superar 25 MB" }, 400);
-    audit = await startImportAudit({ client, source: "admin.import.docentes", file });
+    audit = await startImportAudit({
+      client,
+      source: "admin.import.docentes",
+      file,
+    });
 
     const { data: run, error: runError } = await client
       .from("import_runs")
@@ -119,7 +126,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const headers = records[0];
     const columns = {
-      fullName: findColumn(headers, "NOMBRE COMPLETO", "DOCENTE"),
+      fullName: findColumn(
+        headers,
+        "NOMBRE COMPLETO",
+        "DOCENTE",
+        "NOMBRE COMPLETO DOCENTE",
+      ),
       nombre: findColumn(headers, "NOMBRE"),
       apellidoPaterno: findColumn(
         headers,
@@ -131,7 +143,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         "APELLIDO MATERNO",
         "SEGUNDO APELLIDO",
       ),
-      email: findColumn(headers, "CORREO", "EMAIL", "CORREO INSTITUCIONAL"),
+      email: findColumn(
+        headers,
+        "CORREO",
+        "EMAIL",
+        "CORREO INSTITUCIONAL",
+        "CORREO ELECTRÓNICO",
+      ),
       employee: findColumn(
         headers,
         "NUM EMPLEADO",
@@ -156,7 +174,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         { rowsRead: records.length - 1, issues: 1, contractError: true },
         "completed",
       );
-      await audit.fail("contrato_invalido", { rowsRead: records.length - 1, issues: 1 });
+      await audit.fail("contrato_invalido", {
+        rowsRead: records.length - 1,
+        issues: 1,
+      });
       return json(
         {
           error:
@@ -187,7 +208,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         { rowsRead: records.length - 1, issues: 1, contractError: true },
         "completed",
       );
-      await audit.fail("contrato_invalido", { rowsRead: records.length - 1, issues: 1 });
+      await audit.fail("contrato_invalido", {
+        rowsRead: records.length - 1,
+        issues: 1,
+      });
       return json(
         {
           error:
@@ -412,7 +436,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       success: true,
       runId: run.id,
       ...summary,
-      traceability: { changeSetId: audit.changeSetId, restorePointId: audit.restorePointId },
+      traceability: {
+        changeSetId: audit.changeSetId,
+        restorePointId: audit.restorePointId,
+      },
       reportUrl: `/api/admin/import-report?run_id=${run.id}`,
     });
   } catch (error) {
@@ -421,7 +448,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       try {
         await audit.fail("error_interno_importacion");
       } catch (auditError) {
-        console.error("[Importar docentes] no se pudo cerrar la trazabilidad", auditError);
+        console.error(
+          "[Importar docentes] no se pudo cerrar la trazabilidad",
+          auditError,
+        );
       }
     }
     return json(

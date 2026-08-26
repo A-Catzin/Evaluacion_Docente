@@ -34,6 +34,7 @@ export interface Cuatrimestre {
   fecha_fin: string;
   activo: boolean;
   cerrado: boolean;
+  es_prueba: boolean;
 }
 
 export interface Licenciatura {

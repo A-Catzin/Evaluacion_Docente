@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 let _clienteR2: S3Client | null = null;
@@ -76,6 +76,12 @@ export async function obtenerUrlFirmada(
     new GetObjectCommand({ Bucket: bucketName, Key: key }),
     { expiresIn }
   );
+}
+
+export async function eliminarArchivo(bucket: string, key: string): Promise<void> {
+  const cliente = obtenerClienteR2();
+  const bucketName = import.meta.env.R2_BUCKET as string | undefined || bucket;
+  await cliente.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
 }
 
 function extraerRutaDesdeUrl(url: string): string | null {

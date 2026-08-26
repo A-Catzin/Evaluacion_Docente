@@ -37,6 +37,15 @@ supabase/migrations/*
 !supabase/migrations/038_calificaciones_finales_y_snapshot.sql
 !supabase/migrations/039_upsert_calificacion_final_security_definer.sql
 !supabase/migrations/040_audit_and_logical_restore_points.sql
+!supabase/migrations/041_audit_visibility_planning_history.sql
+!supabase/migrations/042_institutional_notices.sql
+!supabase/migrations/043_native_student_scale_1_to_5.sql
+!supabase/migrations/044_fix_audit_completion_timestamp.sql
+!supabase/migrations/045_fix_audit_completion_summary_return_types.sql
+!supabase/migrations/046_safe_test_cycle_hard_delete.sql
+!supabase/migrations/047_test_cycle_delete_diagnostics.sql
+!supabase/migrations/049_optimize_test_cycle_delete_audit.sql
+
 openspec/
 src/supabase/
 .atl/
