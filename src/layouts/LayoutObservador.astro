@@ -23,6 +23,8 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
         <a href={`/observador/dashboard${qs}`} class="font-semibold text-tup text-sm sm:text-base">SED-360 · Observador {cuatrimestreSel && <span class="text-[10px] bg-tup text-white px-2 py-0.5 rounded-full ml-1">{cuatrimestreSel}</span>}</a>
         <nav class="hidden sm:flex gap-1">
           <a href={`/observador/dashboard${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Dashboard</a>
+           <a href="/observador/mi-actividad" class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mi actividad</a>
+           <a href={`/avisos${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Avisos</a>
         </nav>
       </div>
       <div class="flex items-center gap-3">
@@ -31,6 +33,8 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
     </header>
     <nav id="nav-menu" class="sm:hidden hidden bg-white border-b border-slate-200 px-4 py-2 space-y-1">
       <a href={`/observador/dashboard${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📊 Dashboard</a>
+       <a href="/observador/mi-actividad" class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">🧾 Mi actividad</a>
+       <a href={`/avisos${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📢 Avisos</a>
     </nav>
     <main class="p-4 sm:p-6 max-w-5xl mx-auto"><slot /></main>
   </div>

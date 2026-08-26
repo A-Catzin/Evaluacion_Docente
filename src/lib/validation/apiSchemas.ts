@@ -12,17 +12,9 @@ const REACTIVOS_ESTUDIANTE_COUNT = 19;
 
 export const EstudianteEvaluacionSchema = z.object({
   grupo_id: z.number().int().positive("grupo_id debe ser un entero positivo"),
-  respuestas: z.array(z.number().int()).refine(
-    (arr) =>
-      arr.length === REACTIVOS_ESTUDIANTE_COUNT &&
-      arr.every((answer, index) => {
-        const max = index === 0 ? 6 : 4;
-        return answer >= 1 && answer <= max;
-      }),
-    {
-      message:
-        "respuestas debe tener 19 enteros; la primera entre 1 y 6 y el resto entre 1 y 4",
-    },
+  respuestas: z.array(z.number().int().min(1).max(5)).length(
+    REACTIVOS_ESTUDIANTE_COUNT,
+    "respuestas debe tener 19 enteros entre 1 y 5",
   ),
   comentario: z.string().max(MAX_COMENTARIO_LONGITUD).optional().nullable(),
 });

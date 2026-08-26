@@ -14,6 +14,7 @@ import {
   normalizeText,
   parseCsv,
 } from "../../../lib/importCsv";
+import { startImportAudit, type ImportAudit } from "../../../lib/auditChangeSet";
 
 type Issue = Record<string, unknown>;
 
@@ -67,6 +68,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const auth = await authorizeSuperadmin(cookies);
   if (auth.error) return auth.error;
   const client = auth.client;
+  let audit: ImportAudit | null = null;
 
   try {
     const formData = await request.formData();
@@ -75,6 +77,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return json({ error: "Archivo CSV requerido" }, 400);
     if (file.size > 25 * 1024 * 1024)
       return json({ error: "El archivo no debe superar 25 MB" }, 400);
+    audit = await startImportAudit({ client, source: "admin.import.docentes", file });
 
     const { data: run, error: runError } = await client
       .from("import_runs")
@@ -85,13 +88,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       })
       .select("id")
       .single();
-    if (runError || !run)
+    if (runError || !run) {
+      await audit.fail("inicio_importacion_fallido");
       return json(
         {
           error: `No se pudo iniciar la importación: ${runError?.message || "sin identificador"}`,
         },
         500,
       );
+    }
 
     const records = parseCsv((await file.text()).replace(/^\uFEFF/, ""));
     const issues: Issue[] = [];
@@ -105,6 +110,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         { rowsRead: 0, issues: 1 },
         "completed",
       );
+      await audit.fail("archivo_vacio", { rowsRead: 0, issues: 1 });
       return json(
         { error: "CSV vacío o sin filas de datos", runId: run.id },
         400,
@@ -150,6 +156,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         { rowsRead: records.length - 1, issues: 1, contractError: true },
         "completed",
       );
+      await audit.fail("contrato_invalido", { rowsRead: records.length - 1, issues: 1 });
       return json(
         {
           error:
@@ -180,6 +187,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         { rowsRead: records.length - 1, issues: 1, contractError: true },
         "completed",
       );
+      await audit.fail("contrato_invalido", { rowsRead: records.length - 1, issues: 1 });
       return json(
         {
           error:
@@ -399,14 +407,23 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     // Cuando un docente importado reciba asignaciones, el endpoint
     // importar-asignaciones recalculará su calificación en batch.
     await finishImportRun(client, run.id, summary);
+    await audit.complete({ ...summary, import_run_id: run.id });
     return json({
       success: true,
       runId: run.id,
       ...summary,
+      traceability: { changeSetId: audit.changeSetId, restorePointId: audit.restorePointId },
       reportUrl: `/api/admin/import-report?run_id=${run.id}`,
     });
   } catch (error) {
     console.error("[Importar docentes]", error);
+    if (audit) {
+      try {
+        await audit.fail("error_interno_importacion");
+      } catch (auditError) {
+        console.error("[Importar docentes] no se pudo cerrar la trazabilidad", auditError);
+      }
+    }
     return json(
       {
         error:

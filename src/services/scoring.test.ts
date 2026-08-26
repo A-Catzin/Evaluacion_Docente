@@ -165,8 +165,8 @@ describe('scoring', () => {
   describe('aggregateNativeScoresByTeacher', () => {
     it('promedia ponderado por cantidad de respuestas válidas', () => {
       const rows: NativeStudentEvaluationScore[] = [
-        { docente_id: 1, asignatura_id: 10, grupo_id: 100, cuatrimestre_id: 1, respuestas_validas: 10, score_normalizado: 80, version_calculo: 'native-19-v1' },
-        { docente_id: 1, asignatura_id: 11, grupo_id: 101, cuatrimestre_id: 1, respuestas_validas: 20, score_normalizado: 90, version_calculo: 'native-19-v1' },
+        { docente_id: 1, asignatura_id: 10, grupo_id: 100, cuatrimestre_id: 1, respuestas_validas: 10, score_normalizado: 80, version_calculo: 'native-19-v2' },
+        { docente_id: 1, asignatura_id: 11, grupo_id: 101, cuatrimestre_id: 1, respuestas_validas: 20, score_normalizado: 90, version_calculo: 'native-19-v2' },
       ];
       const map = aggregateNativeScoresByTeacher(rows);
       expect(map.get(1)).toBe((10 * 80 + 20 * 90) / 30);
@@ -174,7 +174,7 @@ describe('scoring', () => {
 
     it('ignora respuestas inválidas', () => {
       const rows: NativeStudentEvaluationScore[] = [
-        { docente_id: 2, asignatura_id: 10, grupo_id: 100, cuatrimestre_id: 1, respuestas_validas: 0, score_normalizado: 80, version_calculo: 'native-19-v1' },
+        { docente_id: 2, asignatura_id: 10, grupo_id: 100, cuatrimestre_id: 1, respuestas_validas: 0, score_normalizado: 80, version_calculo: 'native-19-v2' },
       ];
       expect(aggregateNativeScoresByTeacher(rows).has(2)).toBe(false);
     });
@@ -183,9 +183,9 @@ describe('scoring', () => {
   describe('aggregateNativeScoresByTeacherAndSubject', () => {
     it('agrupa por docente y asignatura', () => {
       const rows: NativeStudentEvaluationScore[] = [
-        { docente_id: 1, asignatura_id: 10, grupo_id: 100, cuatrimestre_id: 1, respuestas_validas: 5, score_normalizado: 80, version_calculo: 'native-19-v1' },
-        { docente_id: 1, asignatura_id: 10, grupo_id: 101, cuatrimestre_id: 1, respuestas_validas: 15, score_normalizado: 90, version_calculo: 'native-19-v1' },
-        { docente_id: 1, asignatura_id: 11, grupo_id: 102, cuatrimestre_id: 1, respuestas_validas: 10, score_normalizado: 70, version_calculo: 'native-19-v1' },
+        { docente_id: 1, asignatura_id: 10, grupo_id: 100, cuatrimestre_id: 1, respuestas_validas: 5, score_normalizado: 80, version_calculo: 'native-19-v2' },
+        { docente_id: 1, asignatura_id: 10, grupo_id: 101, cuatrimestre_id: 1, respuestas_validas: 15, score_normalizado: 90, version_calculo: 'native-19-v2' },
+        { docente_id: 1, asignatura_id: 11, grupo_id: 102, cuatrimestre_id: 1, respuestas_validas: 10, score_normalizado: 70, version_calculo: 'native-19-v2' },
       ];
       const map = aggregateNativeScoresByTeacherAndSubject(rows);
       expect(map.get(1)?.get(10)).toBe((5 * 80 + 15 * 90) / 20);

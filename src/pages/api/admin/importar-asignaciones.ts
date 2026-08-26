@@ -15,6 +15,7 @@ import {
 } from "../../../lib/importCsv";
 import { ImportFormSchema } from "../../../lib/validation/apiSchemas";
 import { formatZodFieldErrors } from "../../../lib/validation/errors";
+import { startImportAudit, type ImportAudit } from "../../../lib/auditChangeSet";
 
 type ClassRow = {
   row: number;
@@ -71,6 +72,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const auth = await authorizeSuperadmin(cookies);
   if (auth.error) return auth.error;
   const client = auth.client;
+  let audit: ImportAudit | null = null;
 
   try {
     const formData = await request.formData();
@@ -97,6 +99,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       .eq("id", cycleId)
       .maybeSingle();
     if (!cycle) return json({ error: "El ciclo seleccionado no existe" }, 400);
+    audit = await startImportAudit({
+      client,
+      source: "admin.import.asignaciones",
+      cycleId,
+      file,
+    });
     const { data: run, error: runError } = await client
       .from("import_runs")
       .insert({
@@ -107,13 +115,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       })
       .select("id")
       .single();
-    if (runError || !run)
+    if (runError || !run) {
+      await audit.fail("inicio_importacion_fallido");
       return json(
         {
           error: `No se pudo iniciar la importación: ${runError?.message || "sin identificador"}`,
         },
         500,
       );
+    }
 
     const records = parseCsv((await file.text()).replace(/^\uFEFF/, ""));
     if (records.length < 2) {
@@ -128,6 +138,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       };
       await saveImportIssues(client, run.id, [finding]);
       await finishImportRun(client, run.id, { rowsRead: 0, issues: 1 });
+      await audit.fail("archivo_vacio", { rowsRead: 0, issues: 1, import_run_id: run.id });
       return json(
         { error: "CSV vacío o sin filas de datos", runId: run.id, issues: 1 },
         400,
@@ -179,6 +190,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         issues: 1,
         contractError: true,
       });
+      await audit.fail("contrato_invalido", { rowsRead: records.length - 1, issues: 1, import_run_id: run.id });
       return json(
         {
           error:
@@ -597,16 +609,26 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       recalculo = { recalculados: 0, errores: 1 };
     }
 
+    await audit.complete({ ...summary, import_run_id: run.id, recalculo });
+
     return json({
       success: true,
       runId: run.id,
       cycle: { id: cycle.id, clave: cycle.clave },
       ...summary,
       recalculo,
+      traceability: { changeSetId: audit.changeSetId, restorePointId: audit.restorePointId },
       reportUrl: `/api/admin/import-report?run_id=${run.id}`,
     });
   } catch (error) {
     console.error("[Importar asignaciones]", error);
+    if (audit) {
+      try {
+        await audit.fail("error_interno_importacion");
+      } catch (auditError) {
+        console.error("[Importar asignaciones] no se pudo cerrar la trazabilidad", auditError);
+      }
+    }
     return json(
       {
         error:

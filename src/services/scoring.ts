@@ -86,7 +86,7 @@ export interface NativeStudentEvaluationScore {
   grupo_id: number;
   respuestas_validas: number;
   score_normalizado: number;
-  version_calculo: 'native-19-v1';
+  version_calculo: 'native-19-v2';
 }
 
 export async function fetchNativeStudentEvaluationScores(
@@ -102,7 +102,7 @@ export async function fetchNativeStudentEvaluationScores(
     ...row,
     respuestas_validas: Number(row.respuestas_validas),
     score_normalizado: Number(row.score_normalizado),
-    version_calculo: 'native-19-v1',
+    version_calculo: 'native-19-v2',
   }));
 }
 

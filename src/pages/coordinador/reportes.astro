@@ -3,6 +3,7 @@ import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { formatScore } from '../../services/scoring';
+import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 
 const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -34,54 +35,43 @@ if (modo === 'individual') {
   const asigIds = new Set((asigs || []).map(a => a.docente_id));
   const ids = [...asigIds];
 
-  // Scores ya calculados; usamos la vista materializada para listados grandes.
-  const { data: aggData, error: aggError } = ids.length
-    ? await cliente
-        .from('resultados_agregados')
-        .select('*')
-        .eq('cuatrimestre_id', cuatrimestreId)
-        .in('docente_id', ids)
-    : { data: [], error: null };
-  if (aggError) throw aggError;
-
-  const { data: annualData, error: annualError } = ids.length
-    ? await cliente
-        .from('resultados_agregados')
-        .select('docente_id,cuatrimestre_id,calificacion_final,num_instrumentos_completados')
-        .in('docente_id', ids)
-    : { data: [], error: null };
-  if (annualError) throw annualError;
+  // Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
+  const todasLasCalificaciones = ids.length
+    ? await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId)
+    : [];
 
   const anualMap = new Map<number, { sum: number; count: number }>();
-  for (const row of (annualData || [])) {
-    if (Number(row.num_instrumentos_completados || 0) > 0) {
-      const docId = Number(row.docente_id);
-      const acc = anualMap.get(docId) || { sum: 0, count: 0 };
-      acc.sum += Number(row.calificacion_final);
-      acc.count++;
-      anualMap.set(docId, acc);
+  for (const c of cuatrimestres) {
+    const cals = await obtenerCalificacionesPorCuatrimestre(cliente, c.id);
+    for (const row of cals) {
+      if (ids.includes(row.docente_id) && row.num_instrumentos_completados > 0) {
+        const acc = anualMap.get(row.docente_id) || { sum: 0, count: 0 };
+        acc.sum += row.calificacion_final;
+        acc.count++;
+        anualMap.set(row.docente_id, acc);
+      }
     }
   }
 
   individualData = {
-    docentes: (aggData || [])
-      .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
-      .map((row: any) => ({
-        id: Number(row.docente_id),
+    docentes: todasLasCalificaciones
+      .filter((row) => ids.includes(row.docente_id) && row.num_instrumentos_completados > 0)
+      .map((row) => ({
+        id: row.docente_id,
         nombre: String(row.docente_nombre ?? ''),
         apellidos: String(row.docente_apellidos ?? ''),
         email: String(row.docente_email ?? ''),
         modalidad: String(row.modalidad_snapshot ?? ''),
-        ee: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
-        coord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
-        plan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
-        obs: row.score_observacion != null ? Number(row.score_observacion) : null,
-        auto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
-        final: Number(row.calificacion_final),
+        ee: row.score_encuesta_estudiantil,
+        coord: row.score_coordinacion,
+        plan: row.score_planeacion,
+        obs: row.score_observacion,
+        auto: row.score_autoevaluacion,
+        final: row.calificacion_final,
         category: String(row.categoria_final ?? ''),
-        instrumentCount: Number(row.num_instrumentos_completados || 0),
+        instrumentCount: row.num_instrumentos_completados,
       }))
-      .sort((a: any, b: any) => a.apellidos.localeCompare(b.apellidos)),
+      .sort((a, b) => a.apellidos.localeCompare(b.apellidos)),
     anualMap,
   };
 }
@@ -101,35 +91,26 @@ if (modo === 'general') {
       : { data: [] };
     const allDocIds = [...new Set((asigs || []).map(a => a.docente_id))];
 
-    // Scores ya calculados; usamos la vista materializada para listados grandes.
-    const { data: aggData, error: aggError } = allDocIds.length
-      ? await cliente
-          .from('resultados_agregados')
-          .select('*')
-          .in('docente_id', allDocIds)
-          .in('cuatrimestre_id', cicloIds)
-      : { data: [], error: null };
-    if (aggError) throw aggError;
-
+    // Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
     const docenteMap = new Map<number, any>();
-    for (const row of (aggData || [])) {
-      const id = Number(row.docente_id);
-      if (!docenteMap.has(id)) {
-        docenteMap.set(id, {
-          id,
-          nombre: String(row.docente_nombre ?? ''),
-          apellidos: String(row.docente_apellidos ?? ''),
-          email: String(row.docente_email ?? ''),
-          campus: String(row.docente_campus ?? ''),
-          modalidad: String(row.modalidad_snapshot ?? ''),
-          puntajes: {},
-        });
+    for (const cid of cicloIds) {
+      const cals = await obtenerCalificacionesPorCuatrimestre(cliente, cid);
+      for (const row of cals) {
+        if (!allDocIds.includes(row.docente_id)) continue;
+        if (!docenteMap.has(row.docente_id)) {
+          docenteMap.set(row.docente_id, {
+            id: row.docente_id,
+            nombre: String(row.docente_nombre ?? ''),
+            apellidos: String(row.docente_apellidos ?? ''),
+            email: String(row.docente_email ?? ''),
+            campus: String(row.docente_campus ?? ''),
+            modalidad: String(row.modalidad_snapshot ?? ''),
+            puntajes: {},
+          });
+        }
+        const doc = docenteMap.get(row.docente_id)!;
+        doc.puntajes[cid] = row.num_instrumentos_completados > 0 ? row.calificacion_final : null;
       }
-      const doc = docenteMap.get(id)!;
-      const cid = Number(row.cuatrimestre_id);
-      doc.puntajes[cid] = Number(row.num_instrumentos_completados || 0) > 0
-        ? Number(row.calificacion_final)
-        : null;
     }
 
     generalData = {

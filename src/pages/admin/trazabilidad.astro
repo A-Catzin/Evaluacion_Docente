@@ -1,0 +1,125 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../lib/auth';
+
+type TraceEvent = {
+  event_id: string;
+  occurred_at: string;
+  actor_id: string | null;
+  actor_role: string | null;
+  actor_visibility: 'identified' | 'protected';
+  source: string;
+  action: string;
+  table_name: string | null;
+  operation: string;
+  change_set_id: string | null;
+  change_set_status: string | null;
+  cuatrimestre_id: number | null;
+  restore_point_id: string | null;
+  restore_status: string | null;
+  restore_content_hash: string | null;
+  restore_execution_available: boolean | null;
+  summary_safe: {
+    cuatrimestre_id?: number;
+    grupo_id?: number;
+  };
+};
+
+const params = Astro.url.searchParams;
+const isoDate = (value: string | null, end = false) => /^\d{4}-\d{2}-\d{2}$/.test(value || '')
+  ? `${value}${end ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`
+  : null;
+const uuid = (value: string | null) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '') ? value : null;
+const text = (name: string) => (params.get(name) || '').trim().slice(0, 120) || null;
+const cycleValue = Number.parseInt(params.get('cuatrimestre') || '', 10);
+const cuatrimestreId = Number.isSafeInteger(cycleValue) && cycleValue > 0 ? cycleValue : null;
+const filters = {
+  from: params.get('desde') || '',
+  to: params.get('hasta') || '',
+  actor: params.get('actor') || '',
+  operation: params.get('operacion') || '',
+  table: params.get('tabla') || '',
+  source: params.get('origen') || '',
+  changeSet: params.get('change_set') || '',
+  cycle: cuatrimestreId ? String(cuatrimestreId) : '',
+};
+
+let events: TraceEvent[] = [];
+let errorMessage = '';
+try {
+  const auth = await requireRole(Astro.cookies, ['superadmin']);
+  const { data, error } = await auth.client.rpc('audit_list_traceability', {
+    p_from: isoDate(filters.from),
+    p_to: isoDate(filters.to, true),
+    p_actor_id: uuid(filters.actor),
+    p_operation: text('operacion'),
+    p_table_name: text('tabla'),
+    p_source: text('origen'),
+    p_change_set_id: uuid(filters.changeSet),
+    p_cuatrimestre_id: cuatrimestreId,
+    p_limit: 100,
+  });
+  if (error) throw error;
+  events = (data || []) as TraceEvent[];
+} catch (error) {
+  errorMessage = error instanceof Error ? error.message : 'No se pudo consultar la trazabilidad.';
+}
+
+const shortId = (value: string | null) => value ? `${value.slice(0, 8)}…` : '—';
+const formatDate = (value: string) => new Intl.DateTimeFormat('es-MX', {
+  dateStyle: 'short', timeStyle: 'medium', timeZone: 'UTC',
+}).format(new Date(value));
+---
+
+<LayoutAdmin titulo="Trazabilidad y recuperación — Admin">
+  <div class="animate-flotar-entrada max-w-7xl mx-auto">
+    <div class="mb-6">
+      <p class="text-sm font-medium text-tup mb-2">Control administrativo</p>
+      <h1 class="text-3xl font-bold text-slate-800 mb-2">Trazabilidad y puntos de restauración</h1>
+      <p class="text-slate-500 max-w-4xl">Consulta eventos seguros y metadatos de cambios masivos. Los envíos de evaluación estudiantil se muestran como actividad protegida, sin identidad ni contenido de respuestas. La restauración no se ejecuta desde esta pantalla en la Fase 1.</p>
+    </div>
+
+    <div class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+      <p class="font-semibold">Límite deliberado de esta fase</p>
+      <p class="mt-1">No existe botón de deshacer. Una reversión futura requerirá validar dependencias y concurrencia, aprobación explícita y eventos compensatorios. Los respaldos PITR de Supabase son recuperación externa ante desastres, no una acción de este panel.</p>
+    </div>
+
+    <form method="GET" class="mb-6 grid gap-3 rounded-2xl bg-white p-4 shadow-tarjeta md:grid-cols-2 xl:grid-cols-4">
+      <label class="text-sm text-slate-600">Desde<input type="date" name="desde" value={filters.from} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label>
+      <label class="text-sm text-slate-600">Hasta<input type="date" name="hasta" value={filters.to} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label>
+      <label class="text-sm text-slate-600">Actor (UUID)<input name="actor" value={filters.actor} maxlength="36" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label>
+      <label class="text-sm text-slate-600">Operación<select name="operacion" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="">Todas</option><option value="insert" selected={filters.operation === 'insert'}>Insertar</option><option value="update" selected={filters.operation === 'update'}>Actualizar</option><option value="delete" selected={filters.operation === 'delete'}>Eliminar</option><option value="change_set" selected={filters.operation === 'change_set'}>Cambio masivo</option><option value="restore_point" selected={filters.operation === 'restore_point'}>Punto de restauración</option></select></label>
+      <label class="text-sm text-slate-600">Tabla<input name="tabla" value={filters.table} maxlength="120" placeholder="Ej. docentes" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label>
+      <label class="text-sm text-slate-600">Origen<input name="origen" value={filters.source} maxlength="120" placeholder="Ej. admin.import.alumnos" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label>
+      <label class="text-sm text-slate-600">Conjunto de cambios<input name="change_set" value={filters.changeSet} maxlength="36" placeholder="UUID" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label>
+      <label class="text-sm text-slate-600">Ciclo<input name="cuatrimestre" value={filters.cycle} inputmode="numeric" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label>
+      <div class="flex items-end gap-3 xl:col-span-4"><button type="submit" class="rounded-xl bg-tup px-4 py-2.5 text-sm font-medium text-white">Filtrar</button><a href="/admin/trazabilidad" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600">Limpiar</a><span class="text-sm text-slate-400">Máximo 100 eventos recientes.</span></div>
+    </form>
+
+    {errorMessage ? (
+      <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{errorMessage}</div>
+    ) : events.length === 0 ? (
+      <div class="rounded-2xl bg-white p-12 text-center text-slate-400 shadow-tarjeta">No hay eventos para los filtros seleccionados.</div>
+    ) : (
+      <div class="overflow-x-auto rounded-2xl bg-white shadow-tarjeta">
+        <table class="w-full min-w-[1050px] text-sm">
+          <thead><tr class="border-b bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><th class="px-4 py-3">Fecha UTC</th><th class="px-4 py-3">Actor</th><th class="px-4 py-3">Evento</th><th class="px-4 py-3">Tabla</th><th class="px-4 py-3">Origen</th><th class="px-4 py-3">Cambio masivo</th><th class="px-4 py-3">Punto lógico</th></tr></thead>
+          <tbody class="divide-y divide-slate-100">
+            {events.map((event) => (
+              <tr class="align-top hover:bg-slate-50">
+                <td class="whitespace-nowrap px-4 py-3 text-slate-600">{formatDate(event.occurred_at)}</td>
+                <td class="px-4 py-3">{event.actor_visibility === 'protected' ? <><span class="text-xs font-medium text-slate-600">Actor protegido</span><div class="mt-1 text-xs text-slate-400">Estudiante seudonimizado</div></> : <><code class="text-xs text-slate-600">{shortId(event.actor_id)}</code><div class="mt-1 text-xs text-slate-400">{event.actor_role || 'No disponible'}</div></>}</td>
+                <td class="px-4 py-3"><span class="font-medium text-slate-700">{event.action}</span><div class="mt-1 text-xs text-slate-400">{event.operation}</div>{event.summary_safe.cuatrimestre_id && <div class="mt-1 text-xs text-slate-400">Ciclo {event.summary_safe.cuatrimestre_id}{event.summary_safe.grupo_id ? ` · grupo ${event.summary_safe.grupo_id}` : ''}</div>}</td>
+                <td class="px-4 py-3 text-slate-600">{event.table_name || '—'}</td>
+                <td class="px-4 py-3"><code class="text-xs text-slate-600">{event.source}</code></td>
+                <td class="px-4 py-3"><code class="text-xs text-slate-600">{shortId(event.change_set_id)}</code><div class="mt-1 text-xs text-slate-400">{event.change_set_status || 'Evento directo'}{event.cuatrimestre_id ? ` · ciclo ${event.cuatrimestre_id}` : ''}</div></td>
+                <td class="px-4 py-3">{event.restore_point_id ? <><code class="text-xs text-slate-600">{shortId(event.restore_point_id)}</code><div class="mt-1 text-xs text-slate-400">{event.restore_status} · ejecución no disponible</div><div class="mt-1 font-mono text-[10px] text-slate-400">{event.restore_content_hash?.slice(0, 16)}…</div></> : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+    <p class="mt-4 text-xs text-slate-400">La tabla muestra metadatos seguros. No expone respuestas de encuestas, comentarios, credenciales, identificadores estudiantiles, UUID de actores estudiantes ni el contenido de los manifiestos.</p>
+  </div>
+</LayoutAdmin>

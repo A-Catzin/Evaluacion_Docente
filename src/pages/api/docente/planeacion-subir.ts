@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { db } from "../../../lib/db";
+import { AuthError, requireRole } from "../../../lib/auth";
 import { validarComentarioOpcional } from "../../../lib/moderation";
 import { estaHabilitadoR2, subirArchivo } from "../../../lib/storage";
 import {
@@ -10,26 +10,22 @@ import {
 const BUCKET_PLANEACIONES = "planeaciones";
 
 export const POST: APIRoute = async ({ request, cookies }) => {
-  const t = cookies.get("sb-access-token")?.value;
-  const r = cookies.get("sb-refresh-token")?.value;
-  if (!t || !r)
-    return new Response(JSON.stringify({ error: "No autorizado" }), {
-      status: 401,
-    });
+  let cl;
+  let userId: string;
   try {
-    const cl = db();
-    const { data: s } = await cl.auth.setSession({
-      access_token: t,
-      refresh_token: r,
-    });
-    if (!s.user)
-      return new Response(JSON.stringify({ error: "Sesión inválida" }), {
-        status: 401,
-      });
+    const auth = await requireRole(cookies, ["docente"]);
+    cl = auth.client;
+    userId = auth.user.id;
+  } catch (error) {
+    if (error instanceof AuthError) return error.response;
+    return new Response(JSON.stringify({ error: "Error interno" }), { status: 500 });
+  }
+
+  try {
     const { data: u } = await cl
       .from("usuarios")
       .select("entidad_id,rol")
-      .eq("id", s.user.id)
+      .eq("id", userId)
       .maybeSingle();
     if (!u || u.rol !== "docente" || !u.entidad_id)
       return new Response(JSON.stringify({ error: "Solo docentes" }), {

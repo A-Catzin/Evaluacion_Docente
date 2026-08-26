@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
 import { formatScoreCsv } from "../../../services/scoring";
 import {
-  rowToCalificacion,
+  obtenerCalificacionesPorCuatrimestre,
   type CalificacionFinal,
 } from "../../../services/calificaciones";
 
@@ -76,33 +76,18 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 
     const allDocIds = allDocs.map((d) => d.id);
 
-    const { data: califRows, error: califError } = await cl
-      .from("calificaciones_finales")
-      .select("*")
-      .in("docente_id", allDocIds)
-      .in("cuatrimestre_id", cicloIdsValid);
-
-    if (califError) {
-      console.error(
-        "[reporte-general-admin] Error al leer calificaciones_finales:",
-        califError,
-      );
-      return new Response(
-        JSON.stringify({ error: "Error al leer calificaciones" }),
-        { status: 500 },
-      );
-    }
-
     const califPorDocenteCiclo = new Map<
       number,
       Map<number, CalificacionFinal>
     >();
-    for (const row of (califRows || []) as Record<string, unknown>[]) {
-      const cal = rowToCalificacion(row);
-      if (!califPorDocenteCiclo.has(cal.docente_id)) {
-        califPorDocenteCiclo.set(cal.docente_id, new Map());
+    for (const cid of cicloIdsValid) {
+      const cals = await obtenerCalificacionesPorCuatrimestre(cl, cid);
+      for (const cal of cals) {
+        if (!califPorDocenteCiclo.has(cal.docente_id)) {
+          califPorDocenteCiclo.set(cal.docente_id, new Map());
+        }
+        califPorDocenteCiclo.get(cal.docente_id)!.set(cid, cal);
       }
-      califPorDocenteCiclo.get(cal.docente_id)!.set(cal.cuatrimestre_id, cal);
     }
 
     const resultDocentes = allDocs.flatMap((d) => {

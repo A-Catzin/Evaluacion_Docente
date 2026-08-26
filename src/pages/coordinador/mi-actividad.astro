@@ -1,0 +1,28 @@
+---
+import ActivityReceipts, { type ActivityReceipt } from '../../components/ActivityReceipts.astro';
+import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
+import { requireRole } from '../../lib/auth';
+
+const params = Astro.url.searchParams;
+const isoDate = (value: string | null, end = false) => /^\d{4}-\d{2}-\d{2}$/.test(value || '')
+  ? `${value}${end ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`
+  : null;
+const from = params.get('desde') || '';
+const to = params.get('hasta') || '';
+let events: ActivityReceipt[] = [];
+let errorMessage = '';
+try {
+  const auth = await requireRole(Astro.cookies, ['coordinador']);
+  const { data, error } = await auth.client.rpc('audit_list_my_activity', {
+    p_from: isoDate(from), p_to: isoDate(to, true), p_limit: 100,
+  });
+  if (error) throw error;
+  events = (data || []) as ActivityReceipt[];
+} catch (error) {
+  errorMessage = 'No se pudo consultar tu actividad. Intenta nuevamente más tarde.';
+}
+---
+
+<LayoutCoordinador titulo="Mi actividad — Coordinador">
+  <ActivityReceipts events={events} errorMessage={errorMessage} />
+</LayoutCoordinador>

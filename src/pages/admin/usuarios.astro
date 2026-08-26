@@ -3,6 +3,7 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { db } from '../../lib/db';
 import type { RolUsuario } from '../../types/supabase';
 import { obtenerCuatrimestreActivo } from '../../services/catalogos';
+import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 
 
 type FiltroRol = RolUsuario | 'estudiante';
@@ -127,17 +128,20 @@ try {
         const { data: usuarios, error } = await query.order('email');
         if (error) throw error;
 
-        // Precargar calificaciones finales de docentes para evitar N+1.
-        const docenteEntidadIds = (usuarios || [])
-          .filter((u: any) => u.rol === 'docente' && u.entidad_id)
-          .map((u: any) => Number(u.entidad_id));
-        const { data: calData } = await cliente
-          .from('calificaciones_finales')
-          .select('*')
-          .eq('cuatrimestre_id', cuatrimestreId)
-          .in('docente_id', docenteEntidadIds.length ? docenteEntidadIds : [-1]);
-        const calMap = new Map<number, any>();
-        for (const row of calData || []) calMap.set(Number(row.docente_id), row);
+            // Precargar calificaciones finales de docentes para evitar N+1.
+            const docenteEntidadIds = (usuarios || [])
+              .filter((u: any) => u.rol === 'docente' && u.entidad_id)
+              .map((u: any) => Number(u.entidad_id));
+            const entidadIdSet = new Set(docenteEntidadIds);
+            const calData = cuatrimestreId
+              ? await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId)
+              : [];
+            const calMap = new Map<number, any>();
+            for (const row of calData) {
+              if (entidadIdSet.has(row.docente_id)) {
+                calMap.set(row.docente_id, row);
+              }
+            }
     
         for (const u of (usuarios || [])) {
       const fila: FilaUsuario = { id: u.id, email: u.email, rol: u.rol, nombre: '', apellidos: '', rol_solicitado: u.rol_solicitado };

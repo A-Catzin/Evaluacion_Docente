@@ -1,0 +1,53 @@
+---
+export type ActivityReceipt = {
+  occurred_at: string;
+  action: string;
+};
+
+export interface Props {
+  events: ActivityReceipt[];
+  errorMessage?: string;
+}
+
+const { events, errorMessage = '' } = Astro.props;
+const formatDate = (value: string) => new Intl.DateTimeFormat('es-MX', {
+  dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Cancun',
+}).format(new Date(value));
+---
+
+<div class="animate-flotar-entrada max-w-4xl mx-auto">
+  <div class="mb-6">
+    <h1 class="text-3xl font-bold text-slate-800 mb-2">Mi actividad</h1>
+    <p class="text-slate-500">Consulta las actividades que has completado.</p>
+  </div>
+
+  {errorMessage ? (
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{errorMessage}</div>
+  ) : events.length === 0 ? (
+    <div class="rounded-2xl bg-white p-12 text-center shadow-tarjeta">
+      <p class="font-medium text-slate-700">Aún no tienes actividades registradas.</p>
+      <p class="mt-1 text-sm text-slate-400">Las actividades completadas aparecerán aquí.</p>
+    </div>
+  ) : (
+    <div class="overflow-x-auto rounded-2xl bg-white shadow-tarjeta">
+      <table class="w-full min-w-[560px] text-sm">
+        <thead>
+          <tr class="border-b bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <th class="px-5 py-3">Fecha</th>
+            <th class="px-5 py-3">Actividad</th>
+            <th class="px-5 py-3">Estado</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {events.map((event) => (
+            <tr class="hover:bg-slate-50">
+              <td class="whitespace-nowrap px-5 py-4 text-slate-600">{formatDate(event.occurred_at)}</td>
+              <td class="px-5 py-4 font-medium text-slate-700">{event.action}</td>
+              <td class="px-5 py-4"><span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">Completado</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>

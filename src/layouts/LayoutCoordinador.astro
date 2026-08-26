@@ -26,7 +26,9 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
           <a href={`/coordinador/captura/coordinacion${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Ev. Coordi.</a>
           <a href={`/coordinador/captura/observacion${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Observación</a>
           <a href={`/coordinador/planeaciones${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Planeaciones</a>
-          <a href={`/coordinador/reportes${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Reportes</a>
+           <a href={`/coordinador/reportes${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Reportes</a>
+           <a href={`/avisos${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Avisos</a>
+          <a href="/coordinador/mi-actividad" class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mi actividad</a>
         </nav>
       </div>
       <div class="flex items-center gap-3">
@@ -39,7 +41,9 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
       <a href={`/coordinador/captura/coordinacion${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📋 Ev. Coordinación</a>
       <a href={`/coordinador/captura/observacion${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">👁️ Observación</a>
       <a href={`/coordinador/planeaciones${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📄 Planeaciones</a>
-      <a href={`/coordinador/reportes${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📊 Reportes</a>
+       <a href={`/coordinador/reportes${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📊 Reportes</a>
+       <a href={`/avisos${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📢 Avisos</a>
+      <a href="/coordinador/mi-actividad" class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">🧾 Mi actividad</a>
     </nav>
     <main class="p-4 sm:p-6 max-w-7xl mx-auto"><slot /></main>
   </div>

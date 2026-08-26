@@ -7,20 +7,28 @@ Este runbook es la referencia operativa del estado implementado. Permite prepara
 1. Confirme que las migraciones 030–036 estén aplicadas en el ambiente correspondiente; que los archivos existan en el repositorio no confirma su aplicación en producción.
 2. Seleccione el ciclo en la aplicación.
 3. Importe docentes, el padrón completo de estudiantes y las asignaciones grupo-asignatura-docente, en ese orden.
-4. Revise los reportes de importación y `/admin/grupos-asignados` antes de abrir el ciclo a estudiantes.
-5. Compruebe el progreso agregado y la columna `Est.` de los docentes; no consulte respuestas ni comentarios individuales.
+4. Al finalizar la importación de asignaciones, el sistema recalcula automáticamente `calificaciones_finales` de los docentes afectados y refresca `resultados_agregados`.
+5. Revise los reportes de importación y `/admin/grupos-asignados` antes de abrir el ciclo a estudiantes.
+6. Compruebe el progreso agregado y la columna `Est.` de los docentes; no consulte respuestas ni comentarios individuales.
 
 ## Migraciones requeridas después de la línea base
 
 | Migración | Efecto | Verificación operativa |
-|---|---|---|
+| --- | --- | --- |
 | 030 | Identidad normalizada de grupos e inscripción única por estudiante, grupo y ciclo | El padrón del ciclo no duplica inscripciones y los grupos tienen identidad normalizada. |
 | 031 | Bitácora de importaciones, incidencias y normalización de docentes | Cada importación deja `import_runs` e `import_issues` revisables. |
 | 032 | Resolver de roles en autenticación | Una identidad de padrón activa y única recibe `docente` o `estudiante`. |
 | 033 | Trigger y retrocarga para usuarios pendientes | `usuarios` vincula el UUID de Auth con la identidad de padrón, sin poblarse desde el padrón. |
 | 034 | Consulta y envío nativo seguro de evaluación estudiantil | El estudiante sólo ve grupos asignados del ciclo activo y no puede reenviar. |
 | 035 | Progreso nativo agregado para personal | Administración y coordinación ven conteos, nunca respuestas, comentarios ni vínculo estudiante-respuesta. |
-| 036 | Puntaje nativo `native-19-v1` y retiro de Saeko | `Est.` se obtiene de respuestas nativas válidas; Saeko queda sólo para auditoría de superadmin. |
+| 036 | Puntaje nativo inicial y retiro de Saeko | Base histórica del puntaje nativo; la escala vigente queda definida por 043. |
+| 037 | Versión de instrumento en observaciones | Las observaciones de clase registran la versión del instrumento usado. |
+| 038 | Calificaciones finales precalculadas, snapshot de modalidad y vista materializada | Existen `calificaciones_finales`, `docente_modalidad_historica` y `resultados_agregados`; los dashboards leen de la vista materializada. |
+| 039 | RPC de scoring con `SECURITY DEFINER` | El recálculo puede persistir su resultado sin depender de una política RLS de la sesión que capturó el instrumento. |
+| 040 | Trazabilidad, manifiestos lógicos y recibos personales | Existen `audit_events`, `change_sets` y `restore_points`; los importadores compatibles crean un conjunto y manifiesto antes de mutar datos, cada envío nativo completado deja un evento protegido y el personal elegible consulta sólo sus propios recibos. |
+| 041 | Visibilidad agregada y envíos de planeación | Administración consulta entregas estudiantiles agrupadas; planeaciones conserva el primer y último envío del docente. Requiere 040 antes de aplicarse. |
+| 042 | Avisos institucionales | Avisos separados de las notificaciones personales, con alcance por rol/ciclo, RPCs y auditoría segura explícita. Requiere 040 antes de aplicarse. |
+| 043 | Escala nativa uniforme 1–5 | Elimina de forma destructiva los datos nativos heredados de prueba, aplica restricciones 1–5 y usa `native-19-v2`. |
 
 Después de aplicar en un ambiente una migración que agregue o cambie RPC, recargue la caché de esquema de PostgREST:
 
@@ -33,11 +41,15 @@ NOTIFY pgrst, 'reload schema';
 El ciclo se elige en la aplicación. Ningún CSV crea ni selecciona ciclos; su columna `CICLO`, si existe, sólo sirve para detectar diferencias o mezclas.
 
 | Orden | Importación | Resultado esperado |
-|---|---|---|
+| --- | --- | --- |
 | 1 | Docentes | Catálogo de docentes actualizado mediante correo o número de empleado estable. |
 | 2 | Padrón completo de estudiantes | Estudiantes e inscripciones del ciclo seleccionado; el CSV requiere `NOMBRE COMPLETO`. |
 | 3 | Asignaciones | Grupos, asignaturas y docentes conciliados de forma normalizada y segura. |
-| 4 | Revisión | Reportes de ejecución, incidencias y `/admin/grupos-asignados` sin pendientes críticos. |
+| 4 | Revisión | Reportes de ejecución, incidencias y `/admin/grupos-asignados` sin pendientes críticos. El sistema ya recalculó `calificaciones_finales` y refrescó `resultados_agregados`. |
+
+### Recálculo automático de calificaciones
+
+La importación de asignaciones ejecuta `recalcularCalificacionesCuatrimestre` al concluir, con `refrescarAgregados: true`. Esto genera o actualiza las filas de `calificaciones_finales` para los docentes con grupos en el ciclo y refresca `resultados_agregados`. Si el proceso reporta errores, revise los logs del endpoint y vuelva a ejecutar la importación o invoque manualmente el refresh (ver siguiente sección).
 
 ### Controles de conciliación
 
@@ -46,12 +58,59 @@ El ciclo se elige en la aplicación. Ningún CSV crea ni selecciona ciclos; su c
 - En `/admin/grupos-asignados`, revise las pestañas de asignados, incidencias de conciliación y grupos sin información de carga académica.
 - La asignación compara identidades normalizadas; no usa coincidencias difusas para vincular estudiantes, grupos, materias o docentes.
 
+## Trazabilidad y recuperación de Fase 1
+
+`/admin/trazabilidad` es de sólo lectura y está disponible únicamente para superadmin. Permite filtrar eventos seguros, conjuntos de cambios, envíos nativos protegidos y metadatos de los puntos lógicos creados antes de importar docentes, padrón de alumnos o asignaciones.
+
+El personal consulta sus propios recibos, también de sólo lectura, en `/docente/mi-actividad`, `/coordinador/mi-actividad` y `/observador/mi-actividad`. Cada recibo confirma que una acción fue registrada, no que una calificación o resultado posterior permanezca sin cambios. No hay reversiones disponibles en la Fase 1.
+
+| Concepto | Alcance en Fase 1 |
+| --- | --- |
+| Auditoría | `audit_events` es append-only y tiene cadena de integridad. Registra operación, origen, actor autenticado cuando la sesión lo provee, identidad segura del registro y campos seguros. Los UUID de actores estudiantes se conservan sólo en la tabla de auditoría y la RPC del panel los sustituye por `Actor protegido`. |
+| Recibos personales | `audit_list_my_activity` fija el actor en `auth.uid()` y valida el rol activo en `usuarios`; no acepta un actor como parámetro. Docente, coordinador y observador ven únicamente los eventos de captura definidos para su rol, con fecha UTC, acción, instrumento, metadatos seguros, rol, UUID del evento y hash de integridad. Superadmin conserva el panel global en lugar de una vista personal duplicada. |
+| Conjunto de cambios | `change_sets` registra el estado solicitado, en ejecución, completado o fallido de cada importación compatible. El hash y metadatos del archivo se guardan, no el archivo. Las importaciones ejecutadas con `service_role` se registran mediante este resumen y su punto lógico; no se presentan como correlación autenticada por fila. |
+| Punto lógico | `restore_points` guarda un manifiesto acotado y sanitizado con alcance, conteos y hashes criptográficos previos a la mutación. No almacena respuestas, comentarios ni copias completas de la base. `execution_available` permanece en `false`. |
+| Restauración | No hay botón de deshacer ni restauración automática. Cualquier reversión posterior debe verificar dependencias y concurrencia, tener aprobación explícita y crear eventos compensatorios. |
+| PITR | Point-in-time recovery de Supabase es recuperación externa ante desastre, depende del plan y no es una acción del dashboard. No se configuró ni ejecutó en esta fase. |
+
+Los objetos de Cloudflare R2 y Supabase Storage no se restauran con snapshots de la base. Requieren una estrategia separada de versionado, retención y prueba de recuperación antes de ofrecer una restauración completa.
+
+### Matriz de cobertura de actividad
+
+La cobertura se instala sólo sobre las tablas que existen al aplicar la migración. No reconstruye actividad histórica ni afirma cobertura universal de operaciones fuera de esta matriz.
+
+| Actividad | Tabla o mecanismo | Acciones auditadas | Datos visibles en el panel |
+| --- | --- | --- | --- |
+| Catálogos, usuarios, docentes, estudiantes, grupos, inscripciones y asignaciones | `docentes`, `estudiantes`, `grupos`, `inscripciones`, `asignaturas`, `cuatrimestres`, `ofertas_academicas`, `coordinador_docentes`, `usuarios` | Inserción, actualización y eliminación | Actor no estudiantil cuando exista, operación, identidad segura y campos operativos permitidos. |
+| Instrumentos y capturas de personal | `instrumento_preguntas`, `planeaciones`, `evaluacion_coordinacion`, `observaciones`, `autodiagnosticos`, `evaluacion_planeacion`, `observacion_clase`, `autoevaluacion_docente`, `calificaciones_finales` | Inserción, actualización y eliminación | Estado, relaciones y métricas operativas permitidas; no texto libre ni respuestas detalladas. |
+| Retroalimentación global | `docente_360_feedback` | Inserción y actualización | Presencia de feedback o áreas de mejora, docente, ciclo y fecha; nunca el texto. |
+| Notificaciones internas | `notificaciones` | Inserción y actualización de lectura | Tipo, fecha y estado de lectura; nunca título, mensaje, URL ni UUID de la persona destinataria. |
+| Importaciones compatibles | `change_sets` y `restore_points` | Solicitud, captura, finalización o falla | Resumen seguro, hash del archivo y manifiesto acotado. No es una bitácora con actor autenticado por fila si interviene `service_role`. |
+| Envío nativo de evaluación estudiantil | `encuesta_control_envio` mediante trigger especializado | Sólo inserción de un estudiante autenticado | `student_evaluation.submitted`, fecha/hora, ciclo, grupo y destino con hash. El panel muestra `Actor protegido`; nunca su UUID. |
+| Recibo docente | `autodiagnosticos` y `planeaciones` mediante trigger de fila | Envío de autodiagnóstico, entrega o reenvío de planeación | Sólo el docente actor recibe su propio comprobante; ciclo, grupo o asignatura sólo cuando el campo seguro existe. La evaluación posterior de la planeación no modifica este comprobante. |
+| Recibo de coordinación | `evaluacion_coordinacion`, `planeaciones` y `observaciones` mediante trigger de fila | Evaluación de coordinación, evaluación de planeación y observación enviada | Sólo el coordinador actor recibe su comprobante, con destino seguro mínimo. Los endpoints de captura usan un cliente de Supabase por solicitud con la sesión autenticada. |
+| Recibo de observación | `observaciones` mediante trigger de fila | Observación de clase enviada | Sólo el observador actor recibe su comprobante, con ciclo, grupo o docente únicamente cuando el evento los contiene como metadatos seguros. |
+| Feedback global | `docente_360_feedback` mediante trigger de fila | Alta o actualización del feedback | Se muestra en la trazabilidad global de superadmin. El formulario se guarda con la sesión autenticada del superadmin, no con `service_role`, para conservar la atribución. No crea un recibo personal duplicado. |
+
+### Límites de privacidad de la encuesta
+
+`encuesta_estudiantil_respuestas` queda excluida de los triggers de auditoría. No se registran valores de reactivos, comentario abierto, nombres, correos, matrícula, `estudiante_id` ni una relación directa entre un control de envío y una respuesta. El trigger especializado es diferido y se ejecuta al final de la transacción que crea el control de envío: el evento sólo es durable si el envío nativo confirma; si falla o se revierte, no queda evento de completado.
+
+La identidad del actor de un trigger procede exclusivamente de `auth.uid()` en la base de datos. La aplicación no puede proporcionar ni sustituir actor, origen o destino para estos eventos.
+
+### Exclusiones de los recibos personales
+
+- No exponen eventos de otros actores, aunque compartan ciclo, grupo o docente.
+- No incluyen actividad estudiantil ni eventos con semántica de actor protegido.
+- No incluyen comentarios privados, respuestas, identidad estudiantil, credenciales, rutas de archivos ni los payloads de auditoría antes/después.
+- No convierten operaciones históricas ejecutadas con `service_role` en actividad atribuida; sólo los resúmenes globales de importación permanecen disponibles para superadmin.
+
 ## Roles y resolución de identidad
 
 Los roles de aplicación son `superadmin`, `coordinador`, `docente`, `estudiante` y `observador`. `pendiente` es un estado de acceso no resuelto, no un sexto rol operativo.
 
 | Caso de inicio de sesión | Resultado |
-|---|---|
+| --- | --- |
 | Coincidencia exacta, única y activa sólo en `estudiantes` | `estudiante`, con `entidad_id` del estudiante. |
 | Coincidencia exacta, única y activa sólo en `docentes` | `docente`, con `entidad_id` del docente. |
 | Coincidencia explícita de personal | Conserva `superadmin`, `coordinador` u `observador`. |
@@ -64,23 +123,45 @@ Los roles de aplicación son `superadmin`, `coordinador`, `docente`, `estudiante
 El portal está disponible en `/estudiante/dashboard` y el formulario en `/estudiante/evaluar/[grupoId]`.
 
 | Regla | Contrato implementado |
-|---|---|
+| --- | --- |
 | Ventana | Sólo el ciclo activo. |
 | Elegibilidad | Inscripción exacta del estudiante en el grupo de asignación activo, con docente y asignatura. Una inscripción sólo en el grupo base no habilita evaluación. |
 | Envío | Máximo un envío completado por estudiante, grupo y ciclo. |
-| Reactivos | 19 obligatorios: `q1` de 1 a 6; `q2` a `q19` de 1 a 4. |
-| Comentario | Opcional, máximo 2000 caracteres. |
+| Reactivos | 19 obligatorios, todos enteros de 1 a 5. |
+| Comentario | Opcional, máximo 500 caracteres. |
 | Seguridad | El servidor y las RPC derivan estudiante, docente, asignatura y ciclo; el cliente no decide esas identidades. |
+| Trazabilidad | Al confirmar la transacción se audita el control de envío con fecha/hora, actor estudiante protegido, ciclo, grupo y destino con hash. No se auditan respuestas, comentario ni vínculo control-respuesta. |
 
 ## Puntaje y progreso
 
-`native-19-v1` es la única fuente de `Est.` en todos los ciclos. Cada respuesta válida se normaliza a 0–100: `q1` desde la escala 1–6 y `q2`–`q19` desde la escala 1–4. El puntaje del docente o materia es el promedio ponderado por cantidad de respuestas válidas.
+`native-19-v2` es la única fuente de `Est.` en todos los ciclos posteriores a 043. Cada uno de los 19 reactivos usa la misma escala 1–5 y se normaliza a 0–100. El puntaje del docente o materia es el promedio ponderado por cantidad de respuestas válidas.
 
 - El puntaje aparece desde la primera respuesta válida.
 - Sin respuesta nativa válida, `Est.` no está disponible y el avance es parcial; nunca se muestra como `0` ni se usa Saeko como respaldo.
 - Los resúmenes de docentes mantienen el avance de los cinco instrumentos estándar y muestran el puntaje nativo como `Est.`.
 - El progreso administrativo es agregado: inscripciones elegibles, controles enviados y respuestas nativas. Las respuestas, comentarios y enlaces a estudiantes no son datos de interfaz para personal.
 - En administración, `Ver` dirige a la ruta de detalle. El modal individual y el control de visibilidad anterior fueron retirados.
+- Los dashboards de admin y coordinador leen de `resultados_agregados`. Si la vista materializada está desactualizada, los scores no reflejarán la última captura hasta el próximo refresco. El recálculo por importación de asignaciones refresca la vista; las capturas individuales actualizan `calificaciones_finales` pero no la vista automáticamente.
+
+## Actualizar `resultados_agregados` manualmente
+
+Si se capturan evaluaciones individuales después de una importación y los dashboards no reflejan los cambios, el superadmin puede refrescar la vista materializada mediante el endpoint:
+
+```
+GET /api/admin/refrescar-resultados?periodo=<opcional>
+```
+
+El endpoint ejecuta `REFRESH MATERIALIZED VIEW` sobre `resultados_agregados` y redirige de vuelta al dashboard. Úsese cuando se requiera consistencia inmediata entre `calificaciones_finales` y los dashboards.
+
+## Backfill y datos de prueba
+
+La migración 043 elimina deliberadamente todas las filas de `encuesta_estudiantil_respuestas` y `encuesta_control_envio` antes de imponer la escala 1–5. Esta operación es irreversible y fue autorizada sólo porque esas filas nativas eran datos de prueba inutilizables; no la aplique sin respaldo en un ambiente que contenga datos válidos. También elimina de `calificaciones_finales` la contribución obsoleta de encuesta y refresca la vista agregada. Las nuevas capturas vuelven a calcular el resultado.
+
+## Avisos institucionales y exportación
+
+`/admin/avisos` administra avisos institucionales separados de `notificaciones`. Los avisos publicados sólo aparecen en `/avisos` cuando están activos, no vencieron y coinciden con el rol y, cuando aplica, el ciclo seleccionado. Las imágenes usan una ruta generada por servidor bajo `avisos/` en R2; cuando `R2_PUBLIC_URL` está configurada, esa URL es pública y no debe contener información sensible.
+
+El botón **Descargar CSV para Excel** en `/admin/resultados-docentes` llama al export de superadmin. Incluye exclusivamente docentes activos que ya tienen una fila de `calificaciones_finales` con al menos un instrumento completado para el ciclo elegido. El CSV usa BOM UTF-8, escape de comillas y neutraliza fórmulas de hojas de cálculo.
 
 ## Saeko retirado
 
@@ -90,11 +171,15 @@ La importación Saeko ya no es un flujo operativo. `POST /api/admin/importar-sae
 
 ## Checklist de despliegue
 
-- [ ] Migraciones 030–036 aplicadas en el ambiente objetivo y registradas por el proceso de despliegue.
+- [ ] Migraciones 030–040 aplicadas en el ambiente objetivo y registradas por el proceso de despliegue.
 - [ ] Caché de esquema recargada después de nuevas RPC.
 - [ ] Ciclo seleccionado antes de cada importación.
 - [ ] Reportes e incidencias de importación revisados.
 - [ ] `/admin/grupos-asignados` validado para el ciclo.
+- [ ] `/admin/trazabilidad` accesible sólo para superadmin y sin datos sensibles en la lista.
+- [ ] Cada ruta `mi-actividad` permite sólo su rol correspondiente y muestra únicamente recibos con el `actor_id` de la sesión actual.
+- [ ] Un envío de autodiagnóstico, planeación, evaluación de coordinación u observación crea un recibo atribuido al actor; una operación con `service_role` no se presenta como recibo personal.
+- [ ] Un envío nativo exitoso muestra `student_evaluation.submitted` como actividad protegida; un envío fallido no deja ese evento.
 - [ ] El portal de estudiante muestra sólo asignaciones elegibles.
 - [ ] `Est.` y progreso se validan con agregados nativos, sin consultar Saeko ni datos individuales.
 
@@ -104,7 +189,9 @@ La convención de verificación actual ejecuta comprobación de Astro, compilaci
 
 ```bash
 npx astro check
-npm run build
+npx astro build
+npm run test:run
+git diff --check
 ```
 
 Consulte también [la especificación nativa](documentacion/11-evaluacion-estudiantil-nativa.md) y [el resumen de implementación](documentacion/08-resumen-implementacion.md).

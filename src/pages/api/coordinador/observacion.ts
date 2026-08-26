@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { db } from "../../../lib/db";
+import { AuthError, requireRole } from "../../../lib/auth";
 import { isObservationInstrumentVersion } from "../../../lib/observationDefinitions";
 import {
   MAX_COMENTARIO_LONGITUD,
@@ -20,34 +20,21 @@ import {
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 export const POST: APIRoute = async ({ request, cookies }) => {
-  const t = cookies.get("sb-access-token")?.value;
-  const r = cookies.get("sb-refresh-token")?.value;
-  if (!t || !r)
-    return new Response(JSON.stringify({ error: "No autorizado" }), {
-      status: 401,
+  let cl;
+  let userId: string;
+  try {
+    const auth = await requireRole(cookies, ["superadmin", "coordinador", "observador"]);
+    cl = auth.client;
+    userId = auth.user.id;
+  } catch (error) {
+    if (error instanceof AuthError) return error.response;
+    return new Response(JSON.stringify({ error: "Error interno" }), {
+      status: 500,
       headers: JSON_HEADERS,
     });
+  }
+
   try {
-    const cl = db();
-    const { data: s } = await cl.auth.setSession({
-      access_token: t,
-      refresh_token: r,
-    });
-    if (!s.user)
-      return new Response(JSON.stringify({ error: "Sesión inválida" }), {
-        status: 401,
-        headers: JSON_HEADERS,
-      });
-    const { data: u } = await cl
-      .from("usuarios")
-      .select("rol")
-      .eq("id", s.user.id)
-      .maybeSingle();
-    if (!u || !["superadmin", "coordinador", "observador"].includes(u.rol))
-      return new Response(JSON.stringify({ error: "No autorizado" }), {
-        status: 403,
-        headers: JSON_HEADERS,
-      });
 
     const body: unknown = await request.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -99,7 +86,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     const datos: Record<string, unknown> = {
-      evaluador_id: s.user.id,
+      evaluador_id: userId,
       ...parseResult.data,
       ...moderacion.valores,
     };

@@ -30,6 +30,11 @@ export interface CalificacionFinal {
   num_instrumentos_esperados: number;
   version_calculo: string;
   calculada_en: string;
+  // Info del docente; se completa cuando el dashboard la necesita.
+  docente_nombre?: string | null;
+  docente_apellidos?: string | null;
+  docente_email?: string | null;
+  docente_campus?: string | null;
 }
 
 const VERSION_CALCULO = "v2.1";
@@ -69,6 +74,73 @@ export function rowToCalificacion(
   };
 }
 
+export async function calcularCalificacionDocenteInline(
+  client: SupabaseClient,
+  docenteId: number,
+  cuatrimestreId: number,
+  docenteInfo?: {
+    nombre?: string | null;
+    apellidos?: string | null;
+    email?: string | null;
+    campus?: string | null;
+  },
+): Promise<CalificacionFinal | null> {
+  const scores = await fetchCuatrimestreScores(
+    client,
+    docenteId,
+    cuatrimestreId,
+  );
+
+  // Si no hay ningún instrumento puntuable, no devolvemos fila inline.
+  if (
+    scores.ee == null &&
+    scores.coord == null &&
+    scores.plan == null &&
+    scores.obs == null &&
+    scores.auto == null
+  ) {
+    return null;
+  }
+
+  const { data: docente, error: errorDocente } = await client
+    .from("docentes")
+    .select("modalidad")
+    .eq("id", docenteId)
+    .maybeSingle();
+
+  if (errorDocente) {
+    throw new Error(
+      `Error al leer modalidad del docente: ${errorDocente.message}`,
+    );
+  }
+
+  const modalidad = String(docente?.modalidad ?? "Escolarizada");
+  const final = calcFinalScore(scores, modalidad);
+  const profile = obtenerPerfilModalidad(modalidad);
+
+  return {
+    id: 0,
+    docente_id: docenteId,
+    cuatrimestre_id: cuatrimestreId,
+    modalidad_snapshot: modalidad,
+    score_encuesta_estudiantil: round2(scores.ee) ?? null,
+    score_coordinacion: round2(scores.coord) ?? null,
+    score_planeacion: round2(scores.plan) ?? null,
+    score_observacion: round2(scores.obs) ?? null,
+    score_autoevaluacion: round2(scores.auto) ?? null,
+    calificacion_final: final.final,
+    categoria_final: final.category,
+    num_instrumentos_completados: final.instrumentCount,
+    num_instrumentos_esperados: profile.expectedInstrumentCount,
+    version_calculo: `${VERSION_CALCULO}-inline`,
+    calculada_en: new Date().toISOString(),
+    docente_nombre: docenteInfo?.nombre ?? null,
+    docente_apellidos: docenteInfo?.apellidos ?? null,
+    docente_email: docenteInfo?.email ?? null,
+    docente_campus: docenteInfo?.campus ?? null,
+  };
+}
+
 export async function obtenerCalificacionDocente(
   client: SupabaseClient,
   docenteId: number,
@@ -83,26 +155,155 @@ export async function obtenerCalificacionDocente(
 
   if (error)
     throw new Error(`Error al leer calificación final: ${error.message}`);
-  if (!data) return null;
-  return rowToCalificacion(data as Record<string, unknown>);
+  if (data) return rowToCalificacion(data as Record<string, unknown>);
+
+  return calcularCalificacionDocenteInline(client, docenteId, cuatrimestreId);
+}
+
+export async function obtenerCalificacionesPorDocenteYCuatrimestres(
+  client: SupabaseClient,
+  docenteId: number,
+  cuatrimestreIds: number[],
+): Promise<Map<number, CalificacionFinal>> {
+  const result = new Map<number, CalificacionFinal>();
+  const faltantes: number[] = [];
+
+  // Batch read de filas precalculadas.
+  if (cuatrimestreIds.length) {
+    const { data, error } = await client
+      .from("calificaciones_finales")
+      .select("*")
+      .eq("docente_id", docenteId)
+      .in("cuatrimestre_id", cuatrimestreIds);
+
+    if (error) {
+      throw new Error(
+        `Error al leer calificaciones por docente: ${error.message}`,
+      );
+    }
+
+    for (const row of (data || []) as Record<string, unknown>[]) {
+      const cal = rowToCalificacion(row);
+      result.set(cal.cuatrimestre_id, cal);
+    }
+  }
+
+  for (const cid of cuatrimestreIds) {
+    if (!result.has(cid)) faltantes.push(cid);
+  }
+
+  for (const cid of faltantes) {
+    const cal = await calcularCalificacionDocenteInline(client, docenteId, cid);
+    if (cal) result.set(cid, cal);
+  }
+
+  return result;
+}
+
+async function leerInfoDocentes(
+  client: SupabaseClient,
+  docenteIds: number[],
+): Promise<
+  Map<
+    number,
+    { nombre: string; apellidos: string; email: string; campus: string }
+  >
+> {
+  const map = new Map<
+    number,
+    { nombre: string; apellidos: string; email: string; campus: string }
+  >();
+  if (!docenteIds.length) return map;
+
+  const { data, error } = await client
+    .from("docentes")
+    .select("id,nombre,apellidos,email,campus")
+    .in("id", docenteIds);
+
+  if (error) {
+    throw new Error(`Error al leer info de docentes: ${error.message}`);
+  }
+
+  for (const row of (data || []) as any[]) {
+    map.set(Number(row.id), {
+      nombre: String(row.nombre ?? ""),
+      apellidos: String(row.apellidos ?? ""),
+      email: String(row.email ?? ""),
+      campus: String(row.campus ?? ""),
+    });
+  }
+  return map;
 }
 
 export async function obtenerCalificacionesPorCuatrimestre(
   client: SupabaseClient,
   cuatrimestreId: number,
 ): Promise<CalificacionFinal[]> {
-  const { data, error } = await client
-    .from("calificaciones_finales")
-    .select("*")
-    .eq("cuatrimestre_id", cuatrimestreId);
+  const [{ data: precalculadas, error }, docenteIdsActividad] =
+    await Promise.all([
+      client
+        .from("calificaciones_finales")
+        .select("*")
+        .eq("cuatrimestre_id", cuatrimestreId),
+      obtenerDocentesConInstrumentos(client, cuatrimestreId),
+    ]);
 
   if (error)
     throw new Error(
       `Error al leer calificaciones por cuatrimestre: ${error.message}`,
     );
-  return (data || []).map((row) =>
-    rowToCalificacion(row as Record<string, unknown>),
-  );
+
+  const precalculadasMap = new Map<number, CalificacionFinal>();
+  for (const row of (precalculadas || []) as Record<string, unknown>[]) {
+    const cal = rowToCalificacion(row);
+    precalculadasMap.set(cal.docente_id, cal);
+  }
+
+  const resultados: CalificacionFinal[] = [...precalculadasMap.values()];
+  const faltantes: number[] = [];
+
+  for (const docenteId of docenteIdsActividad) {
+    if (!precalculadasMap.has(docenteId)) {
+      faltantes.push(docenteId);
+    }
+  }
+
+  if (faltantes.length) {
+    const infoDocentes = await leerInfoDocentes(client, faltantes);
+    const inlineResults = await Promise.all(
+      faltantes.map((docenteId) => {
+        const info = infoDocentes.get(docenteId);
+        return calcularCalificacionDocenteInline(
+          client,
+          docenteId,
+          cuatrimestreId,
+          info,
+        );
+      }),
+    );
+    for (const cal of inlineResults) {
+      if (cal) resultados.push(cal);
+    }
+  }
+
+  // Completar info de docente para las filas precalculadas que no la tengan.
+  const idsSinInfo = resultados
+    .filter((r) => !r.docente_nombre && !r.docente_apellidos)
+    .map((r) => r.docente_id);
+  if (idsSinInfo.length) {
+    const infoDocentes = await leerInfoDocentes(client, idsSinInfo);
+    for (const r of resultados) {
+      const info = infoDocentes.get(r.docente_id);
+      if (info) {
+        r.docente_nombre = info.nombre;
+        r.docente_apellidos = info.apellidos;
+        r.docente_email = info.email;
+        r.docente_campus = info.campus;
+      }
+    }
+  }
+
+  return resultados.sort((a, b) => a.docente_id - b.docente_id);
 }
 
 async function obtenerModalidadSnapshot(
@@ -138,22 +339,20 @@ async function obtenerModalidadSnapshot(
 
   const snapshot = String(docente.modalidad ?? "Escolarizada");
 
-  const { error: errorSnapshot } = await client
-    .from("docente_modalidad_historica")
-    .insert({
-      docente_id: docenteId,
-      cuatrimestre_id: cuatrimestreId,
-      modalidad_snapshot: snapshot,
-      fuente: "primer_score",
-    });
+  const { error: errorSnapshot } = await client.rpc(
+    "tomar_snapshot_modalidad",
+    {
+      p_docente_id: docenteId,
+      p_cuatrimestre_id: cuatrimestreId,
+      p_modalidad: snapshot,
+      p_fuente: "primer_score",
+    },
+  );
 
   if (errorSnapshot) {
-    // Si ya existe por condición de carrera, no falla el cálculo.
-    if (errorSnapshot.code !== "23505") {
-      throw new Error(
-        `Error al guardar snapshot de modalidad: ${errorSnapshot.message}`,
-      );
-    }
+    throw new Error(
+      `Error al guardar snapshot de modalidad: ${errorSnapshot.message}`,
+    );
   }
 
   return snapshot;
@@ -195,11 +394,9 @@ export async function recalcularCalificacionDocente(
     calculada_en: new Date().toISOString(),
   };
 
-  const { data, error } = await client
-    .from("calificaciones_finales")
-    .upsert(upsertPayload, { onConflict: "docente_id,cuatrimestre_id" })
-    .select()
-    .single();
+  const { data, error } = await client.rpc("upsert_calificacion_final", {
+    p_payload: upsertPayload,
+  });
 
   if (error) {
     throw new Error(`Error al persistir calificación final: ${error.message}`);

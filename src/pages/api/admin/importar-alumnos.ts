@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { AuthError, requireRole } from '../../../lib/auth';
 import { ImportFormSchema } from '../../../lib/validation/apiSchemas';
 import { formatZodFieldErrors } from '../../../lib/validation/errors';
+import { startImportAudit, type ImportAudit } from '../../../lib/auditChangeSet';
 
 type RosterRow = {
   rowNumber: number;
@@ -126,6 +127,7 @@ function legacyGroupMatch(group: any, bucket: GroupBucket): boolean {
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   let client;
+  let audit: ImportAudit | null = null;
   try {
     const auth = await requireRole(cookies, ['superadmin']);
     client = auth.client;
@@ -149,9 +151,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const { data: cycle, error: cycleError } = await client.from('cuatrimestres').select('id,clave,nombre').eq('id', cycleId).maybeSingle();
     if (cycleError || !cycle) return json({ error: 'El ciclo seleccionado no existe' }, 400);
+    audit = await startImportAudit({ client, source: 'admin.import.alumnos', cycleId, file });
 
     const records = parseCsv((await file.text()).replace(/^\uFEFF/, ''));
-    if (records.length < 2) return json({ error: 'CSV vacío o sin filas de datos' }, 400);
+    if (records.length < 2) {
+      await audit.fail('archivo_vacio', { rowsRead: 0 });
+      return json({ error: 'CSV vacío o sin filas de datos' }, 400);
+    }
     const headers = records[0];
     const columns = {
       ciclo: findColumn(headers, 'CICLO'),
@@ -167,9 +173,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       estado: findColumn(headers, 'ESTADO DE INSCRIPCION', 'ESTADO DE INSCRIPCIÓN', 'ESTADO'),
     };
     if (columns.matricula < 0 || columns.email < 0 || columns.grupo < 0) {
+      await audit.fail('contrato_invalido', { rowsRead: records.length - 1 });
       return json({ error: 'El CSV debe incluir MATRICULA, CORREO INSTITUCIONAL y GRUPO' }, 400);
     }
     if (columns.fullName < 0) {
+      await audit.fail('contrato_invalido', { rowsRead: records.length - 1 });
       return json({ error: 'El CSV debe incluir NOMBRE COMPLETO' }, 400);
     }
 
@@ -204,7 +212,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     const { data: existingStudents, error: studentsError } = await client.from('estudiantes').select('id,nombre,apellidos,email,matricula,activo');
-    if (studentsError) return json({ error: `No se pudo leer estudiantes: ${studentsError.message}` }, 500);
+    if (studentsError) {
+      await audit.fail('lectura_estudiantes_fallida');
+      return json({ error: `No se pudo leer estudiantes: ${studentsError.message}` }, 500);
+    }
     const byMatricula = new Map<string, any>();
     const byEmail = new Map<string, any>();
     for (const student of existingStudents || []) {
@@ -276,7 +287,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     const { data: groups, error: groupsError } = await client.from('grupos').select(GROUP_FIELDS).eq('cuatrimestre_id', cycleId);
-    if (groupsError) return json({ error: `No se pudo leer grupos del ciclo. Aplica la migración 030_importacion_alumnos_ciclo.sql: ${groupsError.message}` }, 500);
+    if (groupsError) {
+      await audit.fail('lectura_grupos_fallida');
+      return json({ error: `No se pudo leer grupos del ciclo. Aplica la migración 030_importacion_alumnos_ciclo.sql: ${groupsError.message}` }, 500);
+    }
 
     const groupBuckets = new Map<string, GroupBucket>();
     for (const row of validRows) {
@@ -413,9 +427,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     // No se recalculan calificaciones aquí: esta importación solo crea/actualiza
     // estudiantes, grupos base e inscripciones. No modifica docentes ni
     // instrumentos de evaluación. El recálculo se dispara desde importar-asignaciones.
-    return json({
-      success: true,
-      cycle: { id: cycle.id, clave: cycle.clave },
+    const summary = {
       rowsRead: records.length - 1,
       studentsMatched,
       studentsCreated,
@@ -427,11 +439,25 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       skipped,
       ambiguous,
       errors,
+    };
+    await audit.complete(summary);
+    return json({
+      success: true,
+      cycle: { id: cycle.id, clave: cycle.clave },
+      ...summary,
       cycleValues: [...cycleValues.entries()].map(([value, count]) => ({ value, count })),
       diagnostics,
+      traceability: { changeSetId: audit.changeSetId, restorePointId: audit.restorePointId },
     });
   } catch (error) {
     console.error('[Importar alumnos]', error);
+    if (audit) {
+      try {
+        await audit.fail('error_interno_importacion');
+      } catch (auditError) {
+        console.error('[Importar alumnos] no se pudo cerrar la trazabilidad', auditError);
+      }
+    }
     return json({ error: 'Error interno al procesar el padrón' }, 500);
   }
 };

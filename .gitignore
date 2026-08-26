@@ -35,6 +35,8 @@ supabase/migrations/*
 !supabase/migrations/036_evaluacion_estudiantil_nativa_puntaje.sql
 !supabase/migrations/037_observacion_instrument_version.sql
 !supabase/migrations/038_calificaciones_finales_y_snapshot.sql
+!supabase/migrations/039_upsert_calificacion_final_security_definer.sql
+!supabase/migrations/040_audit_and_logical_restore_points.sql
 openspec/
 src/supabase/
 .atl/

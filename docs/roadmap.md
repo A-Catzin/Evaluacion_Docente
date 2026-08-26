@@ -2,60 +2,75 @@
 
 > Agosto 2026
 
-## Fase completada — MVP
+## Fase 0 — Limpieza de infra y `.gitignore` ✅
 
-- [x] 5 roles operativos: superadmin, coordinador, docente, estudiante y observador; `pendiente` para accesos no resueltos
-- [x] 5 instrumentos de evaluación (EE, CA, PD, OC, AD)
-- [x] Astro SSR + Tailwind 3 + Supabase + Vercel
-- [x] Autenticación Google OAuth con middleware por rol
-- [x] Dashboard general con métricas por cuatrimestre
-- [x] CRUD de catálogos (ofertas, campus, turnos, asignaturas, cuatrimestres)
-- [x] Autodiagnóstico docente (wizard, 24 reactivos, auto-asignación de rol)
-- [x] Observación de clase (3 modalidades con reactivos dinámicos)
-- [x] Planeaciones didácticas (subida PDF a Cloudflare R2 + rúbrica con estados)
-- [x] Coordinación académica (15 preguntas en 5 secciones)
-- [x] Importación por ciclo de docentes, padrón completo y asignaciones con reportes de conciliación
-- [x] Migraciones 030–036 para identidad de grupos, importaciones, roles y EE nativa
+- Limpieza de archivos de infraestructura no utilizados.
+- Actualización de `.gitignore` para ignorar datos sensibles, artefactos locales y documentación no pública, manteniendo en el repositorio únicamente las migraciones de schema 036, 037 y 038.
+- Vercel consolidado como único proveedor de deploy; sin Firebase.
 
-## Fase completada — Dashboards
+## Fase 1 — Fundamentos de calidad ✅
 
-- [x] **Admin**: KPIs agregados, gráficos, buscador de docentes, progreso nativo agregado y enlaces `Ver` a detalle
-- [x] **Docente**: dashboard con feedback detallado por pregunta desde `instrumento_preguntas`, scores por instrumento y materia
-- [x] **Coordinador**: lista de docentes asignados + selector de cuatrimestre + paginación de 12 cards, acceso a captura CA/OC/PD
-- [x] **Observador**: lista de docentes asignados, acceso directo a captura de observación, selector dinámico
+- **Tests**: suite con Vitest para `scoring`, `calificaciones`, validación, moderación, rate limiting, autenticación e importación CSV.
+- **Autorización**: middleware de Astro con validación de sesión, dominio `@tecplayacar.edu.mx` y roles por prefijo de ruta; helper `requireRole` para endpoints.
+- **Validación**: esquemas Zod centralizados en `src/lib/validation/apiSchemas.ts` y formateo uniforme de errores.
+- **Moderación**: módulo de blacklist para comentarios de texto libre en evaluaciones estudiantiles, autodiagnóstico, planeaciones y observaciones.
+- **Rate limiting**: control de frecuencia por base de datos para endpoints críticos (por ejemplo, envío de evaluación estudiantil).
 
-## Fase completada — Asignaciones y reportes
+## Fase 2 — Scoring histórico, precálculo y refactor de dashboards/reportes ✅
 
-- [x] Panel `/admin/asignaciones` por cuatrimestre: asignación batch coordinador↔docente y observador↔docente
-- [x] Tabla `coordinador_docentes` con UNIQUE (coordinador_id, docente_id, cuatrimestre_id)
-- [x] Reporte anual con exportación CSV en `/admin/reporte-anual`
-- [x] Editor de preguntas en `/admin/instrumentos` — preguntas editables con opciones y tipo de respuesta
-- [x] Paginación server-side en tablas principales
-- [x] Reporte coordinador con CSV en `/coordinador/reportes`
+### Scoring y persistencia
 
-## Fase completada — Funcionalidades adicionales
+- Tabla `calificaciones_finales` con scores precalculados por docente y cuatrimestre.
+- Tabla `docente_modalidad_historica` que congela la modalidad al momento del primer cálculo.
+- Vista materializada `resultados_agregados` para lectura rápida en dashboards.
+- Fuente única de verdad en TypeScript: pesos, perfiles de modalidad y categorías en `src/services/scoring.ts`.
+- Punto único de entrada en `src/services/calificaciones.ts` para leer y recalcular calificaciones.
+- Recálculo automático desde endpoints de escritura de instrumentos.
+- Recálculo masivo al finalizar la importación de asignaciones.
+- Endpoint `/api/admin/refrescar-resultados` para refrescar `resultados_agregados` manualmente.
 
-- [x] Sistema de notificaciones in-app (tabla `notificaciones`, campana en layouts, API REST)
-- [x] Scoring por modalidad (`scoring.ts` con campos dinámicos para cada tipo de observación)
-- [x] Páginas de docente: `materias` y `materia/[asignaturaId]` para consulta de materias
-- [x] Páginas de admin: `evaluar-docentes` con subpáginas por instrumento (coordinacion, observacion-escolarizado, observacion-virtual, observacion-ejecutivo)
-- [x] Storage migrado a Cloudflare R2 para planeaciones
-- [x] Portal de estudiante: dashboard, evaluación nativa de 19 reactivos y envío único por grupo/ciclo elegible
-- [x] Puntaje `native-19-v1` como única fuente de `Est.` en todos los ciclos
-- [x] Retiro de importación Saeko; el archivo histórico queda sólo para auditoría de superadmin
+### Dashboards y reportes
 
-## Mejoras futuras
+- Dashboard de admin con KPIs agregados, gráficos, buscador de docentes y progreso nativo agregado.
+- Dashboard de docente con feedback detallado por pregunta y scores por instrumento.
+- Dashboard de coordinador con docentes asignados, selector de cuatrimestre y acceso a captura CA/OC/PD.
+- Dashboard de observador con docentes asignados y acceso directo a captura de observación.
+- Reporte anual exportable a CSV en `/admin/reporte-anual`.
+- Reporte de coordinador con CSV en `/coordinador/reportes`.
+- Páginas de docente `materias` y `materia/[asignaturaId]`.
+- Páginas de admin `evaluar-docentes` con subpáginas por instrumento.
 
-- [ ] Firma electrónica en evaluaciones
-- [ ] Exportación PDF de reportes individuales
-- [ ] Modo offline para captura de observaciones
-- [ ] Dashboard de visibilidad pública de resultados
+### Funcionalidades operativas
+
+- Panel `/admin/asignaciones` por cuatrimestre: asignación batch coordinador↔docente y observador↔docente.
+- Importación por ciclo de docentes, padrón completo de estudiantes y asignaciones con reportes de conciliación.
+- Editor de preguntas en `/admin/instrumentos`.
+- Paginación server-side en tablas principales.
+- Sistema de notificaciones in-app (`notificaciones`, campana en layouts, API REST).
+- Storage de planeaciones en Cloudflare R2 con URLs firmadas.
+- Portal de estudiante con evaluación nativa de 19 reactivos y envío único por grupo/ciclo elegible.
+- Puntaje `native-19-v1` como única fuente de `Est.` en todos los ciclos.
+- Retiro de importación Saeko; el archivo histórico queda sólo para auditoría de superadmin.
+- Migraciones 030–038 requeridas para el flujo vigente.
+
+## Fase 3 — Alineación modelo-UI ⏳
+
+- [ ] Alinear modelos de datos con los componentes de UI para reducir transformaciones ad-hoc en páginas y endpoints.
+- [ ] Unificar contratos de tipos entre servicios, stores y componentes.
+- [ ] Mejorar la experiencia de selección de cuatrimestre y persistencia de filtros.
+
+## Fase 4 — DX y deuda técnica ⏳
+
+- [ ] Revisar y consolidar endpoints duplicados o con lógica similar.
+- [ ] Documentar convenciones de API, tests y patrones de Astro SSR.
+- [ ] Optimizar consultas a la base de datos y tiempos de build.
+- [ ] Evaluar firma electrónica en evaluaciones, exportación PDF de reportes individuales y modo offline para captura de observaciones como mejoras futuras opcionales.
 
 ## Estadísticas
 
 | Métrica | Valor |
 |---------|-------|
-| Migraciones | Línea base hasta 026 + 030–036 requeridas para el flujo vigente |
+| Migraciones | Línea base hasta 026 + 030–038 requeridas para el flujo vigente |
 | Usuarios docentes | ~341 |
 | Instrumentos activos | 5 |
 | Roles operativos | 5 + estado `pendiente` |

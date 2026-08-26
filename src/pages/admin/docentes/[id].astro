@@ -1,6 +1,7 @@
 ---
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../../lib/db';
+import { requireRole } from '../../../lib/auth';
 import { fetchNativeStudentEvaluationScores, formatScore, OBSERVATION_SELECT } from '../../../services/scoring';
 import { obtenerCalificacionDocente } from '../../../services/calificaciones';
 import { OBSERVATION_INSTRUMENT_DEFINITIONS, OBSERVATION_STORAGE_SECTIONS, getObservationQuestion, isObservationInstrumentVersion, type ObservationInstrumentVersion } from '../../../lib/observationDefinitions';
@@ -27,6 +28,7 @@ const docenteId = parseInt(Astro.params.id || '');
 if (!docenteId) return Astro.redirect(`/admin/resultados-docentes${currentSearch}`);
 
 const cl = dbAdmin();
+const auth = await requireRole(Astro.cookies, ['superadmin']);
 const [docenteRes, cuatrisRes] = await Promise.all([
   cl.from('docentes').select('id,nombre,apellidos,email,campus,modalidad,visible_dashboard,activo').eq('id', docenteId).maybeSingle(),
   cl.from('cuatrimestres').select('id,clave,nombre,activo,cerrado').order('id', { ascending: true }),
@@ -56,7 +58,7 @@ if (Astro.request.method === 'POST') {
   const improvementAreas = String(form.get('improvement_areas') || '').trim() || null;
 
   if (submittedCuatriId) {
-    const { error: saveError } = await cl.from('docente_360_feedback').upsert(
+    const { error: saveError } = await auth.client.from('docente_360_feedback').upsert(
       {
         docente_id: docenteId,
         cuatrimestre_id: submittedCuatriId,
@@ -347,24 +349,20 @@ const currentFinal = {
   expectedInstrumentCount: currentCal?.num_instrumentos_esperados ?? 0,
 };
 
-const { data: historialData, error: historialError } = await cl
-  .from('calificaciones_finales')
-  .select('*')
-  .eq('docente_id', docenteId)
-  .order('cuatrimestre_id', { ascending: true });
-if (historialError) throw historialError;
-
 const historial: { clave: string; final: number; cat: string; inst: number; expected: number; ee: number | null; coord?: number; plan?: number; obs?: number; auto?: number }[] = [];
 let sumFinals = 0;
 let bestCycle = { clave: '', final: 0 };
-
-for (const row of (historialData || [])) {
+    
+for (const c of cuatrimestres) {
+  const row = c.id === cuatrimestreId && currentCal
+    ? currentCal
+    : await obtenerCalificacionDocente(cl, docenteId, c.id);
+  if (!row) continue;
   const instCount = Number(row.num_instrumentos_completados || 0);
   if (instCount === 0) continue;
-  const ciclo = cuatrimestres.find((c) => c.id === row.cuatrimestre_id);
   const final = Number(row.calificacion_final);
   historial.push({
-    clave: ciclo?.clave || '',
+    clave: c.clave || '',
     final,
     cat: String(row.categoria_final ?? 'No iniciado'),
     inst: instCount,
@@ -376,7 +374,7 @@ for (const row of (historialData || [])) {
     auto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
   });
   sumFinals += final;
-  if (final > bestCycle.final) bestCycle = { clave: ciclo?.clave || '', final };
+  if (final > bestCycle.final) bestCycle = { clave: c.clave || '', final };
 }
 
 const cyclesEvaluated = historial.length;

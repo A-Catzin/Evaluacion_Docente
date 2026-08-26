@@ -5,19 +5,19 @@ Plataforma integral de evaluación docente para el Tecnológico Universitario Pl
 ## Stack
 
 | Capa | Tecnología |
-|------|-----------|
+| ------ | ----------- |
 | Framework | Astro 4.16.18 SSR |
 | Estilos | Tailwind CSS 3.4.17 |
 | Base de datos | Supabase PostgreSQL |
 | Auth | Google OAuth (`@tecplayacar.edu.mx`) + cookies |
 | Storage | Cloudflare R2 (planeaciones PDF) |
 | Validación | Zod |
-| Deploy | Vercel (`@astrojs/vercel`, Node 20.x) |
+| Deploy | Vercel (`@astrojs/vercel`, Node 20.x) — único proveedor de deploy; sin Firebase |
 
 ## Roles y acceso
 
 | Rol | Acceso |
-|-----|--------|
+| ----- | -------- |
 | Superadmin | Total: KPIs, catálogos, usuarios, importación CSV, asignaciones, reportes |
 | Coordinador | Evalúa docentes asignados: CA, OC, PD. Reportes de su grupo |
 | Docente | Resultados al cierre, autodiagnóstico, planeaciones, feedback |
@@ -45,18 +45,36 @@ src/
 ├── services/            # Lógica de negocio: autodiagnostico, calificaciones, catalogos, docentes, estudiantes, instrumentos, notificaciones, observaciones, planeaciones, scoring, usuarios
 └── types/               # Tipos TypeScript (supabase.ts)
 supabase/
-└── migrations/          # Línea base y migraciones 030–036 para ciclos, roles y EE nativa
+└── migrations/          # Línea base y migraciones 030–040; 036–040 versionadas en repo (el resto se ignora por contener datos sensibles)
 ```
 
 ## Comandos
 
 | Comando | Acción |
-|---------|--------|
+| --------- | -------- |
 | `npm install` | Instalar dependencias |
 | `npm run dev` | Servidor de desarrollo en `localhost:4321` |
 | `npm run build` | Build de producción a `./dist/` |
 | `npm run preview` | Previsualizar build local |
 | `npm run check:r2` | Verificar configuración de Cloudflare R2 |
+| `npm run test` | Ejecutar tests en modo watch con Vitest |
+| `npm run test:run` | Ejecutar tests una sola vez (CI) |
+
+## Migraciones y datos sensibles
+
+El directorio `supabase/migrations/` contiene migraciones de schema versionadas. En el repositorio se mantienen explícitamente:
+
+- `036_evaluacion_estudiantil_nativa_puntaje.sql`
+- `037_observacion_instrument_version.sql`
+- `038_calificaciones_finales_y_snapshot.sql`
+- `039_upsert_calificacion_final_security_definer.sql`
+- `040_audit_and_logical_restore_points.sql`
+
+Las migraciones que incluyen datos sensibles o de entornos específicos están ignoradas en `.gitignore` y no deben versionarse.
+
+## Scores y reportes
+
+Los scores finales de docentes se precalculan y persisten en la tabla `calificaciones_finales`. Los dashboards de admin/coordinador y los reportes leen principalmente desde la vista materializada `resultados_agregados`, que se refresca tras los recálculos masivos o manualmente desde el endpoint `/api/admin/refrescar-resultados` (accesible para superadmin).
 
 ## Documentación
 

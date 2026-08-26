@@ -3,6 +3,7 @@ import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
+import { obtenerCalificacionesPorCuatrimestre, type CalificacionFinal } from '../../services/calificaciones';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
@@ -33,23 +34,17 @@ if (userId) {
   docentesAsignados = new Set((asigs||[]).map(a=>a.docente_id));
 }
 
-// Scores ya calculados; usamos la vista materializada para listados grandes.
+// Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
 const asignadosIds = [...docentesAsignados];
-let aggData: any[] = [];
+let todasLasCalificaciones: CalificacionFinal[] = [];
 if (asignadosIds.length > 0) {
-  const { data, error } = await cliente
-    .from('resultados_agregados')
-    .select('*')
-    .eq('cuatrimestre_id', cuatrimestreId)
-    .in('docente_id', asignadosIds);
-  if (error) throw error;
-  aggData = data || [];
+  todasLasCalificaciones = await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId);
 }
 
 const docentesEvaluados = new Set(
-  aggData
-    .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
-    .map((row: any) => Number(row.docente_id))
+  todasLasCalificaciones
+    .filter((row) => row.num_instrumentos_completados > 0 && docentesAsignados.has(row.docente_id))
+    .map((row) => row.docente_id)
 );
 const docentes = todos.filter(d => docentesAsignados.has(d.id) && docentesEvaluados.has(d.id));
 

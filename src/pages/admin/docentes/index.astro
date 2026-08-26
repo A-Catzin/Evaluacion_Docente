@@ -3,6 +3,7 @@ import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { db } from '../../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 import { formatScore } from '../../../services/scoring';
+import { obtenerCalificacionesPorCuatrimestre } from '../../../services/calificaciones';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const page = parseInt(Astro.url.searchParams.get('page')||'1');
@@ -27,28 +28,24 @@ if (token && refresh) {
 
 function colorScore(n: number|null|undefined): string { if (n == null) return ''; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
 
-// Scores ya calculados; usamos la vista materializada para listados grandes.
-const { data: aggData, error: aggError } = await cliente
-  .from('resultados_agregados')
-  .select('*')
-  .eq('cuatrimestre_id', cuatrimestreId);
-if (aggError) throw aggError;
+// Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
+const aggData = await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId);
 
-const filasBase = (aggData || [])
-  .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
-  .map((row: any) => ({
-    id: Number(row.docente_id),
+const filasBase = aggData
+  .filter((row) => row.num_instrumentos_completados > 0)
+  .map((row) => ({
+    id: row.docente_id,
     nombre: String(row.docente_nombre ?? ''),
     apellidos: String(row.docente_apellidos ?? ''),
     email: String(row.docente_email ?? ''),
-    promEst: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
-    promCoord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
-    promPlan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
-    promObs: row.score_observacion != null ? Number(row.score_observacion) : null,
-    promAuto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
-    final360: Number(row.calificacion_final),
+    promEst: row.score_encuesta_estudiantil,
+    promCoord: row.score_coordinacion,
+    promPlan: row.score_planeacion,
+    promObs: row.score_observacion,
+    promAuto: row.score_autoevaluacion,
+    final360: row.calificacion_final,
     cat360: String(row.categoria_final ?? 'No iniciado'),
-    instrumentos: Number(row.num_instrumentos_completados || 0),
+    instrumentos: row.num_instrumentos_completados,
   }));
 
 const filas = busqueda

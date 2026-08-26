@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { requireRole } from '../lib/auth';
+import { estaHabilitadoR2, obtenerUrlPublica } from '../lib/storage';
+
+const auth = await requireRole(Astro.cookies, ['superadmin', 'coordinador', 'docente', 'estudiante', 'observador']);
+const { data: activeCycle } = await auth.client.from('cuatrimestres').select('id,clave').eq('activo', true).maybeSingle();
+const selectedValue = Astro.url.searchParams.get('cuatrimestre') || Astro.cookies.get('cuatrimestre_sel')?.value || '';
+const selectedCycle = Number.parseInt(selectedValue, 10);
+const cuatrimestreId = Number.isSafeInteger(selectedCycle) && selectedCycle > 0 ? selectedCycle : activeCycle?.id || null;
+const { data, error } = await auth.client.rpc('institutional_notice_list', { p_cuatrimestre_id: cuatrimestreId });
+if (error) throw error;
+const notices = (data || []).map((notice: any) => ({ ...notice, imageUrl: notice.image_path && estaHabilitadoR2() ? obtenerUrlPublica('avisos', notice.image_path) : null }));
+---
+
+<BaseLayout titulo="Avisos institucionales">
+  <main class="mx-auto min-h-screen max-w-4xl p-4 sm:p-8"><a href="/" class="text-sm font-semibold text-tup hover:underline">SED-360</a><h1 class="mt-5 text-3xl font-bold text-slate-800">Avisos institucionales</h1><p class="mt-2 text-slate-600">Información institucional vigente para tu rol{cuatrimestreId ? ' y ciclo seleccionado' : ''}.</p>{notices.length === 0 ? <div class="mt-8 rounded-2xl bg-white p-10 text-center text-slate-500 shadow-tarjeta">No hay avisos institucionales vigentes.</div> : <div class="mt-8 space-y-5">{notices.map((notice: any) => <article class="overflow-hidden rounded-2xl bg-white shadow-tarjeta">{notice.imageUrl && <img src={notice.imageUrl} alt={notice.image_alt_text} class="max-h-96 w-full object-cover" />}<div class="p-6"><h2 class="text-xl font-bold text-slate-800">{notice.title}</h2><p class="mt-3 whitespace-pre-wrap text-slate-600">{notice.body}</p><p class="mt-4 text-xs text-slate-400">Publicado {new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' }).format(new Date(notice.published_at))}</p></div></article>)}</div>}</main>
+</BaseLayout>

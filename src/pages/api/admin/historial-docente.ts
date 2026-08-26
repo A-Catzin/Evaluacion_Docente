@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
 import { formatScoreCsv } from "../../../services/scoring";
 import {
-  rowToCalificacion,
+  obtenerCalificacionesPorDocenteYCuatrimestres,
   type CalificacionFinal,
 } from "../../../services/calificaciones";
 
@@ -35,28 +35,11 @@ export const GET: APIRoute = async ({ url, cookies }) => {
   const cuatrimestreIds = cuatris.map((c) => c.id);
   const clavesPorId = new Map(cuatris.map((c) => [c.id, c.clave]));
 
-  const { data: califRows, error: califError } = await cl
-    .from("calificaciones_finales")
-    .select("*")
-    .eq("docente_id", docenteId)
-    .in("cuatrimestre_id", cuatrimestreIds);
-
-  if (califError) {
-    console.error(
-      "[historial-docente] Error al leer calificaciones_finales:",
-      califError,
-    );
-    return new Response(
-      JSON.stringify({ error: "Error al leer calificaciones" }),
-      { status: 500 },
-    );
-  }
-
-  const califPorCiclo = new Map<number, CalificacionFinal>();
-  for (const row of (califRows || []) as Record<string, unknown>[]) {
-    const cal = rowToCalificacion(row);
-    califPorCiclo.set(cal.cuatrimestre_id, cal);
-  }
+  const califPorCiclo = await obtenerCalificacionesPorDocenteYCuatrimestres(
+    cl,
+    docenteId,
+    cuatrimestreIds,
+  );
 
   const historial: any[] = [];
   let totalCycles = 0;

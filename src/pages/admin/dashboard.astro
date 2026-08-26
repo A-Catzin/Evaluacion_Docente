@@ -3,6 +3,7 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerCuatrimestres, obtenerCuatrimestreActivo } from '../../services/catalogos';
 import { db } from '../../lib/db';
 import { formatScore } from '../../services/scoring';
+import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
 const pathname = Astro.url.pathname;
@@ -41,12 +42,8 @@ const progresoEENativa = (progresoEENativaData || []) as ProgresoEENativa[];
 // Usuarios pendientes de aprobacion
 const { count: pendientes } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
 
-// Scores ya calculados; leemos la vista materializada para listados grandes.
-const { data: aggData, error: aggError } = await cliente
-  .from('resultados_agregados')
-  .select('*')
-  .eq('cuatrimestre_id', cuatrimestreId);
-if (aggError) throw aggError;
+// Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
+const aggData = await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId);
 
 interface FilaDashboard {
   id: number; nombre: string; apellidos: string; email: string;
@@ -56,24 +53,24 @@ interface FilaDashboard {
   instrumentos: number;
 }
 
-const filasTodas: FilaDashboard[] = (aggData || [])
-  .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
-  .map((row: any) => {
-    const progresoNativo = progresoEENativa.find((p) => p.docente_id === Number(row.docente_id));
+const filasTodas: FilaDashboard[] = aggData
+  .filter((row) => row.num_instrumentos_completados > 0)
+  .map((row) => {
+    const progresoNativo = progresoEENativa.find((p) => p.docente_id === row.docente_id);
     return {
-      id: Number(row.docente_id),
+      id: row.docente_id,
       nombre: String(row.docente_nombre ?? ''),
       apellidos: String(row.docente_apellidos ?? ''),
       email: String(row.docente_email ?? ''),
-      promEst: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
-      promCoord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
-      promPlan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
-      promObs: row.score_observacion != null ? Number(row.score_observacion) : null,
-      promAuto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
+      promEst: row.score_encuesta_estudiantil,
+      promCoord: row.score_coordinacion,
+      promPlan: row.score_planeacion,
+      promObs: row.score_observacion,
+      promAuto: row.score_autoevaluacion,
       respuestasNativas: progresoNativo?.respuestas_nativas || 0,
-      final360: Number(row.calificacion_final),
+      final360: row.calificacion_final,
       cat360: String(row.categoria_final ?? 'No iniciado'),
-      instrumentos: Number(row.num_instrumentos_completados || 0),
+      instrumentos: row.num_instrumentos_completados,
     };
   });
 

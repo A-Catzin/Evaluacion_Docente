@@ -25,25 +25,25 @@ try {
 if (!evaluation) return Astro.redirect('/estudiante/dashboard');
 
 const prompts = [
-  { text: 'En términos generales, ¿cómo califica la calidad de la docencia recibida?', range: 6, labels: ['1 Muy deficiente', '2', '3', '4', '5', '6 Excelente'] },
-  { text: 'El docente presentó y siguió el plan de estudios de la asignatura.', range: 4 },
-  { text: 'El docente mantuvo un trato respetuoso con el grupo.', range: 4 },
-  { text: 'El docente cumplió con la asistencia programada.', range: 4 },
-  { text: 'El docente inició y concluyó las sesiones con puntualidad.', range: 4 },
-  { text: 'El docente promovió la participación de las y los estudiantes.', range: 4 },
-  { text: 'El docente demostró dominio de los contenidos de la asignatura.', range: 4 },
-  { text: 'El docente utilizó adecuadamente la plataforma institucional cuando fue necesaria.', range: 4 },
-  { text: 'El docente fomentó el pensamiento crítico.', range: 4 },
-  { text: 'El docente planteó retos intelectuales acordes con la asignatura.', range: 4 },
-  { text: 'El docente explicó con claridad los objetivos y actividades del curso.', range: 4 },
-  { text: 'Las lecturas y actividades favorecieron mi aprendizaje.', range: 4 },
-  { text: 'El docente promovió el respeto a las reglas acordadas.', range: 4 },
-  { text: 'El docente despertó interés por la asignatura.', range: 4 },
-  { text: 'El docente utilizó apoyos didácticos pertinentes.', range: 4 },
-  { text: 'El docente mostró actitudes y valores congruentes con su función.', range: 4 },
-  { text: 'El docente proporcionó retroalimentación útil y oportuna.', range: 4 },
-  { text: 'El docente explicó con claridad los criterios de evaluación.', range: 4 },
-  { text: 'El docente fue receptivo a dudas y comentarios del grupo.', range: 4 },
+  { text: 'En términos generales, ¿cómo califica la calidad de la docencia recibida?', range: 5, labels: ['1 Muy deficiente', '2', '3', '4', '5 Excelente'] },
+  { text: 'El docente presentó y siguió el plan de estudios de la asignatura.', range: 5 },
+  { text: 'El docente mantuvo un trato respetuoso con el grupo.', range: 5 },
+  { text: 'El docente cumplió con la asistencia programada.', range: 5 },
+  { text: 'El docente inició y concluyó las sesiones con puntualidad.', range: 5 },
+  { text: 'El docente promovió la participación de las y los estudiantes.', range: 5 },
+  { text: 'El docente demostró dominio de los contenidos de la asignatura.', range: 5 },
+  { text: 'El docente utilizó adecuadamente la plataforma institucional cuando fue necesaria.', range: 5 },
+  { text: 'El docente fomentó el pensamiento crítico.', range: 5 },
+  { text: 'El docente planteó retos intelectuales acordes con la asignatura.', range: 5 },
+  { text: 'El docente explicó con claridad los objetivos y actividades del curso.', range: 5 },
+  { text: 'Las lecturas y actividades favorecieron mi aprendizaje.', range: 5 },
+  { text: 'El docente promovió el respeto a las reglas acordadas.', range: 5 },
+  { text: 'El docente despertó interés por la asignatura.', range: 5 },
+  { text: 'El docente utilizó apoyos didácticos pertinentes.', range: 5 },
+  { text: 'El docente mostró actitudes y valores congruentes con su función.', range: 5 },
+  { text: 'El docente proporcionó retroalimentación útil y oportuna.', range: 5 },
+  { text: 'El docente explicó con claridad los criterios de evaluación.', range: 5 },
+  { text: 'El docente fue receptivo a dudas y comentarios del grupo.', range: 5 },
 ];
 ---
 
@@ -67,14 +67,14 @@ const prompts = [
       <>
         <div class="mt-6 rounded-2xl border border-tup-100 bg-tup-50 p-5 text-sm text-tup-800">
           <p class="font-semibold">Indicaciones de respuesta</p>
-          <p class="mt-1">Responde todos los reactivos. En los reactivos 2 a 19, 1 es la valoración más baja y 4 la más alta.</p>
+          <p class="mt-1">Responde todos los reactivos en una escala de 1 a 5, donde 1 es la valoración más baja y 5 la más alta.</p>
         </div>
 
         <form id="evaluation-form" class="mt-6 space-y-5" novalidate>
           {prompts.map((prompt, index) => (
             <fieldset class="rounded-2xl bg-white p-5 shadow-tarjeta" aria-describedby={`help-${index}`}>
               <legend class="font-semibold leading-6 text-slate-800"><span class="mr-2 text-tup">{index + 1}.</span>{prompt.text}</legend>
-              <p id={`help-${index}`} class="mt-2 text-xs text-slate-500">{index === 0 ? 'Selecciona una valoración del 1 al 6.' : 'Selecciona una valoración del 1 al 4.'}</p>
+              <p id={`help-${index}`} class="mt-2 text-xs text-slate-500">Selecciona una valoración del 1 al 5.</p>
               <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-6">
                 {Array.from({ length: prompt.range }, (_, answer) => answer + 1).map((answer) => (
                   <label class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium text-slate-700 hover:border-tup" for={`answer-${index}-${answer}`}>
@@ -88,8 +88,8 @@ const prompts = [
 
           <div class="rounded-2xl bg-white p-5 shadow-tarjeta">
             <label for="comentario" class="font-semibold text-slate-800">Comentario adicional <span class="font-normal text-slate-500">(opcional)</span></label>
-            <textarea id="comentario" name="comentario" maxlength="2000" rows="5" class="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 focus:border-tup focus:outline-none focus:ring-2 focus:ring-tup-100" aria-describedby="comment-help"></textarea>
-            <p id="comment-help" class="mt-2 text-xs text-slate-500">Máximo 2000 caracteres. Evita incluir datos personales.</p>
+            <textarea id="comentario" name="comentario" maxlength="500" rows="5" class="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 focus:border-tup focus:outline-none focus:ring-2 focus:ring-tup-100" aria-describedby="comment-help"></textarea>
+            <p id="comment-help" class="mt-2 text-xs text-slate-500">Máximo 500 caracteres. Evita incluir datos personales.</p>
           </div>
 
           <p id="form-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert"></p>

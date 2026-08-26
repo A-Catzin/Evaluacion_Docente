@@ -20,6 +20,8 @@ export interface Planeacion {
   puntaje_promedio: number | null;
   estado: string; comentario_retroalimentacion: string | null; comentario_interno: string | null;
   fecha_subida: string; fecha_evaluacion: string | null;
+  first_teacher_submitted_at: string | null;
+  latest_teacher_submitted_at: string | null;
 }
 
 // ─── Catálogo ──────────────────────────────────────────────────
@@ -115,25 +117,25 @@ export interface EncuestaEstudiantilRespuesta {
   docente_id: number;
   grupo_id: number;
   cuatrimestre_id: number;
-  calidad_general: number; // 1-6
-  item_plan_estudio: number | null;
-  item_trato_respeto: number | null;
-  item_asistencia: number | null;
-  item_puntualidad: number | null;
-  item_participacion: number | null;
-  item_dominio_materia: number | null;
-  item_plataforma_moodle: number | null;
-  item_pensamiento_critico: number | null;
-  item_desafio_intelectual: number | null;
-  item_claridad_objetivos: number | null;
-  item_lecturas_aprendizaje: number | null;
-  item_respeto_reglas: number | null;
-  item_interes_materia: number | null;
-  item_apoyos_didacticos: number | null;
-  item_actitudes_valores: number | null;
-  item_retroalimentacion: number | null;
-  item_criterios_evaluacion: number | null;
-  item_receptividad: number | null;
+  calidad_general: number; // 1-5
+  item_plan_estudio: number;
+  item_trato_respeto: number;
+  item_asistencia: number;
+  item_puntualidad: number;
+  item_participacion: number;
+  item_dominio_materia: number;
+  item_plataforma_moodle: number;
+  item_pensamiento_critico: number;
+  item_desafio_intelectual: number;
+  item_claridad_objetivos: number;
+  item_lecturas_aprendizaje: number;
+  item_respeto_reglas: number;
+  item_interes_materia: number;
+  item_apoyos_didacticos: number;
+  item_actitudes_valores: number;
+  item_retroalimentacion: number;
+  item_criterios_evaluacion: number;
+  item_receptividad: number;
   comentario_abierto: string | null;
   clasificacion_comentario: string;
 }

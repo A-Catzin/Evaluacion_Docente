@@ -4,6 +4,7 @@ import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestres } from '../../services/catalogos';
 import { formatScore } from '../../services/scoring';
+import { obtenerCalificacionDocente, obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 
 const cliente = db();
 const token = Astro.cookies.get('sb-access-token')?.value;
@@ -25,19 +26,11 @@ const docente = docentes.find(d=>d.id===docenteSel);
 let historial: any[] = [];
 let totalCycles = 0, sumFinals = 0;
 if (modo === 'individual' && docenteSel) {
-  const { data: calData, error: calError } = await cliente
-    .from('calificaciones_finales')
-    .select('*')
-    .eq('docente_id', docenteSel)
-    .order('cuatrimestre_id', { ascending: true });
-  if (calError) throw calError;
-
-  for (const row of (calData || [])) {
-    const instCount = Number(row.num_instrumentos_completados || 0);
-    if (instCount === 0) continue;
-    const c = cuatrimestres.find((x) => x.id === row.cuatrimestre_id);
+  for (const c of cuatrimestres) {
+    const row = await obtenerCalificacionDocente(cliente, docenteSel, c.id);
+    if (!row || row.num_instrumentos_completados === 0) continue;
     historial.push({
-      clave: c?.clave || '',
+      clave: c.clave || '',
       ee: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
       coord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
       plan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
@@ -45,7 +38,7 @@ if (modo === 'individual' && docenteSel) {
       auto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
       final: Number(row.calificacion_final),
       cat: String(row.categoria_final ?? 'No iniciado'),
-      inst: instCount,
+      inst: row.num_instrumentos_completados,
       expected: Number(row.num_instrumentos_esperados || 0),
     });
     totalCycles++;
@@ -71,17 +64,13 @@ if (modo === 'general') {
     const { data: allDocs } = await cliente.from('docentes').select('id,nombre,apellidos,email,campus,modalidad').eq('activo', true).order('apellidos');
 
     if (allDocs?.length) {
-      const { data: calData, error: calError } = await cliente
-        .from('calificaciones_finales')
-        .select('*')
-        .in('cuatrimestre_id', cicloIdsGeneral)
-        .order('cuatrimestre_id', { ascending: true });
-      if (calError) throw calError;
-
       const calMap = new Map<number, Map<number, any>>();
-      for (const row of (calData || [])) {
-        if (!calMap.has(row.docente_id)) calMap.set(row.docente_id, new Map());
-        calMap.get(row.docente_id)!.set(row.cuatrimestre_id, row);
+      for (const cid of cicloIdsGeneral) {
+        const cals = await obtenerCalificacionesPorCuatrimestre(cliente, cid);
+        for (const row of cals) {
+if (!calMap.has(row.docente_id)) calMap.set(row.docente_id, new Map());
+calMap.get(row.docente_id)!.set(row.cuatrimestre_id, row);
+        }
       }
 
       const filas = allDocs.flatMap(d => {

@@ -2,6 +2,7 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../lib/db';
 import { formatScore } from '../../services/scoring';
+import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 
 const cl = dbAdmin();
 const { data: cuatrisData, error: cuatrisError } = await cl
@@ -24,33 +25,29 @@ if (Astro.url.searchParams.has('cuatrimestre') && cuatrimestreId) {
 
 const busqueda = (Astro.url.searchParams.get('q') || '').trim().toLowerCase();
 
-// Scores ya calculados; usamos la vista materializada para listados grandes.
-const { data: aggData, error: aggError } = await cl
-  .from('resultados_agregados')
-  .select('*')
-  .eq('cuatrimestre_id', cuatrimestreId);
-if (aggError) throw aggError;
+// Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
+const aggData = await obtenerCalificacionesPorCuatrimestre(cl, cuatrimestreId);
 
-const cardsConResultados = (aggData || [])
-  .filter((row: any) => Number(row.num_instrumentos_completados || 0) > 0)
-  .map((row: any) => ({
-    id: Number(row.docente_id),
+const cardsConResultados = aggData
+  .filter((row) => row.num_instrumentos_completados > 0)
+  .map((row) => ({
+    id: row.docente_id,
     nombre: String(row.docente_nombre ?? ''),
     apellidos: String(row.docente_apellidos ?? ''),
     email: String(row.docente_email ?? ''),
     campus: row.docente_campus,
     modalidad: row.modalidad_snapshot,
-    ee: row.score_encuesta_estudiantil != null ? Number(row.score_encuesta_estudiantil) : null,
-    coord: row.score_coordinacion != null ? Number(row.score_coordinacion) : null,
-    plan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
-    obs: row.score_observacion != null ? Number(row.score_observacion) : null,
-    auto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
-    final: Number(row.calificacion_final),
+    ee: row.score_encuesta_estudiantil,
+    coord: row.score_coordinacion,
+    plan: row.score_planeacion,
+    obs: row.score_observacion,
+    auto: row.score_autoevaluacion,
+    final: row.calificacion_final,
     category: String(row.categoria_final ?? 'No iniciado'),
-    instruments: Number(row.num_instrumentos_completados || 0),
-    expected: Number(row.num_instrumentos_esperados || 0),
+    instruments: row.num_instrumentos_completados,
+    expected: row.num_instrumentos_esperados,
   }))
-  .sort((a: any, b: any) => (b.final || 0) - (a.final || 0) || a.apellidos.localeCompare(b.apellidos));
+  .sort((a, b) => (b.final || 0) - (a.final || 0) || a.apellidos.localeCompare(b.apellidos));
 
 const cards = busqueda
   ? cardsConResultados.filter((d) => `${d.nombre} ${d.apellidos} ${d.email} ${d.campus || ''} ${d.modalidad || ''}`.toLowerCase().includes(busqueda))
@@ -109,6 +106,7 @@ function fmt(n: number | null | undefined): string {
         </div>
         <button type="submit" class="px-4 py-2 rounded-xl bg-tup text-white text-sm font-medium">Filtrar</button>
         {busqueda && <a href={`/admin/resultados-docentes${qs}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600">Limpiar</a>}
+        {cuatrimestreId && <a href={`/api/admin/exportar-resultados?cuatrimestre_id=${cuatrimestreId}`} class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium">Descargar CSV para Excel</a>}
       </form>
     </div>
 
