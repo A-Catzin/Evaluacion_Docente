@@ -2,6 +2,13 @@ import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
 import { validarComentarioOpcional } from "../../../lib/moderation";
 import { estaHabilitadoR2, subirArchivo } from "../../../lib/storage";
+import {
+  buildPlanningPdfPath,
+  parsePositiveInteger,
+  requireTeacherPlanningSubmissionOpen,
+  resolveTeacherPlanningGroup,
+  validatePlanningPdf,
+} from "../../../lib/planningSubmissionWindow";
 
 const BUCKET_PLANEACIONES = "planeaciones";
 
@@ -28,14 +35,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ error: "Solo docentes" }), {
         status: 403,
       });
+    const { data: docente } = await cl.from("docentes").select("campus,turno").eq("id", u.entidad_id).maybeSingle();
+    if (!docente) return new Response(JSON.stringify({ error: "No fue posible verificar tu perfil docente" }), { status: 403 });
 
     const formData = await request.formData();
-    const path = formData.get("path") as string;
-    const file = formData.get("file") as File;
+    const file = formData.get("file");
 
-    console.log("[Subir] path:", path, "file:", file?.name, file?.size);
-    if (!file || !path)
-      return new Response(JSON.stringify({ error: "Faltan archivo o ruta" }), {
+    if (!file || !(file instanceof File))
+      return new Response(JSON.stringify({ error: "Archivo requerido o inválido" }), {
         status: 400,
       });
 
@@ -48,6 +55,29 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         { status: 400 },
       );
 
+    const cuatrimestreId = parsePositiveInteger(formData.get("cuatrimestre_id"));
+    const asignaturaId = parsePositiveInteger(formData.get("asignatura_id"));
+    const grupo = String(formData.get("grupo") || "").trim();
+    if (!cuatrimestreId || !asignaturaId || !grupo) return new Response(JSON.stringify({ error: "Asignatura, grupo o cuatrimestre inválido" }), { status: 400 });
+    const accessDenied = await requireTeacherPlanningSubmissionOpen(cl, cuatrimestreId);
+    if (accessDenied) return accessDenied;
+    const pdfValidation = validatePlanningPdf(file);
+    if (!pdfValidation.ok) return new Response(JSON.stringify({ error: pdfValidation.error }), { status: 400 });
+
+    const planId = parsePositiveInteger(formData.get("plan_id"));
+    if (planId) {
+      const { data } = await cl.from("planeaciones").select("docente_id,cuatrimestre_id,asignatura_id,grupo,modalidad,estado").eq("id", planId).maybeSingle();
+      const plan = data as { docente_id: number; cuatrimestre_id: number; asignatura_id: number; grupo: string; modalidad: string; estado: string } | null;
+      if (!plan || plan.estado !== "Corrección" || plan.docente_id !== u.entidad_id || plan.cuatrimestre_id !== cuatrimestreId || plan.asignatura_id !== asignaturaId || plan.grupo !== grupo) {
+        return new Response(JSON.stringify({ error: "La planeación a reenviar no corresponde a tu carga del cuatrimestre." }), { status: 403 });
+      }
+    }
+    const group = await resolveTeacherPlanningGroup(cl, u.entidad_id, cuatrimestreId, asignaturaId, grupo);
+    if (!group) return new Response(JSON.stringify({ error: "La asignatura y el grupo no corresponden a tu carga escolarizada del cuatrimestre." }), { status: 403 });
+    const comentarioRaw = formData.get("comentario") as string | null;
+    const moderacion = validarComentarioOpcional(comentarioRaw, 500);
+    if (!moderacion.valido) return new Response(JSON.stringify({ error: moderacion.error, code: "comment_rejected" }), { status: 400 });
+    const path = buildPlanningPdfPath(cuatrimestreId, u.entidad_id);
     const buffer = await file.arrayBuffer();
 
     let pdfUrl: string;
@@ -79,40 +109,30 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       pdfUrl = urlData.publicUrl;
     }
 
-    const planId = formData.get("plan_id") as string;
-
-    const comentarioRaw = formData.get("comentario") as string | null;
-    const moderacion = validarComentarioOpcional(comentarioRaw, 500);
-    if (!moderacion.valido) {
-      return new Response(
-        JSON.stringify({ error: moderacion.error, code: "comment_rejected" }),
-        { status: 400 },
-      );
-    }
-
     const datos = {
-      asignatura_id: parseInt(formData.get("asignatura_id") as string) || null,
-      grupo: formData.get("grupo") as string,
-      modalidad: modalidad,
+      asignatura_id: asignaturaId,
+      grupo: group.clave,
+      modalidad: group.modalidad,
       proyecto: formData.get("proyecto") === "true",
       laboratorio: formData.get("laboratorio") as string,
       visitas: formData.get("visitas") as string,
       url_pdf: pdfUrl,
-      nombre_archivo: (formData.get("nombre") as string) || file.name,
+      nombre_archivo: file.name,
       comentario_docente: moderacion.valorNormalizado,
-      campus: formData.get("campus") as string,
-      turno: formData.get("turno") as string,
+      campus: docente.campus || "",
+      turno: docente.turno || "",
       estado: planId ? "Pendiente" : undefined,
     };
 
     let dbErr = null;
-    const cuatrimestreId = parseInt(formData.get("cuatrimestre_id") as string);
     if (planId) {
       // Reenviar correccion: actualizar existente
       const { error } = await cl
         .from("planeaciones")
         .update(datos)
-        .eq("id", parseInt(planId));
+        .eq("id", planId)
+        .eq("docente_id", u.entidad_id)
+        .eq("cuatrimestre_id", cuatrimestreId);
       dbErr = error;
     } else {
       const { error } = await cl.from("planeaciones").insert({

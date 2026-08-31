@@ -54,11 +54,11 @@ const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('es
   <div class="animate-flotar-entrada max-w-5xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-tup">Evaluación de Planeaciones (Admin)</h1>
-      <form method="GET" class="flex items-center gap-2">
+      <div class="flex items-center gap-3"><a href={`/admin/planeaciones/acceso${qs}`} class="rounded-xl border border-tup px-3 py-2 text-sm font-medium text-tup hover:bg-tup/5">Configurar acceso</a><form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
           {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
         </select>
-      </form>
+      </form></div>
     </div>
 
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-8">

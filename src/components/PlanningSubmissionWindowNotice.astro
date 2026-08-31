@@ -1,0 +1,14 @@
+---
+interface Props {
+  message: string;
+  opensAt?: string | null;
+  closesAt?: string | null;
+}
+const { message, opensAt, closesAt } = Astro.props;
+---
+
+<section class="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700" role="status">
+  <h2 class="font-semibold text-slate-800">Entrega de planeaciones no disponible</h2>
+  <p class="mt-1">{message}</p>
+  {(opensAt || closesAt) && <p class="mt-2 text-xs text-slate-500">Horario mostrado en America/Cancun{opensAt ? ` · Inicio: ${opensAt}` : ''}{closesAt ? ` · Cierre: ${closesAt}` : ''}</p>}
+</section>

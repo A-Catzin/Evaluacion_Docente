@@ -35,6 +35,7 @@ Este runbook es la referencia operativa del estado implementado. Permite prepara
 | 047 | Diagnóstico seguro de borrado de prueba | Conserva los controles de 046 y devuelve códigos distintos para ciclo activo, sin marca, confirmación incorrecta y guardia de dependencias. Requiere 046. |
 | 048 | Clausura FK completa de borrado de prueba | Incluye `calificacion_final_docente` heredada, conserva el borrado explícito hijo-padre y restringe la lista aprobada al inventario FK vivo. Requiere 046–047. |
 | 049 | Borrado de prueba escalable con auditoría resumida | Agrega el índice de cadena de auditoría y suprime sólo eventos de fila dentro de la transacción validada de `delete_test_cycle`; conserva un resumen seguro al confirmar. Requiere 040 y 046–048. |
+| 050 | Acceso a entregas de planeación | Agrega ventana manual o programada por cuatrimestre, cerrada por defecto, con protección de escritura en base de datos y rutas de carga. Requiere 040, 041 y 049. |
 
 Después de aplicar en un ambiente una migración que agregue o cambie RPC, recargue la caché de esquema de PostgREST:
 
@@ -63,6 +64,7 @@ El borrado duro no es una acción normal de administración. Sólo existe para d
 | Evaluación estudiantil | `encuesta_control_envio`, `encuesta_estudiantil_respuestas`, `encuesta_estudiantil` heredada |
 | Instrumentos y capturas | `evaluacion_coordinacion`, `evaluacion_planeacion`, `observacion_clase`, `autoevaluacion_docente`, `planeaciones`, `observaciones`, `autodiagnosticos` |
 | Resultados y comunicación | `docente_360_feedback`, `docente_modalidad_historica`, `calificacion_final_docente` heredada, `calificaciones_finales`, `institutional_notices` |
+| Configuración de entregas | `planning_submission_windows` |
 | Auditoría y recuperación | `audit_events`, `change_sets` y `restore_points` se conservan. `change_sets.cuatrimestre_id` no es FK y `restore_points`/`audit_events` dependen de `change_sets`, no del ciclo. |
 
 Los catálogos compartidos (`docentes`, `estudiantes`, `asignaturas`, `instrumento_preguntas`, ofertas y usuarios) no se eliminan: pueden pertenecer a otros ciclos. La eliminación de las inscripciones, controles y respuestas del ciclo elimina los datos estudiantiles operativos de prueba sin borrar identidades reutilizables.
@@ -107,6 +109,20 @@ La respuesta JSON de `POST /api/admin/cuatrimestres` conserva un mensaje seguro 
 6. Tras éxito, confirme que el ciclo y sus filas con alcance ya no existen, que `/admin/trazabilidad` contiene exactamente un nuevo `test_cycle.deleted` con el mismo ID y conteos, y que las tareas de `test_cycle_storage_cleanup` quedan visibles para procesar. Verifique que no se añadieron eventos por fila de ese borrado.
 
 ## Importar un ciclo
+
+## Ventana de entrega de planeaciones
+
+La recepción de planeaciones se controla por cuatrimestre desde `/admin/planeaciones/acceso`. Un superadmin elige una sola modalidad: apertura manual, cierre manual o ventana programada con inicio y cierre. La ausencia de registro equivale a cierre. Coordinación y superadministración pueden evaluar planeaciones ya existentes aunque la recepción esté cerrada.
+
+1. Aplique `050_teacher_planning_access_window.sql` después de `049` y recargue la caché de PostgREST.
+2. Abra `/admin/planeaciones/acceso?cuatrimestre=<id>` y seleccione el cuatrimestre correcto.
+3. Para una ventana programada, capture ambos campos como hora local de `America/Cancun`; por ejemplo, del día 16 a las 00:00 al día 30 a las 23:59. El sistema abre al inicio y cierra al llegar al fin.
+4. Verifique con una cuenta docente que, al cierre, siga visible el historial, PDF y retroalimentación, pero no aparezcan formularios ni reenvíos. Un intento directo de escritura debe responder `planning_submissions_closed`.
+5. Verifique con una cuenta de coordinación o superadministración que una evaluación de planeación existente siga siendo posible durante el cierre.
+
+La protección no depende de la interfaz: los tres endpoints docentes revisan el estado antes de leer bytes del archivo y la base de datos valida identidad docente, grupo, asignatura y ciclo en cada inserción, actualización o eliminación. Las rutas de los PDF se generan en el servidor; no se aceptan rutas de almacenamiento enviadas por el cliente.
+
+Al borrar un ciclo de prueba, el preview incluye `planning_submission_windows` y la RPC la elimina explícitamente antes de `cuatrimestres`. El evento de cambio de ventana sólo registra el ciclo, modalidad y presencia de límites; no registra texto libre, rutas ni datos personales.
 
 El ciclo se elige en la aplicación. Ningún CSV crea ni selecciona ciclos; su columna `CICLO`, si existe, sólo sirve para detectar diferencias o mezclas.
 

@@ -45,6 +45,7 @@ supabase/migrations/*
 !supabase/migrations/046_safe_test_cycle_hard_delete.sql
 !supabase/migrations/047_test_cycle_delete_diagnostics.sql
 !supabase/migrations/049_optimize_test_cycle_delete_audit.sql
+!supabase/migrations/050_teacher_planning_access_window.sql
 
 openspec/
 src/supabase/
@@ -63,3 +64,6 @@ docs/estructura_de_carpetas.md
 docs/requerimientos.md
 docs/sistema_evaluacion.md
 docs/ui_ux_guidelines.md
+
+# private project documentation
+docs-privados/

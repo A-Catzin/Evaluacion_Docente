@@ -1,9 +1,10 @@
 import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
 import {
-  logRecalcError,
-  recalcularCalificacionDocente,
-} from "../../../services/calificaciones";
+  parsePositiveInteger,
+  requireTeacherPlanningSubmissionOpen,
+  resolveTeacherPlanningGroup,
+} from "../../../lib/planningSubmissionWindow";
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   let cl;
@@ -29,36 +30,25 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       });
 
     const body = await request.json();
-    const cuatrimestreId = body.cuatrimestre_id;
-    const { data, error } = await cl
-      .from("planeaciones")
-      .insert({ ...body, docente_id: u.entidad_id })
-      .select()
-      .single();
-    if (error) {
-      if (error.code === "23505")
-        return new Response(
-          JSON.stringify({
-            error: "Ya subiste una planeación para esta asignatura",
-          }),
-          { status: 409 },
-        );
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 400,
-      });
+    if (!body || typeof body !== "object") {
+      return new Response(JSON.stringify({ error: "Datos de planeación inválidos" }), { status: 400 });
     }
-
-    try {
-      if (typeof cuatrimestreId === "number") {
-        await recalcularCalificacionDocente(cl, u.entidad_id, cuatrimestreId);
-      }
-    } catch (recalcError) {
-      logRecalcError(u.entidad_id, cuatrimestreId as number, recalcError);
+    const planning = body as Record<string, unknown>;
+    const cuatrimestreId = parsePositiveInteger(planning.cuatrimestre_id);
+    const asignaturaId = parsePositiveInteger(planning.asignatura_id);
+    const grupo = typeof planning.grupo === "string" ? planning.grupo.trim() : "";
+    if (!cuatrimestreId || !asignaturaId || !grupo) {
+      return new Response(JSON.stringify({ error: "Asignatura, grupo o cuatrimestre inválido" }), { status: 400 });
     }
-
-    return new Response(JSON.stringify({ success: true, id: data.id }), {
-      status: 201,
-    });
+    const accessDenied = await requireTeacherPlanningSubmissionOpen(cl, cuatrimestreId);
+    if (accessDenied) return accessDenied;
+    const group = await resolveTeacherPlanningGroup(cl, u.entidad_id, cuatrimestreId, asignaturaId, grupo);
+    if (!group) {
+      return new Response(JSON.stringify({ error: "La asignatura y el grupo no corresponden a tu carga escolarizada del cuatrimestre." }), { status: 403 });
+    }
+    // This legacy JSON endpoint cannot safely receive a storage reference.
+    // PDFs must go through an upload endpoint that generates the object path.
+    return new Response(JSON.stringify({ error: "La planeación debe enviarse con un archivo PDF mediante el formulario de carga." }), { status: 400 });
   } catch (err) {
     return new Response(JSON.stringify({ error: "Error interno" }), {
       status: 500,

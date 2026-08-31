@@ -183,7 +183,7 @@ function feedbackCards(text: string | null | undefined) {
       <div><h1 class="text-3xl font-bold text-tup">Mi Evaluación 360°</h1><p class="text-slate-500">{nombreDocente}</p></div>
       <form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
-          {cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.clave} {c.nombre||''}</option>))}
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.nombre}</option>))}
         </select>
       </form>
     </div>

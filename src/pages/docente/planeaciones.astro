@@ -2,6 +2,8 @@
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+import PlanningSubmissionWindowNotice from '../../components/PlanningSubmissionWindowNotice.astro';
+import { formatPlanningDate, getPlanningSubmissionWindow, planningSubmissionMessage } from '../../lib/planningSubmissionWindow';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -27,6 +29,8 @@ const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
 const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
 const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
+const planningWindow = await getPlanningSubmissionWindow(cl, cuatrimestreId);
+const planningSubmissionOpen = planningWindow.state === 'open';
 if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
 }
@@ -45,7 +49,7 @@ const materiasDisponibles = (misAsignaturas||[]).filter(a => !materiasBloqueadas
 const materiasCorreccion = new Map<number, number>(); // asignatura_id → planeacion_id
 (planeacionesRaw||[]).filter(p => (p as any).estado === 'Corrección').forEach(p => materiasCorreccion.set((p as any).asignatura_id, (p as any).id));
 
-interface PlaneacionItem { id: number; asignatura: string; grupo: string; estado: string; puntaje: number | null; url: string; evaluacionDetalle: Record<string,{score:string}> | null; }
+interface PlaneacionItem { id: number; asignatura: string; grupo: string; estado: string; puntaje: number | null; url: string; evaluacionDetalle: Record<string,{score:string}> | null; retroalimentacion: string | null; observaciones: string | null; }
 const planeaciones: PlaneacionItem[] = [];
 for (const p of (planeacionesRaw || [])) {
   const pdfUrl = (p as Record<string,unknown>).url_pdf as string;
@@ -62,7 +66,9 @@ for (const p of (planeacionesRaw || [])) {
     estado: (p as Record<string,unknown>).estado as string,
     puntaje: (p as Record<string,unknown>).puntaje_promedio as number | null,
     url: urlFirmada,
-    evaluacionDetalle: ((p as Record<string,unknown>).evaluacion_detalle as Record<string,{score:string}> | null) || null
+    evaluacionDetalle: ((p as Record<string,unknown>).evaluacion_detalle as Record<string,{score:string}> | null) || null,
+    retroalimentacion: ((p as Record<string,unknown>).comentario_retroalimentacion as string | null) || null,
+    observaciones: ((p as Record<string,unknown>).observaciones_generales as string | null) || null
   });
 }
 ---
@@ -71,6 +77,9 @@ for (const p of (planeacionesRaw || [])) {
   <div class="animate-flotar-entrada max-w-4xl mx-auto">
     <h1 class="text-3xl font-bold text-tup mb-2">Buzón de entrega Planeación Docente {cuatrimestre?.clave || ''}</h1>
     <p class="text-slate-500 mb-6">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'}</p>
+    <form method="GET" class="mb-6 flex items-center gap-3"><label for="cuatrimestre" class="text-sm font-medium text-slate-700">Consultar cuatrimestre</label><select id="cuatrimestre" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => <option value={c.id} selected={c.id === cuatrimestreId}>{c.clave}</option>)}</select></form>
+
+    {!planningSubmissionOpen && <PlanningSubmissionWindowNotice message={planningSubmissionMessage(planningWindow)} opensAt={formatPlanningDate(planningWindow.opens_at)} closesAt={formatPlanningDate(planningWindow.closes_at)} />}
 
     <!-- Leyenda -->
     <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8 text-sm text-slate-600 leading-relaxed space-y-3">
@@ -89,7 +98,7 @@ for (const p of (planeacionesRaw || [])) {
     </div>
 
     <!-- Correcciones pendientes -->
-    {materiasCorreccion.size > 0 && (
+    {planningSubmissionOpen && materiasCorreccion.size > 0 && (
       <div class="bg-red-50 rounded-2xl p-5 border border-red-200 mb-6">
         <h3 class="font-bold text-red-700 mb-3">⚠️ Planeaciones que requieren corrección</h3>
         <p class="text-sm text-red-600 mb-4">El coordinador solicitó cambios en las siguientes materias. Corregí y volvé a subir el archivo.</p>
@@ -103,7 +112,7 @@ for (const p of (planeacionesRaw || [])) {
     )}
 
     <!-- Formulario de subida -->
-    <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8">
+    {planningSubmissionOpen && <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8">
       <h2 class="text-lg font-bold text-tup mb-4">Subir Nueva Planeación</h2>
       {materiasDisponibles.length === 0 && materiasCorreccion.size === 0 ? (
         <p class="text-sm text-slate-400">Ya subiste planeación para todas tus materias. 🎉</p>
@@ -125,7 +134,7 @@ for (const p of (planeacionesRaw || [])) {
         <button type="submit" class="w-full bg-tup text-white font-semibold py-3 rounded-xl hover:bg-tup/90">Subir Planeación</button>
       </form>
       )}
-    </div>
+    </div>}
 
     <!-- Lista -->
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
@@ -134,7 +143,7 @@ for (const p of (planeacionesRaw || [])) {
         <div class="p-12 text-center ">No has subido planeaciones todavía.</div>
       ) : (
         <table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-4 py-3 text-xs uppercase">Grupo</th><th class="text-center px-4 py-3 text-xs uppercase">Estado</th><th class="text-center px-4 py-3 text-xs uppercase">Puntaje</th><th class="text-right px-4 py-3 text-xs uppercase">PDF</th></tr></thead>
-        <tbody class="divide-y">{planeaciones.map(p => (<tr class="hover:bg-slate-50"><td class="px-4 py-3">{p.asignatura}</td><td class="px-4 py-3">{p.grupo}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${p.estado==='Aprobado'?'bg-emerald-50 text-emerald-700':p.estado==='Corrección'?'bg-red-50 text-red-700':'bg-amber-50 text-amber-700'}`}>{p.estado}</span></td><td class="px-4 py-3 text-center font-bold">{(()=>{if(!p.puntaje)return'—';const d=p.evaluacionDetalle||{};let sum=0,count=0;for(const k in d){const s=d[k]?.score;if(s==='na'||s==null)continue;sum+=parseInt(s);count++}const max=count*2;return count>0?Math.round(p.puntaje)+'% ('+sum+'/'+max+')':Math.round(p.puntaje)+'%';})()}</td><td class="px-4 py-3 text-right"><a href={p.url} target="_blank" class="text-tup text-xs hover:underline">Ver PDF</a></td></tr>))}</tbody></table>
+        <tbody class="divide-y">{planeaciones.map(p => (<tr class="hover:bg-slate-50"><td class="px-4 py-3"><p>{p.asignatura}</p>{(p.retroalimentacion || p.observaciones) && <div class="mt-2 space-y-1 text-xs text-slate-600">{p.retroalimentacion && <p><span class="font-medium text-slate-700">Retroalimentación:</span> {p.retroalimentacion}</p>}{p.observaciones && <p><span class="font-medium text-slate-700">Observaciones:</span> {p.observaciones}</p>}</div>}</td><td class="px-4 py-3">{p.grupo}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${p.estado==='Aprobado'?'bg-emerald-50 text-emerald-700':p.estado==='Corrección'?'bg-red-50 text-red-700':'bg-amber-50 text-amber-700'}`}>{p.estado}</span></td><td class="px-4 py-3 text-center font-bold">{(()=>{if(!p.puntaje)return'—';const d=p.evaluacionDetalle||{};let sum=0,count=0;for(const k in d){const s=d[k]?.score;if(s==='na'||s==null)continue;sum+=parseInt(s);count++}const max=count*2;return count>0?Math.round(p.puntaje)+'% ('+sum+'/'+max+')':Math.round(p.puntaje)+'%';})()}</td><td class="px-4 py-3 text-right"><a href={p.url} target="_blank" class="text-tup text-xs hover:underline">Ver PDF</a></td></tr>))}</tbody></table>
       )}
     </div>
     <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
@@ -144,6 +153,8 @@ for (const p of (planeacionesRaw || [])) {
 <script is:inline define:vars={{ docenteId: entidadId, cuatrimestreId: cuatrimestre?.id, campus: docente?.campus || '', turno: docente?.turno || '', gruposJson: JSON.stringify(gruposDocente || []), correccionesJson: JSON.stringify([...materiasCorreccion.entries()]), cuatrimestreClave: cuatrimestre?.clave || 'XX' }}>
   var gruposData = JSON.parse(gruposJson);
   var correccionesData = new Map(JSON.parse(correccionesJson));
+  var planningForm = document.getElementById("form-subir");
+  if (planningForm) {
   document.getElementById("asignatura_id").addEventListener("change", actualizarGrupos);
   function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
   
@@ -181,9 +192,8 @@ for (const p of (planeacionesRaw || [])) {
     if(!asig.value||!grupo){toast('Selecciona asignatura y grupo',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
     var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_doc_'+cuatrimestreClave+'.pdf';
     try{
-      var path=cuatrimestreId+'/'+docenteId+'/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/\s+/g,'_');
-      var formData=new FormData();
-      formData.append('file',file); formData.append('path',path);
+       var formData=new FormData();
+       formData.append('file',file);
       formData.append('cuatrimestre_id',cuatrimestreId); formData.append('asignatura_id',asig.value);
       var planId = document.getElementById('plan_id').value;
       if (planId) formData.append('plan_id', planId);
@@ -197,5 +207,6 @@ for (const p of (planeacionesRaw || [])) {
       if(!uploadRes.ok){var errData=await uploadRes.json().catch(function(){return{}});toast('Error: '+(errData.error||errData.message||uploadRes.status),true);btn.disabled=false;btn.textContent='Subir Planeación';return}
       toast('¡Planeación subida exitosamente!',false);setTimeout(function(){location.reload()},1000);
     }catch(err){toast('Error: '+err.message,true);btn.disabled=false;btn.textContent='Subir Planeación'}
-  });
+   });
+  }
 </script>

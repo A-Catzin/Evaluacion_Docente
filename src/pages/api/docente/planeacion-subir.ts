@@ -3,6 +3,13 @@ import { AuthError, requireRole } from "../../../lib/auth";
 import { validarComentarioOpcional } from "../../../lib/moderation";
 import { estaHabilitadoR2, subirArchivo } from "../../../lib/storage";
 import {
+  buildPlanningPdfPath,
+  parsePositiveInteger,
+  requireTeacherPlanningSubmissionOpen,
+  resolveTeacherPlanningGroup,
+  validatePlanningPdf,
+} from "../../../lib/planningSubmissionWindow";
+import {
   logRecalcError,
   recalcularCalificacionDocente,
 } from "../../../services/calificaciones";
@@ -31,6 +38,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ error: "Solo docentes" }), {
         status: 403,
       });
+    const { data: docente } = await cl.from("docentes").select("campus,turno").eq("id", u.entidad_id).maybeSingle();
+    if (!docente) return new Response(JSON.stringify({ error: "No fue posible verificar tu perfil docente" }), { status: 403 });
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -39,23 +48,16 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         JSON.stringify({ error: "Archivo requerido o inválido" }),
         { status: 400 },
       );
-    if (file.size > 5 * 1024 * 1024)
-      return new Response(
-        JSON.stringify({
-          error:
-            "Máximo 5 MB. Tu archivo pesa: " +
-            (file.size / 1024 / 1024).toFixed(2) +
-            " MB",
-        }),
-        { status: 400 },
-      );
-    if (file.type !== "application/pdf")
-      return new Response(
-        JSON.stringify({
-          error: "Solo archivos PDF. Tipo recibido: " + file.type,
-        }),
-        { status: 400 },
-      );
+    const cuatrimestreId = parsePositiveInteger(formData.get("cuatrimestre_id"));
+    const asignaturaId = parsePositiveInteger(formData.get("asignatura_id"));
+    const grupo = String(formData.get("grupo") || "").trim();
+    if (!cuatrimestreId || !asignaturaId || !grupo) {
+      return new Response(JSON.stringify({ error: "Asignatura, grupo o cuatrimestre inválido" }), { status: 400 });
+    }
+    const accessDenied = await requireTeacherPlanningSubmissionOpen(cl, cuatrimestreId);
+    if (accessDenied) return accessDenied;
+    const pdfValidation = validatePlanningPdf(file);
+    if (!pdfValidation.ok) return new Response(JSON.stringify({ error: pdfValidation.error }), { status: 400 });
 
     const modalidad = formData.get("modalidad") as string;
     if (modalidad !== "Escolarizada")
@@ -66,14 +68,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         { status: 400 },
       );
 
-    const path = formData.get("path") as string;
-    console.log(
-      "[Planeacion Subir] Recibido:",
-      file.name,
-      file.size,
-      "bytes, path:",
-      path,
-    );
+    const group = await resolveTeacherPlanningGroup(cl, u.entidad_id, cuatrimestreId, asignaturaId, grupo);
+    if (!group) return new Response(JSON.stringify({ error: "La asignatura y el grupo no corresponden a tu carga escolarizada del cuatrimestre." }), { status: 403 });
+    const comentarioRaw = formData.get("comentario") as string | null;
+    const moderacion = validarComentarioOpcional(comentarioRaw, 500);
+    if (!moderacion.valido) {
+      return new Response(JSON.stringify({ error: moderacion.error, code: "comment_rejected" }), { status: 400 });
+    }
+    const path = buildPlanningPdfPath(cuatrimestreId, u.entidad_id);
     const buffer = await file.arrayBuffer();
 
     let pdfUrl: string;
@@ -107,51 +109,21 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       pdfUrl = urlData.publicUrl;
     }
 
-    const comentarioRaw = formData.get("comentario") as string | null;
-    const moderacion = validarComentarioOpcional(comentarioRaw, 500);
-    if (!moderacion.valido) {
-      return new Response(
-        JSON.stringify({ error: moderacion.error, code: "comment_rejected" }),
-        { status: 400 },
-      );
-    }
-
     // Guardar en BD
-    const asignaturaId = parseInt(formData.get("asignatura_id") as string);
-    const cuatrimestreId = parseInt(formData.get("cuatrimestre_id") as string);
-    if (isNaN(asignaturaId) || isNaN(cuatrimestreId))
-      return new Response(
-        JSON.stringify({ error: "Asignatura o cuatrimestre inválido" }),
-        { status: 400 },
-      );
-
-    // Validar que el docente esté vinculado a esta asignatura via grupos
-    const { data: vinc } = await cl
-      .from("grupos")
-      .select("id")
-      .eq("docente_id", u.entidad_id)
-      .eq("asignatura_id", asignaturaId)
-      .limit(1);
-    if (!vinc || vinc.length === 0)
-      return new Response(
-        JSON.stringify({ error: "No estás asignado a esta materia" }),
-        { status: 403 },
-      );
-
     const { error: dbError } = await cl.from("planeaciones").insert({
       docente_id: u.entidad_id,
       cuatrimestre_id: cuatrimestreId,
       asignatura_id: asignaturaId,
-      grupo: formData.get("grupo") as string,
-      modalidad: modalidad,
+      grupo: group.clave,
+      modalidad: group.modalidad,
       proyecto: formData.get("proyecto") === "true",
       laboratorio: formData.get("laboratorio") as string,
       visitas: formData.get("visitas") as string,
       url_pdf: pdfUrl,
-      nombre_archivo: path.split("/").pop() || "planeacion.pdf",
+      nombre_archivo: file.name,
       comentario_docente: moderacion.valorNormalizado,
-      campus: formData.get("campus") as string,
-      turno: formData.get("turno") as string,
+      campus: docente.campus || "",
+      turno: docente.turno || "",
     });
 
     if (dbError) {
