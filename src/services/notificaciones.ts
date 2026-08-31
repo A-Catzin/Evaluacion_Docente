@@ -55,22 +55,13 @@ export async function notificarCoordinadoresDocente(
   mensaje: string,
   url?: string
 ): Promise<void> {
-  const cl = db();
-  const { data: vinculaciones } = await cl.from('coordinador_docentes')
+  const cl = dbAdmin();
+  const { data: vinculaciones } = await cl.from('coordinated_teacher_assignments')
     .select('coordinador_id')
     .eq('docente_id', docenteId)
-    .eq('cuatrimestre_id', cuatrimestreId);
-  if (!vinculaciones?.length) {
-    const { data: allCoords } = await cl.from('coordinador_docentes')
-      .select('coordinador_id')
-      .eq('docente_id', docenteId);
-    const ids = allCoords?.map(v => v.coordinador_id) || [];
-    for (const uid of ids) {
-      await crearNotificacion({ usuario_id: uid, titulo, mensaje, url, tipo: 'planeacion' });
-    }
-    return;
-  }
-  for (const v of vinculaciones) {
+    .eq('cuatrimestre_id', cuatrimestreId)
+    .is('revoked_at', null);
+  for (const v of vinculaciones || []) {
     await crearNotificacion({ usuario_id: v.coordinador_id, titulo, mensaje, url, tipo: 'planeacion' });
   }
 }

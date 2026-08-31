@@ -5,6 +5,7 @@ import {
   obtenerCalificacionesPorCuatrimestre,
   type CalificacionFinal,
 } from "../../../services/calificaciones";
+import { getMyAssignedTeacherIds } from "../../../lib/teacherAssignments";
 
 export const GET: APIRoute = async ({ url, cookies }) => {
   const t = cookies.get("sb-access-token")?.value;
@@ -55,6 +56,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     const cicloIdsValid = cuatris.map((c) => c.id);
     const claves = cuatris.map((c) => c.clave);
 
+    const assignedByCycle = new Map<number, Set<number>>();
     let allDocIds: number[];
     if (u.rol === "superadmin") {
       const { data: allDocs } = await cl
@@ -63,12 +65,10 @@ export const GET: APIRoute = async ({ url, cookies }) => {
         .eq("activo", true);
       allDocIds = (allDocs || []).map((d) => d.id);
     } else {
-      const { data: asigs } = await cl
-        .from("coordinador_docentes")
-        .select("docente_id")
-        .eq("coordinador_id", s.user.id)
-        .in("cuatrimestre_id", cicloIdsValid);
-      allDocIds = [...new Set((asigs || []).map((a) => a.docente_id))];
+      for (const cycleId of cicloIdsValid) {
+        assignedByCycle.set(cycleId, await getMyAssignedTeacherIds(cl, "coordinated", cycleId));
+      }
+      allDocIds = [...new Set([...assignedByCycle.values()].flatMap((ids) => [...ids]))];
     }
 
     if (!allDocIds.length) {
@@ -93,6 +93,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     for (const cid of cicloIdsValid) {
       const cals = await obtenerCalificacionesPorCuatrimestre(cl, cid);
       for (const cal of cals) {
+        if (u.rol !== "superadmin" && !assignedByCycle.get(cid)?.has(cal.docente_id)) continue;
         if (!califPorDocenteCiclo.has(cal.docente_id)) {
           califPorDocenteCiclo.set(cal.docente_id, new Map());
         }
@@ -106,7 +107,9 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       let countFinal = 0;
 
       for (const cid of cicloIdsValid) {
-        const cal = califPorDocenteCiclo.get(d.id)?.get(cid);
+        const cal = u.rol === "superadmin" || assignedByCycle.get(cid)?.has(d.id)
+          ? califPorDocenteCiclo.get(d.id)?.get(cid)
+          : undefined;
         puntajesPorCiclo[cid] =
           cal && cal.num_instrumentos_completados > 0
             ? cal.calificacion_final

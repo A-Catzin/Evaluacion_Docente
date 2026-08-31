@@ -20,7 +20,7 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
         <button id="nav-toggle" class="sm:hidden text-slate-600 p-1" onclick="document.getElementById('nav-menu').classList.toggle('hidden')">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
-        <a href={`/coordinador/dashboard${qs}`} class="font-semibold text-tup text-sm sm:text-base">SED-360 · Coordinador {cuatrimestreSel && <span class="text-[10px] bg-tup text-white px-2 py-0.5 rounded-full ml-1">{cuatrimestreSel}</span>}</a>
+        <a href={`/coordinador/dashboard${qs}`} class="font-semibold text-tup text-sm sm:text-base">SED-360 · Coordinador </a>
         <nav class="hidden sm:flex gap-1">
           <a href={`/coordinador/dashboard${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Dashboard</a>
           <a href={`/coordinador/captura/coordinacion${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Ev. Coordi.</a>

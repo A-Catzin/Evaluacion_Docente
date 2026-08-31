@@ -3,6 +3,7 @@ import { AuthError, requireRole } from "../../../lib/auth";
 import { validarComentarioOpcional } from "../../../lib/moderation";
 import { CoordinacionEvaluacionSchema } from "../../../lib/validation/apiSchemas";
 import { formatZodFieldErrors } from "../../../lib/validation/errors";
+import { canManageCoordinatedTeacher } from "../../../lib/teacherAssignments";
 import {
   logRecalcError,
   recalcularCalificacionDocente,
@@ -49,6 +50,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         JSON.stringify({ error: moderacion.error, code: "comment_rejected" }),
         { status: 400, headers: { "Content-Type": "application/json" } },
       );
+    }
+
+    if (!await canManageCoordinatedTeacher(cl, docente_id, cuatrimestre_id)) {
+      return new Response(JSON.stringify({ error: "No tienes asignación de coordinación para este docente" }), {
+        status: 403, headers: { "Content-Type": "application/json" },
+      });
     }
 
     const { data, error } = await cl

@@ -2,13 +2,19 @@
 import LayoutCoordinador from '../../../../layouts/LayoutCoordinador.astro';
 import { db } from '../../../../lib/db';
 import { obtenerUrlFirmadaDesdeUrlAlmacenada } from '../../../../lib/storage';
-import { obtenerPlaneacion } from '../../../../services/planeaciones';
+import { canManageCoordinatedTeacher } from '../../../../lib/teacherAssignments';
 
 const id = parseInt(Astro.params.id || '0');
 const backSearch = Astro.url.search || '';
 const cliente = db();
-const plan = await obtenerPlaneacion(id);
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+const { data: plan } = await cliente.from('planeaciones').select('*').eq('id', id).maybeSingle();
 if (!plan) return Astro.redirect(`/coordinador/planeaciones${backSearch}`);
+if (!await canManageCoordinatedTeacher(cliente, Number(plan.docente_id), Number(plan.cuatrimestre_id))) {
+  return Astro.redirect(`/coordinador/planeaciones${backSearch}`);
+}
 
 let urlFirmada = plan.url_pdf;
 try {

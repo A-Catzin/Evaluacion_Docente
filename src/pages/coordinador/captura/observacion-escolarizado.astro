@@ -1,10 +1,9 @@
 ---
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
-import { obtenerDocentes } from '../../../services/docentes';
 import { obtenerCampus, obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 import { db } from '../../../lib/db';
-import { fetchNativeStudentEvaluationScores } from '../../../services/scoring';
 import { OBSERVATION_INSTRUMENT_DEFINITIONS } from '../../../lib/observationDefinitions';
+import { getMyAssignedTeacherIds } from '../../../lib/teacherAssignments';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
@@ -17,10 +16,11 @@ const cliente = db();
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
 if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
-const todos = await obtenerDocentes();
-const nativeScoreRows = await fetchNativeStudentEvaluationScores(cliente, cuatrimestreId);
-const evalsSet = new Set(nativeScoreRows.map((row) => row.docente_id));
-const docentes = todos.filter(d => evalsSet.has(d.id));
+const docentesAsignados = await getMyAssignedTeacherIds(cliente, 'observation', cuatrimestreId);
+const { data: docentesData } = docentesAsignados.size
+  ? await cliente.from('docentes').select('id,nombre,apellidos,email,oferta_academica,campus,modalidad').in('id', [...docentesAsignados]).eq('activo', true).order('apellidos')
+  : { data: [] };
+const docentes = docentesData || [];
 const campusList = await obtenerCampus();
 const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
 const SECCIONES = OBSERVATION_INSTRUMENT_DEFINITIONS['escolarizado-v1'].sections;

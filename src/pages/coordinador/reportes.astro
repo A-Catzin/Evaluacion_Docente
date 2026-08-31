@@ -4,6 +4,7 @@ import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { formatScore } from '../../services/scoring';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
+import { getMyAssignedTeacherIds } from '../../lib/teacherAssignments';
 
 const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -29,10 +30,9 @@ function colorN(n: any) { return !n ? 'text-slate-400' : n >= 80 ? 'text-emerald
 
 let individualData: any = null;
 if (modo === 'individual') {
-  const { data: asigs } = userId
-    ? await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', userId).eq('cuatrimestre_id', cuatrimestreId)
-    : { data: [] };
-  const asigIds = new Set((asigs || []).map(a => a.docente_id));
+  const asigIds = userId
+    ? await getMyAssignedTeacherIds(cliente, 'coordinated', cuatrimestreId)
+    : new Set<number>();
   const ids = [...asigIds];
 
   // Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
@@ -42,9 +42,12 @@ if (modo === 'individual') {
 
   const anualMap = new Map<number, { sum: number; count: number }>();
   for (const c of cuatrimestres) {
+    const idsForCycle = userId
+      ? await getMyAssignedTeacherIds(cliente, 'coordinated', c.id)
+      : new Set<number>();
     const cals = await obtenerCalificacionesPorCuatrimestre(cliente, c.id);
     for (const row of cals) {
-      if (ids.includes(row.docente_id) && row.num_instrumentos_completados > 0) {
+      if (idsForCycle.has(row.docente_id) && row.num_instrumentos_completados > 0) {
         const acc = anualMap.get(row.docente_id) || { sum: 0, count: 0 };
         acc.sum += row.calificacion_final;
         acc.count++;
@@ -86,17 +89,15 @@ if (modo === 'general') {
     .slice(0, 3);
 
   if (cicloIds.length) {
-    const { data: asigs } = userId
-      ? await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', userId).in('cuatrimestre_id', cicloIds)
-      : { data: [] };
-    const allDocIds = [...new Set((asigs || []).map(a => a.docente_id))];
-
     // Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
     const docenteMap = new Map<number, any>();
     for (const cid of cicloIds) {
+      const idsForCycle = userId
+        ? await getMyAssignedTeacherIds(cliente, 'coordinated', cid)
+        : new Set<number>();
       const cals = await obtenerCalificacionesPorCuatrimestre(cliente, cid);
       for (const row of cals) {
-        if (!allDocIds.includes(row.docente_id)) continue;
+        if (!idsForCycle.has(row.docente_id)) continue;
         if (!docenteMap.has(row.docente_id)) {
           docenteMap.set(row.docente_id, {
             id: row.docente_id,

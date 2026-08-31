@@ -12,6 +12,7 @@ import {
   SECTION_NOTES,
 } from "../../../lib/validation/apiSchemas";
 import { formatZodFieldErrors } from "../../../lib/validation/errors";
+import { canObserveAssignedTeacher } from "../../../lib/teacherAssignments";
 import {
   logRecalcError,
   recalcularCalificacionDocente,
@@ -92,6 +93,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     };
 
     const { docente_id, cuatrimestre_id } = parseResult.data;
+
+    if (!await canObserveAssignedTeacher(cl, docente_id, cuatrimestre_id)) {
+      return new Response(
+        JSON.stringify({ error: "No tienes asignación de observación para este docente" }),
+        { status: 403, headers: JSON_HEADERS },
+      );
+    }
 
     const { data, error } = await cl
       .from("observaciones")

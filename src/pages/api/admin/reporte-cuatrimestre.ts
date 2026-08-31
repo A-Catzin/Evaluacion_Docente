@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
 import { formatScoreCsv } from "../../../services/scoring";
 import { obtenerCalificacionesPorCuatrimestre } from "../../../services/calificaciones";
+import { getMyAssignedTeacherIds } from "../../../lib/teacherAssignments";
 
 export const GET: APIRoute = async ({ url, cookies }) => {
   const t = cookies.get("sb-access-token")?.value;
@@ -45,12 +46,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
         .eq("activo", true);
       docIds = (allDocs || []).map((d) => d.id);
     } else {
-      const { data: asigs } = await cl
-        .from("coordinador_docentes")
-        .select("docente_id")
-        .eq("coordinador_id", s.user.id)
-        .eq("cuatrimestre_id", cuatrimestreId);
-      docIds = [...new Set((asigs || []).map((a) => a.docente_id))];
+      docIds = [...await getMyAssignedTeacherIds(cl, "coordinated", cuatrimestreId)];
     }
 
     const { data: docentes } = docIds.length

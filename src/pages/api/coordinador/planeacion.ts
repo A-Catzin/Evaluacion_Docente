@@ -4,6 +4,7 @@ import {
   logRecalcError,
   recalcularCalificacionDocente,
 } from "../../../services/calificaciones";
+import { canManageCoordinatedTeacher } from "../../../lib/teacherAssignments";
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   let cl;
@@ -28,6 +29,16 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       no_aplica_count,
     } = body;
 
+    const { data: plan, error: planError } = await cl
+      .from("planeaciones")
+      .select("docente_id,cuatrimestre_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (planError || !plan) return new Response(JSON.stringify({ error: "Planeación no encontrada" }), { status: 404 });
+    if (!await canManageCoordinatedTeacher(cl, Number(plan.docente_id), Number(plan.cuatrimestre_id))) {
+      return new Response(JSON.stringify({ error: "No tienes asignación de coordinación para esta planeación" }), { status: 403 });
+    }
+
     const { error } = await cl
       .from("planeaciones")
       .update({
@@ -45,14 +56,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         status: 400,
       });
 
-    // Notificar al docente y recalcular calificación final
-    try {
-      const { data: plan } = await cl
-        .from("planeaciones")
-        .select("docente_id,cuatrimestre_id")
-        .eq("id", id)
-        .maybeSingle();
-      if (plan) {
+      // Notificar al docente y recalcular calificación final
+      try {
+        if (plan) {
         const tipo =
           estado === "Aprobado" ? "aprobada" : "marcada para corrección";
         try {

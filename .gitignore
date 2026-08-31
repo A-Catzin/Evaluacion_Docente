@@ -46,6 +46,10 @@ supabase/migrations/*
 !supabase/migrations/047_test_cycle_delete_diagnostics.sql
 !supabase/migrations/049_optimize_test_cycle_delete_audit.sql
 !supabase/migrations/050_teacher_planning_access_window.sql
+!supabase/migrations/051_split_coordinator_teacher_relationships.sql
+!supabase/migrations/052_admin_assignment_allocation.sql
+!supabase/migrations/053_fix_observation_allocation_evaluators.sql
+!supabase/migrations/054_fix_observation_evaluator_rpc_return_contract.sql
 
 openspec/
 src/supabase/

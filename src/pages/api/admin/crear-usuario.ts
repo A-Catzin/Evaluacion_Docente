@@ -14,7 +14,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (!u || u.rol !== 'superadmin') return new Response(JSON.stringify({ error: 'Solo superadmin' }), { status: 403 });
 
     const body = await request.json();
-    const { nombre_completo, email, rol, docente_ids } = body;
+    const { nombre_completo, email, rol } = body;
     if (!email || !email.endsWith('@tecplayacar.edu.mx')) return new Response(JSON.stringify({ error: 'Email debe ser @tecplayacar.edu.mx' }), { status: 400 });
     if (!['superadmin','coordinador','docente','observador', 'pendiente'].includes(rol)) return new Response(JSON.stringify({ error: 'Rol no válido' }), { status: 400 });
 
@@ -46,13 +46,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const nom = partes.length >= 3 ? partes.slice(2).join(' ') : partes[0] || '';
       const { data: doc } = await cl.from('docentes').insert({ nombre: nom, apellidos: ap, email, activo: true }).select('id').single();
       if (doc) await cl.from('usuarios').update({ entidad_id: doc.id }).eq('id', userId);
-    }
-
-    // 4. Si es coordinador, vincular docentes
-    if (rol === 'coordinador' && docente_ids?.length > 0) {
-      for (const did of docente_ids) {
-        await cl.from('coordinador_docentes').upsert({ coordinador_id: userId, docente_id: did }, { onConflict: 'coordinador_id,docente_id' });
-      }
     }
 
     return new Response(JSON.stringify({ success: true, id: userId }), { status: 201 });

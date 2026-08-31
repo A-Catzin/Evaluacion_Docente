@@ -1,8 +1,16 @@
-import type { APIRoute } from 'astro';
-import { AuthError, requireRole } from '../../../lib/auth';
-import { ImportFormSchema } from '../../../lib/validation/apiSchemas';
-import { formatZodFieldErrors } from '../../../lib/validation/errors';
-import { startImportAudit, type ImportAudit } from '../../../lib/auditChangeSet';
+import type { APIRoute } from "astro";
+import { AuthError, requireRole } from "../../../lib/auth";
+import { ImportFormSchema } from "../../../lib/validation/apiSchemas";
+import { formatZodFieldErrors } from "../../../lib/validation/errors";
+import {
+  startImportAudit,
+  type ImportAudit,
+} from "../../../lib/auditChangeSet";
+import {
+  findAmbiguousStudentImportRows,
+  normalizeStudentImportEmail,
+} from "../../../lib/studentImportIdentity";
+import { selectUniqueGroupCandidate } from "../../../lib/groupImportResolution";
 
 type RosterRow = {
   rowNumber: number;
@@ -17,7 +25,13 @@ type RosterRow = {
   estado: string;
 };
 
-type Diagnostic = { row: number; reason: string; matricula?: string; grupo?: string; ciclo?: string };
+type Diagnostic = {
+  row: number;
+  reason: string;
+  matricula?: string;
+  grupo?: string;
+  ciclo?: string;
+};
 
 type GroupBucket = {
   key: string;
@@ -30,53 +44,61 @@ type GroupBucket = {
 
 const BATCH_SIZE = 100;
 const MAX_DIAGNOSTICS = 250;
-const GROUP_FIELDS = 'id,clave,cuatrimestre_id,asignatura_id,docente_id,num_alumnos,plan_normalizado,grado,grupo_normalizado';
+const GROUP_FIELDS =
+  "id,clave,cuatrimestre_id,asignatura_id,docente_id,num_alumnos,plan_normalizado,grado,grupo_normalizado";
 
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 function normalize(value: string | null | undefined): string {
-  return (value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
-    .replace(/\s+/g, ' ')
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function normalizeKey(value: string): string {
-  return normalize(value).replace(/[^A-Z0-9]+/g, '');
+  return normalize(value).replace(/[^A-Z0-9]+/g, "");
 }
 
 function normalizeGroup(value: string | null | undefined): string {
-  return normalize(value).replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return normalize(value).replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function parseCsv(text: string): string[][] {
   const records: string[][] = [];
   let record: string[] = [];
-  let field = '';
+  let field = "";
   let inQuotes = false;
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     if (inQuotes) {
       if (char === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = false;
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else inQuotes = false;
       } else {
-        field += char === '\r' && text[i + 1] === '\n' ? '' : char;
+        field += char === "\r" && text[i + 1] === "\n" ? "" : char;
       }
     } else if (char === '"') {
       inQuotes = true;
-    } else if (char === ',') {
-      record.push(field.trim()); field = '';
-    } else if (char === '\n') {
-      record.push(field.trim()); field = '';
+    } else if (char === ",") {
+      record.push(field.trim());
+      field = "";
+    } else if (char === "\n") {
+      record.push(field.trim());
+      field = "";
       if (record.some(Boolean)) records.push(record);
       record = [];
-    } else if (char !== '\r') {
+    } else if (char !== "\r") {
       field += char;
     }
   }
@@ -103,82 +125,170 @@ function addDiagnostic(diagnostics: Diagnostic[], item: Diagnostic) {
 
 function chunks<T>(items: T[], size = BATCH_SIZE): T[][] {
   const result: T[][] = [];
-  for (let i = 0; i < items.length; i += size) result.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += size)
+    result.push(items.slice(i, i + size));
   return result;
+}
+
+type ConcurrentStudentRecovery =
+  | { kind: "recovered"; student: any }
+  | { kind: "ambiguous" }
+  | { kind: "not_found" }
+  | { kind: "lookup_error"; error: any };
+
+function isUniqueViolation(error: any): boolean {
+  return error?.code === "23505";
+}
+
+async function recoverConcurrentStudent(
+  client: any,
+  payload: any,
+): Promise<ConcurrentStudentRecovery> {
+  const fields = "id,nombre,apellidos,email,matricula,activo";
+  const [emailResult, matriculaResult] = await Promise.all([
+    client
+      .from("estudiantes")
+      .select(fields)
+      .eq("email", payload.email)
+      .maybeSingle(),
+    client
+      .from("estudiantes")
+      .select(fields)
+      .eq("matricula", payload.matricula)
+      .maybeSingle(),
+  ]);
+
+  if (emailResult.error || matriculaResult.error)
+    return {
+      kind: "lookup_error",
+      error: emailResult.error || matriculaResult.error,
+    };
+  const byEmail = emailResult.data;
+  const byMatricula = matriculaResult.data;
+  if (byEmail && byMatricula && byEmail.id !== byMatricula.id)
+    return { kind: "ambiguous" };
+  if (
+    byEmail &&
+    !byMatricula &&
+    normalize(byEmail.matricula) !== normalize(payload.matricula)
+  )
+    return { kind: "ambiguous" };
+  if (!byEmail && !byMatricula) return { kind: "not_found" };
+  return { kind: "recovered", student: byMatricula || byEmail };
 }
 
 function splitName(fullName: string): { nombre: string; apellidos: string } {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return { nombre: parts[0] || '', apellidos: '' };
-  return { nombre: parts.slice(2).join(' ') || parts[0], apellidos: parts.length > 2 ? parts.slice(0, 2).join(' ') : parts[0] };
+  if (parts.length < 2) return { nombre: parts[0] || "", apellidos: "" };
+  return {
+    nombre: parts.slice(2).join(" ") || parts[0],
+    apellidos: parts.length > 2 ? parts.slice(0, 2).join(" ") : parts[0],
+  };
 }
 
 function exactGroupMatch(group: any, bucket: GroupBucket): boolean {
-  return normalizeGroup(group.grupo_normalizado || group.clave) === bucket.grupo
-    && normalize(group.plan_normalizado) === bucket.plan
-    && normalize(group.grado) === bucket.grado;
+  return (
+    normalizeGroup(group.grupo_normalizado || group.clave) === bucket.grupo &&
+    normalize(group.plan_normalizado) === bucket.plan &&
+    normalize(group.grado) === bucket.grado
+  );
 }
 
 function legacyGroupMatch(group: any, bucket: GroupBucket): boolean {
-  return normalizeGroup(group.grupo_normalizado || group.clave) === bucket.grupo
-    && (!group.plan_normalizado || normalize(group.plan_normalizado) === bucket.plan)
-    && (!group.grado || normalize(group.grado) === bucket.grado);
+  return (
+    normalizeGroup(group.grupo_normalizado || group.clave) === bucket.grupo &&
+    (!group.plan_normalizado ||
+      normalize(group.plan_normalizado) === bucket.plan) &&
+    (!group.grado || normalize(group.grado) === bucket.grado)
+  );
 }
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   let client;
   let audit: ImportAudit | null = null;
   try {
-    const auth = await requireRole(cookies, ['superadmin']);
+    const auth = await requireRole(cookies, ["superadmin"]);
     client = auth.client;
   } catch (error) {
     if (error instanceof AuthError) return error.response;
-    console.error('[Importar alumnos] authentication failed', error);
-    return json({ error: 'Error interno al verificar la sesión' }, 500);
+    console.error("[Importar alumnos] authentication failed", error);
+    return json({ error: "Error interno al verificar la sesión" }, 500);
   }
 
   try {
     const formData = await request.formData();
     const formParse = ImportFormSchema.safeParse({
-      file: formData.get('file'),
-      cuatrimestre_id: formData.get('cuatrimestre_id'),
+      file: formData.get("file"),
+      cuatrimestre_id: formData.get("cuatrimestre_id"),
     });
     if (!formParse.success) {
-      return json({ error: 'Archivo o ciclo inválido', detalles: formatZodFieldErrors(formParse.error) }, 400);
+      return json(
+        {
+          error: "Archivo o ciclo inválido",
+          detalles: formatZodFieldErrors(formParse.error),
+        },
+        400,
+      );
     }
     const { file, cuatrimestre_id: cycleId } = formParse.data;
-    if (file.size > 25 * 1024 * 1024) return json({ error: 'El archivo no debe superar 25 MB' }, 400);
+    if (file.size > 25 * 1024 * 1024)
+      return json({ error: "El archivo no debe superar 25 MB" }, 400);
 
-    const { data: cycle, error: cycleError } = await client.from('cuatrimestres').select('id,clave,nombre').eq('id', cycleId).maybeSingle();
-    if (cycleError || !cycle) return json({ error: 'El ciclo seleccionado no existe' }, 400);
-    audit = await startImportAudit({ client, source: 'admin.import.alumnos', cycleId, file });
+    const { data: cycle, error: cycleError } = await client
+      .from("cuatrimestres")
+      .select("id,clave,nombre")
+      .eq("id", cycleId)
+      .maybeSingle();
+    if (cycleError || !cycle)
+      return json({ error: "El ciclo seleccionado no existe" }, 400);
+    audit = await startImportAudit({
+      client,
+      source: "admin.import.alumnos",
+      cycleId,
+      file,
+    });
 
-    const records = parseCsv((await file.text()).replace(/^\uFEFF/, ''));
+    const records = parseCsv((await file.text()).replace(/^\uFEFF/, ""));
     if (records.length < 2) {
-      await audit.fail('archivo_vacio', { rowsRead: 0 });
-      return json({ error: 'CSV vacío o sin filas de datos' }, 400);
+      await audit.fail("archivo_vacio", { rowsRead: 0 });
+      return json({ error: "CSV vacío o sin filas de datos" }, 400);
     }
     const headers = records[0];
     const columns = {
-      ciclo: findColumn(headers, 'CICLO'),
-      fullName: findColumn(headers, 'NOMBRE COMPLETO'),
-      nombre: findColumn(headers, 'NOMBRE'),
-      firstLastName: findColumn(headers, 'PRIMER APELLIDO'),
-      secondLastName: findColumn(headers, 'SEGUNDO APELLIDO'),
-      matricula: findColumn(headers, 'MATRICULA', 'MATRÍCULA'),
-      email: findColumn(headers, 'CORREO INSTITUCIONAL', 'CORREO', 'EMAIL'),
-      plan: findColumn(headers, 'PLAN DE ESTUDIOS O CURSO', 'PLAN DE ESTUDIOS', 'PLAN'),
-      grado: findColumn(headers, 'GRADO'),
-      grupo: findColumn(headers, 'GRUPO'),
-      estado: findColumn(headers, 'ESTADO DE INSCRIPCION', 'ESTADO DE INSCRIPCIÓN', 'ESTADO'),
+      ciclo: findColumn(headers, "CICLO"),
+      fullName: findColumn(headers, "NOMBRE COMPLETO"),
+      nombre: findColumn(headers, "NOMBRE"),
+      firstLastName: findColumn(headers, "PRIMER APELLIDO"),
+      secondLastName: findColumn(headers, "SEGUNDO APELLIDO"),
+      matricula: findColumn(headers, "MATRICULA", "MATRÍCULA"),
+      email: findColumn(headers, "CORREO INSTITUCIONAL", "CORREO", "EMAIL"),
+      plan: findColumn(
+        headers,
+        "PLAN DE ESTUDIOS O CURSO",
+        "PLAN DE ESTUDIOS",
+        "PLAN",
+      ),
+      grado: findColumn(headers, "GRADO"),
+      grupo: findColumn(headers, "GRUPO"),
+      estado: findColumn(
+        headers,
+        "ESTADO DE INSCRIPCION",
+        "ESTADO DE INSCRIPCIÓN",
+        "ESTADO",
+      ),
     };
     if (columns.matricula < 0 || columns.email < 0 || columns.grupo < 0) {
-      await audit.fail('contrato_invalido', { rowsRead: records.length - 1 });
-      return json({ error: 'El CSV debe incluir MATRICULA, CORREO INSTITUCIONAL y GRUPO' }, 400);
+      await audit.fail("contrato_invalido", { rowsRead: records.length - 1 });
+      return json(
+        {
+          error: "El CSV debe incluir MATRICULA, CORREO INSTITUCIONAL y GRUPO",
+        },
+        400,
+      );
     }
     if (columns.fullName < 0) {
-      await audit.fail('contrato_invalido', { rowsRead: records.length - 1 });
-      return json({ error: 'El CSV debe incluir NOMBRE COMPLETO' }, 400);
+      await audit.fail("contrato_invalido", { rowsRead: records.length - 1 });
+      return json({ error: "El CSV debe incluir NOMBRE COMPLETO" }, 400);
     }
 
     const diagnostics: Diagnostic[] = [];
@@ -190,41 +300,107 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     for (let index = 1; index < records.length; index++) {
       const values = records[index];
-      const value = (column: number) => column >= 0 ? values[column] || '' : '';
+      const value = (column: number) =>
+        column >= 0 ? values[column] || "" : "";
       const ciclo = value(columns.ciclo);
       if (ciclo) cycleValues.set(ciclo, (cycleValues.get(ciclo) || 0) + 1);
       const fullName = value(columns.fullName);
       const parsedName = splitName(fullName);
       const nombre = parsedName.nombre;
       const apellidos = parsedName.apellidos;
-      const row: RosterRow = { rowNumber: index + 1, ciclo, nombre, apellidos, matricula: value(columns.matricula), email: value(columns.email).toLowerCase(), plan: value(columns.plan), grado: value(columns.grado), grupo: value(columns.grupo), estado: value(columns.estado) };
+      const row: RosterRow = {
+        rowNumber: index + 1,
+        ciclo,
+        nombre,
+        apellidos,
+        matricula: value(columns.matricula),
+        email: normalizeStudentImportEmail(value(columns.email)),
+        plan: value(columns.plan),
+        grado: value(columns.grado),
+        grupo: value(columns.grupo),
+        estado: value(columns.estado),
+      };
       const status = normalize(row.estado);
-      if (status && !['INSCRITO', 'ACTIVO', 'VIGENTE'].includes(status)) {
-        skipped++; addDiagnostic(diagnostics, { row: row.rowNumber, reason: 'estado_no_inscrito', matricula: row.matricula, grupo: row.grupo }); continue;
+      if (status && !["INSCRITO", "ACTIVO", "VIGENTE"].includes(status)) {
+        skipped++;
+        addDiagnostic(diagnostics, {
+          row: row.rowNumber,
+          reason: "estado_no_inscrito",
+          matricula: row.matricula,
+          grupo: row.grupo,
+        });
+        continue;
       }
-      if (!row.matricula || !row.email || !row.nombre || !row.apellidos || !normalize(row.plan) || !normalize(row.grado) || !normalizeGroup(row.grupo)) {
-        errors++; addDiagnostic(diagnostics, { row: row.rowNumber, reason: 'identidad_incompleta', matricula: row.matricula, grupo: row.grupo }); continue;
+      if (
+        !row.matricula ||
+        !row.email ||
+        !row.nombre ||
+        !row.apellidos ||
+        !normalize(row.plan) ||
+        !normalize(row.grado) ||
+        !normalizeGroup(row.grupo)
+      ) {
+        errors++;
+        addDiagnostic(diagnostics, {
+          row: row.rowNumber,
+          reason: "identidad_incompleta",
+          matricula: row.matricula,
+          grupo: row.grupo,
+        });
+        continue;
       }
-      if (normalize(row.plan).length > 150 || normalizeGroup(row.grupo).length > 150 || normalize(row.grado).length > 30) {
-        errors++; addDiagnostic(diagnostics, { row: row.rowNumber, reason: 'identidad_fuera_de_rango', matricula: row.matricula, grupo: row.grupo }); continue;
+      if (
+        normalize(row.plan).length > 150 ||
+        normalizeGroup(row.grupo).length > 150 ||
+        normalize(row.grado).length > 30
+      ) {
+        errors++;
+        addDiagnostic(diagnostics, {
+          row: row.rowNumber,
+          reason: "identidad_fuera_de_rango",
+          matricula: row.matricula,
+          grupo: row.grupo,
+        });
+        continue;
       }
       validRows.push(row);
     }
 
-    const { data: existingStudents, error: studentsError } = await client.from('estudiantes').select('id,nombre,apellidos,email,matricula,activo');
+    const incomingAmbiguousRows = findAmbiguousStudentImportRows(validRows);
+    for (const row of validRows) {
+      if (incomingAmbiguousRows.has(row.rowNumber)) {
+        ambiguous++;
+        addDiagnostic(diagnostics, {
+          row: row.rowNumber,
+          reason: "identidad_ambigua",
+          matricula: row.matricula,
+          grupo: row.grupo,
+        });
+      }
+    }
+    const importRows = validRows.filter(
+      (row) => !incomingAmbiguousRows.has(row.rowNumber),
+    );
+
+    const { data: existingStudents, error: studentsError } = await client
+      .from("estudiantes")
+      .select("id,nombre,apellidos,email,matricula,activo");
     if (studentsError) {
-      await audit.fail('lectura_estudiantes_fallida');
-      return json({ error: `No se pudo leer estudiantes: ${studentsError.message}` }, 500);
+      await audit.fail("lectura_estudiantes_fallida");
+      return json(
+        { error: `No se pudo leer estudiantes: ${studentsError.message}` },
+        500,
+      );
     }
     const byMatricula = new Map<string, any>();
     const byEmail = new Map<string, any>();
     for (const student of existingStudents || []) {
       byMatricula.set(normalize(student.matricula), student);
-      byEmail.set(normalize(student.email), student);
+      byEmail.set(normalizeStudentImportEmail(student.email), student);
     }
 
     const identityRows = new Map<string, RosterRow[]>();
-    for (const row of validRows) {
+    for (const row of importRows) {
       const key = normalize(row.matricula);
       if (!identityRows.has(key)) identityRows.set(key, []);
       identityRows.get(key)!.push(row);
@@ -236,26 +412,65 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     let studentsMatched = 0;
     let studentsCreated = 0;
     let studentsUpdated = 0;
+    const excludedIdentityRows = new Set<number>();
 
     for (const [key, rows] of identityRows) {
       const first = rows[0];
-      const emails = new Set(rows.map(row => normalize(row.email)));
+      const emails = new Set(
+        rows.map((row) => normalizeStudentImportEmail(row.email)),
+      );
       if (emails.size > 1) {
-        ambiguous += rows.length; rows.forEach(row => addDiagnostic(diagnostics, { row: row.rowNumber, reason: 'identidad_ambigua', matricula: row.matricula, grupo: row.grupo }));
+        ambiguous += rows.length;
+        rows.forEach((row) => {
+          excludedIdentityRows.add(row.rowNumber);
+          addDiagnostic(diagnostics, {
+            row: row.rowNumber,
+            reason: "identidad_ambigua",
+            matricula: row.matricula,
+            grupo: row.grupo,
+          });
+        });
         continue;
       }
       const byMat = byMatricula.get(normalize(first.matricula));
-      const byMail = byEmail.get(normalize(first.email));
-      if (byMat && byMail && byMat.id !== byMail.id) {
-        ambiguous += rows.length; rows.forEach(row => addDiagnostic(diagnostics, { row: row.rowNumber, reason: 'identidad_ambigua', matricula: row.matricula, grupo: row.grupo }));
+      const byMail = byEmail.get(normalizeStudentImportEmail(first.email));
+      if (
+        (byMat && byMail && byMat.id !== byMail.id) ||
+        (byMail &&
+          !byMat &&
+          normalize(byMail.matricula) !== normalize(first.matricula))
+      ) {
+        ambiguous += rows.length;
+        rows.forEach((row) => {
+          excludedIdentityRows.add(row.rowNumber);
+          addDiagnostic(diagnostics, {
+            row: row.rowNumber,
+            reason: "identidad_ambigua",
+            matricula: row.matricula,
+            grupo: row.grupo,
+          });
+        });
         continue;
       }
       const current = byMat || byMail;
-      const payload = { nombre: first.nombre, apellidos: first.apellidos, email: first.email, matricula: first.matricula, activo: true };
+      const payload = {
+        nombre: first.nombre,
+        apellidos: first.apellidos,
+        email: first.email,
+        matricula: first.matricula,
+        activo: true,
+      };
       if (current) {
         studentsMatched++;
         studentIdByKey.set(key, current.id);
-        if (current.nombre !== payload.nombre || current.apellidos !== payload.apellidos || normalize(current.email) !== normalize(payload.email) || normalize(current.matricula) !== normalize(payload.matricula) || !current.activo) existingPayloads.push({ id: current.id, ...payload });
+        if (
+          current.nombre !== payload.nombre ||
+          current.apellidos !== payload.apellidos ||
+          normalize(current.email) !== normalize(payload.email) ||
+          normalize(current.matricula) !== normalize(payload.matricula) ||
+          !current.activo
+        )
+          existingPayloads.push({ id: current.id, ...payload });
       } else {
         newPayloads.push(payload);
       }
@@ -263,40 +478,134 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     for (const batch of chunks(existingPayloads)) {
       for (const item of batch) {
-        const { error } = await client.from('estudiantes').update(item).eq('id', item.id);
+        const { error } = await client
+          .from("estudiantes")
+          .update(item)
+          .eq("id", item.id);
         if (error) {
-          errors++; addDiagnostic(diagnostics, { row: identityRows.get(normalize(item.matricula))?.[0].rowNumber || 0, reason: 'estudiante_no_guardado', matricula: item.matricula });
+          errors++;
+          addDiagnostic(diagnostics, {
+            row:
+              identityRows.get(normalize(item.matricula))?.[0].rowNumber || 0,
+            reason: "estudiante_no_guardado",
+            matricula: item.matricula,
+          });
         } else studentsUpdated++;
       }
     }
     for (const batch of chunks(newPayloads)) {
-      const { data, error } = await client.from('estudiantes').insert(batch).select('id,matricula,email');
+      const { data, error } = await client
+        .from("estudiantes")
+        .insert(batch)
+        .select("id,matricula,email");
       if (!error && data) {
         studentsCreated += data.length;
-        for (const student of data) studentIdByKey.set(normalize(student.matricula), student.id);
+        for (const student of data)
+          studentIdByKey.set(normalize(student.matricula), student.id);
       } else {
         for (const item of batch) {
-          const result = await client.from('estudiantes').insert(item).select('id,matricula,email').maybeSingle();
-          if (result.error || !result.data) {
-            errors++; addDiagnostic(diagnostics, { row: identityRows.get(normalize(item.matricula))?.[0].rowNumber || 0, reason: 'estudiante_no_guardado', matricula: item.matricula });
-          } else {
-            studentsCreated++; studentIdByKey.set(normalize(item.matricula), result.data.id);
+          const result = await client
+            .from("estudiantes")
+            .insert(item)
+            .select("id,matricula,email")
+            .maybeSingle();
+          const itemRows = identityRows.get(normalize(item.matricula)) || [];
+          if (!result.error && result.data) {
+            studentsCreated++;
+            studentIdByKey.set(normalize(item.matricula), result.data.id);
+            continue;
           }
+
+          if (isUniqueViolation(result.error)) {
+            const recovery = await recoverConcurrentStudent(client, item);
+            if (recovery.kind === "recovered") {
+              const current = recovery.student;
+              studentsMatched++;
+              studentIdByKey.set(normalize(item.matricula), current.id);
+              const needsUpdate =
+                current.nombre !== item.nombre ||
+                current.apellidos !== item.apellidos ||
+                normalizeStudentImportEmail(current.email) !== item.email ||
+                normalize(current.matricula) !== normalize(item.matricula) ||
+                !current.activo;
+              if (needsUpdate) {
+                const updateResult = await client
+                  .from("estudiantes")
+                  .update(item)
+                  .eq("id", current.id);
+                if (updateResult.error) {
+                  errors++;
+                  addDiagnostic(diagnostics, {
+                    row: itemRows[0]?.rowNumber || 0,
+                    reason: "estudiante_no_guardado",
+                    matricula: item.matricula,
+                  });
+                } else {
+                  studentsUpdated++;
+                }
+              }
+              continue;
+            }
+            if (recovery.kind === "ambiguous") {
+              ambiguous += itemRows.length;
+              itemRows.forEach((row) => {
+                excludedIdentityRows.add(row.rowNumber);
+                addDiagnostic(diagnostics, {
+                  row: row.rowNumber,
+                  reason: "identidad_ambigua",
+                  matricula: row.matricula,
+                  grupo: row.grupo,
+                });
+              });
+              continue;
+            }
+            if (recovery.kind === "lookup_error") {
+              console.error(
+                "[Importar alumnos] no se pudo releer estudiante después de conflicto",
+                recovery.error,
+              );
+            }
+          }
+
+          errors++;
+          addDiagnostic(diagnostics, {
+            row: itemRows[0]?.rowNumber || 0,
+            reason: "estudiante_no_guardado",
+            matricula: item.matricula,
+          });
         }
       }
     }
 
-    const { data: groups, error: groupsError } = await client.from('grupos').select(GROUP_FIELDS).eq('cuatrimestre_id', cycleId);
+    const { data: groups, error: groupsError } = await client
+      .from("grupos")
+      .select(GROUP_FIELDS)
+      .eq("cuatrimestre_id", cycleId)
+      .eq("activo", true);
     if (groupsError) {
-      await audit.fail('lectura_grupos_fallida');
-      return json({ error: `No se pudo leer grupos del ciclo. Aplica la migración 030_importacion_alumnos_ciclo.sql: ${groupsError.message}` }, 500);
+      await audit.fail("lectura_grupos_fallida");
+      return json(
+        {
+          error: `No se pudo leer grupos del ciclo. Aplica la migración 030_importacion_alumnos_ciclo.sql: ${groupsError.message}`,
+        },
+        500,
+      );
     }
 
     const groupBuckets = new Map<string, GroupBucket>();
-    for (const row of validRows) {
+    for (const row of importRows) {
+      if (excludedIdentityRows.has(row.rowNumber)) continue;
       const studentId = studentIdByKey.get(normalize(row.matricula));
       if (!studentId) {
-        errors++; skipped++; addDiagnostic(diagnostics, { row: row.rowNumber, reason: 'estudiante_no_guardado', matricula: row.matricula, grupo: row.grupo }); continue;
+        errors++;
+        skipped++;
+        addDiagnostic(diagnostics, {
+          row: row.rowNumber,
+          reason: "estudiante_no_guardado",
+          matricula: row.matricula,
+          grupo: row.grupo,
+        });
+        continue;
       }
       const plan = normalize(row.plan);
       const grado = normalize(row.grado);
@@ -304,7 +613,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const key = `${plan}|${grado}|${grupo}`;
       let bucket = groupBuckets.get(key);
       if (!bucket) {
-        bucket = { key, plan, grado, grupo, rows: [], studentIds: new Set<number>() };
+        bucket = {
+          key,
+          plan,
+          grado,
+          grupo,
+          rows: [],
+          studentIds: new Set<number>(),
+        };
         groupBuckets.set(key, bucket);
       }
       bucket.rows.push(row);
@@ -313,13 +629,18 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const bucketKeysByGroup = new Map<string, Set<string>>();
     for (const bucket of groupBuckets.values()) {
-      if (!bucketKeysByGroup.has(bucket.grupo)) bucketKeysByGroup.set(bucket.grupo, new Set());
+      if (!bucketKeysByGroup.has(bucket.grupo))
+        bucketKeysByGroup.set(bucket.grupo, new Set());
       bucketKeysByGroup.get(bucket.grupo)!.add(bucket.key);
     }
     const legacyUnsafeIds = new Set<number>();
     for (const group of groups || []) {
       const groupNorm = normalizeGroup(group.grupo_normalizado || group.clave);
-      if ((!group.plan_normalizado || !group.grado) && (bucketKeysByGroup.get(groupNorm)?.size || 0) > 1) legacyUnsafeIds.add(group.id);
+      if (
+        (!group.plan_normalizado || !group.grado) &&
+        (bucketKeysByGroup.get(groupNorm)?.size || 0) > 1
+      )
+        legacyUnsafeIds.add(group.id);
     }
 
     let groupsMatched = 0;
@@ -327,21 +648,39 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     let groupsUpdated = 0;
     const resolvedGroups = new Map<string, any>();
     const groupUpdates = new Map<number, any>();
+    const markAmbiguousGroupBucket = (bucket: GroupBucket) => {
+      ambiguous += bucket.rows.length;
+      skipped += bucket.rows.length;
+      bucket.rows.forEach((row) =>
+        addDiagnostic(diagnostics, {
+          row: row.rowNumber,
+          reason: "grupo_ambiguo",
+          matricula: row.matricula,
+          grupo: row.grupo,
+        }),
+      );
+    };
 
     for (const bucket of groupBuckets.values()) {
-      const exactCandidates = (groups || []).filter(group => exactGroupMatch(group, bucket));
+      const exactCandidates = (groups || []).filter((group) =>
+        exactGroupMatch(group, bucket),
+      );
       if (exactCandidates.length > 1) {
-        ambiguous += bucket.rows.length;
-        bucket.rows.forEach(row => addDiagnostic(diagnostics, { row: row.rowNumber, reason: 'grupo_ambiguo', matricula: row.matricula, grupo: row.grupo }));
+        markAmbiguousGroupBucket(bucket);
+        continue;
       }
-      let group = exactCandidates.sort((a, b) => a.id - b.id)[0];
+      let group = selectUniqueGroupCandidate(exactCandidates);
       if (!group) {
-        const legacyCandidates = (groups || []).filter(candidate => legacyGroupMatch(candidate, bucket) && !legacyUnsafeIds.has(candidate.id));
-        if (legacyCandidates.length === 1) group = legacyCandidates[0];
-        else if (legacyCandidates.length > 1) {
-          ambiguous += bucket.rows.length;
-          bucket.rows.forEach(row => addDiagnostic(diagnostics, { row: row.rowNumber, reason: 'grupo_ambiguo', matricula: row.matricula, grupo: row.grupo }));
+        const legacyCandidates = (groups || []).filter(
+          (candidate) =>
+            legacyGroupMatch(candidate, bucket) &&
+            !legacyUnsafeIds.has(candidate.id),
+        );
+        if (legacyCandidates.length > 1) {
+          markAmbiguousGroupBucket(bucket);
+          continue;
         }
+        group = selectUniqueGroupCandidate(legacyCandidates);
       }
 
       if (group) {
@@ -358,42 +697,89 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           num_alumnos: bucket.studentIds.size,
           activo: true,
         };
-        const inserted = await client.from('grupos').insert(payload).select(GROUP_FIELDS).maybeSingle();
+        const inserted = await client
+          .from("grupos")
+          .insert(payload)
+          .select(GROUP_FIELDS)
+          .maybeSingle();
         if (!inserted.error && inserted.data) {
           group = inserted.data;
           groupsCreated++;
           (groups || []).push(group);
         } else {
           // Re-read the exact identity so a repeated/concurrent import can reuse a row created meanwhile.
-          const retry = await client.from('grupos').select(GROUP_FIELDS).eq('cuatrimestre_id', cycleId).eq('plan_normalizado', bucket.plan).eq('grado', bucket.grado).eq('grupo_normalizado', bucket.grupo);
-          if (!retry.error && retry.data?.length) {
-            group = retry.data.sort((a, b) => a.id - b.id)[0];
+          const retry = await client
+            .from("grupos")
+            .select(GROUP_FIELDS)
+            .eq("cuatrimestre_id", cycleId)
+            .eq("plan_normalizado", bucket.plan)
+            .eq("grado", bucket.grado)
+            .eq("grupo_normalizado", bucket.grupo)
+            .eq("activo", true);
+          const retryCandidates = retry.data || [];
+          if (!retry.error && retryCandidates.length > 1) {
+            markAmbiguousGroupBucket(bucket);
+            continue;
+          }
+          if (!retry.error && retryCandidates.length === 1) {
+            group = selectUniqueGroupCandidate(retryCandidates);
             groupsMatched++;
           } else {
             errors += bucket.rows.length;
             skipped += bucket.rows.length;
-            bucket.rows.forEach(row => addDiagnostic(diagnostics, { row: row.rowNumber, reason: 'grupo_no_guardado', matricula: row.matricula, grupo: row.grupo }));
+            bucket.rows.forEach((row) =>
+              addDiagnostic(diagnostics, {
+                row: row.rowNumber,
+                reason: "grupo_no_guardado",
+                matricula: row.matricula,
+                grupo: row.grupo,
+              }),
+            );
             continue;
           }
         }
       }
 
+      if (!group) continue;
       resolvedGroups.set(bucket.key, group);
-      const next = { id: group.id, plan_normalizado: bucket.plan, grado: bucket.grado, grupo_normalizado: bucket.grupo, num_alumnos: bucket.studentIds.size };
-      if (next.plan_normalizado !== group.plan_normalizado || next.grado !== group.grado || next.grupo_normalizado !== group.grupo_normalizado || next.num_alumnos !== group.num_alumnos) groupUpdates.set(group.id, next);
+      const next = {
+        id: group.id,
+        plan_normalizado: bucket.plan,
+        grado: bucket.grado,
+        grupo_normalizado: bucket.grupo,
+        num_alumnos: bucket.studentIds.size,
+      };
+      if (
+        next.plan_normalizado !== group.plan_normalizado ||
+        next.grado !== group.grado ||
+        next.grupo_normalizado !== group.grupo_normalizado ||
+        next.num_alumnos !== group.num_alumnos
+      )
+        groupUpdates.set(group.id, next);
     }
 
     for (const batch of chunks([...groupUpdates.values()])) {
-      const { error } = await client.from('grupos').upsert(batch, { onConflict: 'id' });
+      const { error } = await client
+        .from("grupos")
+        .upsert(batch, { onConflict: "id" });
       if (!error) {
         groupsUpdated += batch.length;
       } else {
         for (const item of batch) {
-          const result = await client.from('grupos').update(item).eq('id', item.id);
+          const result = await client
+            .from("grupos")
+            .update(item)
+            .eq("id", item.id);
           if (result.error) {
             errors++;
-            const bucket = [...groupBuckets.values()].find(candidate => resolvedGroups.get(candidate.key)?.id === item.id);
-            addDiagnostic(diagnostics, { row: bucket?.rows[0].rowNumber || 0, reason: 'grupo_no_guardado', grupo: bucket?.grupo });
+            const bucket = [...groupBuckets.values()].find(
+              (candidate) => resolvedGroups.get(candidate.key)?.id === item.id,
+            );
+            addDiagnostic(diagnostics, {
+              row: bucket?.rows[0].rowNumber || 0,
+              reason: "grupo_no_guardado",
+              grupo: bucket?.grupo,
+            });
           } else groupsUpdated++;
         }
       }
@@ -405,20 +791,38 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       if (!group) continue;
       for (const studentId of bucket.studentIds) {
         const key = `${studentId}|${group.id}|${cycleId}`;
-        inscriptions.set(key, { estudiante_id: studentId, grupo_id: group.id, cuatrimestre_id: cycleId });
+        inscriptions.set(key, {
+          estudiante_id: studentId,
+          grupo_id: group.id,
+          cuatrimestre_id: cycleId,
+        });
       }
     }
 
     let inscriptionsUpserted = 0;
     for (const batch of chunks([...inscriptions.values()])) {
-      const { error } = await client.from('inscripciones').upsert(batch, { onConflict: 'estudiante_id,grupo_id,cuatrimestre_id' });
+      const { error } = await client
+        .from("inscripciones")
+        .upsert(batch, {
+          onConflict: "estudiante_id,grupo_id,cuatrimestre_id",
+        });
       if (!error) {
         inscriptionsUpserted += batch.length;
       } else {
         for (const item of batch) {
-          const result = await client.from('inscripciones').upsert(item, { onConflict: 'estudiante_id,grupo_id,cuatrimestre_id' });
+          const result = await client
+            .from("inscripciones")
+            .upsert(item, {
+              onConflict: "estudiante_id,grupo_id,cuatrimestre_id",
+            });
           if (result.error) {
-            errors++; addDiagnostic(diagnostics, { row: 0, reason: 'inscripcion_no_guardada', matricula: String(item.estudiante_id), grupo: String(item.grupo_id) });
+            errors++;
+            addDiagnostic(diagnostics, {
+              row: 0,
+              reason: "inscripcion_no_guardada",
+              matricula: String(item.estudiante_id),
+              grupo: String(item.grupo_id),
+            });
           } else inscriptionsUpserted++;
         }
       }
@@ -445,19 +849,28 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       success: true,
       cycle: { id: cycle.id, clave: cycle.clave },
       ...summary,
-      cycleValues: [...cycleValues.entries()].map(([value, count]) => ({ value, count })),
+      cycleValues: [...cycleValues.entries()].map(([value, count]) => ({
+        value,
+        count,
+      })),
       diagnostics,
-      traceability: { changeSetId: audit.changeSetId, restorePointId: audit.restorePointId },
+      traceability: {
+        changeSetId: audit.changeSetId,
+        restorePointId: audit.restorePointId,
+      },
     });
   } catch (error) {
-    console.error('[Importar alumnos]', error);
+    console.error("[Importar alumnos]", error);
     if (audit) {
       try {
-        await audit.fail('error_interno_importacion');
+        await audit.fail("error_interno_importacion");
       } catch (auditError) {
-        console.error('[Importar alumnos] no se pudo cerrar la trazabilidad', auditError);
+        console.error(
+          "[Importar alumnos] no se pudo cerrar la trazabilidad",
+          auditError,
+        );
       }
     }
-    return json({ error: 'Error interno al procesar el padrón' }, 500);
+    return json({ error: "Error interno al procesar el padrón" }, 500);
   }
 };

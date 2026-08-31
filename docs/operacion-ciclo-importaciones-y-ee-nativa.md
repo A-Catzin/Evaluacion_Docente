@@ -36,6 +36,10 @@ Este runbook es la referencia operativa del estado implementado. Permite prepara
 | 048 | Clausura FK completa de borrado de prueba | Incluye `calificacion_final_docente` heredada, conserva el borrado explícito hijo-padre y restringe la lista aprobada al inventario FK vivo. Requiere 046–047. |
 | 049 | Borrado de prueba escalable con auditoría resumida | Agrega el índice de cadena de auditoría y suprime sólo eventos de fila dentro de la transacción validada de `delete_test_cycle`; conserva un resumen seguro al confirmar. Requiere 040 y 046–048. |
 | 050 | Acceso a entregas de planeación | Agrega ventana manual o programada por cuatrimestre, cerrada por defecto, con protección de escritura en base de datos y rutas de carga. Requiere 040, 041 y 049. |
+| 051 | Asignaciones separadas de coordinación y observación | Reemplaza `coordinador_docentes` como fuente de autorización por relaciones con historial, backfill revisable y RPCs de mínimo privilegio. Requiere 050. |
+| 052 | Administración y sorteo de asignaciones de observación | Agrega búsqueda de docentes por ciclo, revocación masiva, preferencias por evaluador, vista previa con semilla y confirmación transaccional. Requiere 051. |
+| 053 | Reparación de evaluadores de observación | Requiere cuenta Auth y perfil activos, muestra diagnósticos agregados de perfiles no resueltos y evita que un error de RPC aparezca como lista vacía. Requiere 052. |
+| 054 | Contrato del RPC de evaluadores | Fuerza los tipos declarados de retorno de `admin_observation_allocation_evaluators`, preserva el acceso sólo para `authenticated` y recarga PostgREST. Requiere 052–053. |
 
 Después de aplicar en un ambiente una migración que agregue o cambie RPC, recargue la caché de esquema de PostgREST:
 
@@ -123,6 +127,97 @@ La recepción de planeaciones se controla por cuatrimestre desde `/admin/planeac
 La protección no depende de la interfaz: los tres endpoints docentes revisan el estado antes de leer bytes del archivo y la base de datos valida identidad docente, grupo, asignatura y ciclo en cada inserción, actualización o eliminación. Las rutas de los PDF se generan en el servidor; no se aceptan rutas de almacenamiento enviadas por el cliente.
 
 Al borrar un ciclo de prueba, el preview incluye `planning_submission_windows` y la RPC la elimina explícitamente antes de `cuatrimestres`. El evento de cambio de ventana sólo registra el ciclo, modalidad y presencia de límites; no registra texto libre, rutas ni datos personales.
+
+## Asignaciones de coordinación y observación
+
+La migración `051_split_coordinator_teacher_relationships.sql` separa los dos propósitos por ciclo. Aplíquela antes de desplegar la interfaz que usa las nuevas RPC; no se deben editar ni reaplicar migraciones anteriores.
+
+1. Aplique `051` después de `050` y ejecute `NOTIFY pgrst, 'reload schema';`.
+2. Como superadmin, abra `/admin/asignaciones?cuatrimestre=<id>`. Revise el bloque de estado del backfill antes de cambiar asignaciones.
+3. En **Docentes coordinados**, asigne únicamente coordinadores activos. Esta relación permite información, resultados, planeación, evaluación de coordinación, notificaciones y reportes del docente en ese ciclo.
+4. En **Docentes para observación**, asigne coordinadores u observadores activos. Esta relación permite sólo la captura de observación y los datos mínimos de docente/grupo; no habilita resultados, planeaciones ni reportes.
+5. Pruebe con una cuenta coordinadora asignada sólo para coordinación: debe poder gestionar planeación/coordinación, pero la observación debe rechazarla. Pruebe con una cuenta observadora: debe listar sólo sus docentes de observación y no ver resultados ni PDF de planeación.
+
+La migración conserva `coordinador_docentes` como historial compatible. Para cada fila legada con ciclo, registra una revisión: coordinadores activos se migran a `coordinated_teacher_assignments`, observadores activos a `observation_teacher_assignments`; actores, docentes o roles no elegibles quedan como `needs_review`. Una fila coordinada legada nunca crea una asignación de observación. Las asignaciones se revocan con fecha y actor, no se eliminan, y el evento de auditoría sólo incluye tipo, ciclo y conteos.
+
+El preview y la eliminación de ciclos de prueba incluyen `coordinated_teacher_assignments`, `observation_teacher_assignments`, `teacher_assignment_backfill_review`, `observation_allocation_preferences`, `observation_allocation_previews` y `observation_allocation_runs`. Si la guardia de dependencias falla, no ejecute `DELETE` manual: agregue una migración forward que actualice la clausura explícita.
+
+### Administración y distribución de observaciones
+
+`052_admin_assignment_allocation.sql` se aplica después de `051`. `053_fix_observation_allocation_evaluators.sql` corrige la detección de evaluadores y `054_fix_observation_evaluator_rpc_return_contract.sql` corrige el contrato de retorno de su RPC; se aplican después de 052 y en ese orden. No se renumera ni edita una migración ya aplicada.
+
+No hay backfill automático de observaciones en 052: las asignaciones existentes permanecen manuales e inalteradas, y la ausencia de una preferencia equivale a incluir al evaluador elegible sin meta. Sólo una confirmación explícita crea filas con origen `automatic_allocation`.
+
+1. Aplique `052`, `053` y `054`, recargue la caché de PostgREST y despliegue la interfaz de `/admin/asignaciones` en la misma ventana. La interfaz nueva no debe publicarse contra una base sin las RPC de las tres migraciones.
+2. En ambos bloques manuales, **Docentes del cuatrimestre** es el filtro inicial: incluye sólo docentes activos con al menos un grupo activo asignado en el ciclo seleccionado. Use **Todos los docentes activos** únicamente para localizar una asignación fuera de actividad actual o completar una revisión.
+3. **Asignar selección** sólo agrega o reactiva las filas elegidas. **Quitar selección** exige confirmación y revoca sólo las asignaciones activas seleccionadas de ese ciclo. Nunca borra docentes, usuarios, grupos, instrumentos ni capturas; la revocación conserva fecha y actor.
+4. En la asignación automática, los evaluadores elegibles son cuentas activas con rol `superadmin` (mostrado como **Administrador**), `coordinador` u `observador`. Excluir una cuenta impide nuevas asignaciones automáticas, pero conserva la cuenta y sus asignaciones manuales.
+5. Guarde las preferencias antes de crear la vista previa. Una meta vacía participa en el reparto del remanente; una meta explícita se cubre primero sin revocar una carga previa que ya la supere. La confirmación acepta sólo el identificador, huella y ciclo emitidos por el servidor; si cambian las preferencias, los candidatos o las asignaciones actuales, genere otra vista previa.
+
+### Verificación manual de 052
+
+1. En un ciclo de prueba, prepare 24 docentes activos con al menos un grupo activo cada uno y tres o más evaluadores elegibles activos.
+2. Configure metas explícitas que sumen 10, por ejemplo 4 y 6, y deje al menos dos evaluadores incluidos sin meta. Guarde la configuración y genere la vista previa.
+3. Compruebe que las metas reciben exactamente 10 propuestas antes del remanente y que los 14 docentes restantes se reparten entre los evaluadores sin meta con diferencia máxima de una asignación cuando sus cargas previas lo permiten.
+4. Excluya un evaluador con asignaciones manuales, genere otra vista previa y compruebe que recibe cero propuestas, conserva sus asignaciones y no se desactiva.
+5. Confirme una vista previa y repita la misma confirmación: debe devolver el mismo recibo de ejecución sin insertar asignaciones duplicadas. Cambie una preferencia o agregue una asignación manual antes de confirmar otra vista previa: debe rechazarse como vencida o desactualizada.
+6. Seleccione varias asignaciones coordinadas y varias de observación, confirme **Quitar selección** y compruebe los conteos devueltos. Verifique que docentes, usuarios, grupos y capturas históricas sigan intactos.
+7. Verifique que un `coordinador` activo y resuelto sin asignaciones previas aparezca en la tabla de distribución. Si la carga de evaluadores falla, la pantalla debe mostrar la incompatibilidad de migración en lugar de una tabla vacía. Si no existen elegibles, el diagnóstico sólo muestra conteos de perfiles/cuentas, no nombres ni correos.
+
+### Diagnóstico seguro del RPC de evaluadores
+
+La pantalla no muestra datos parciales cuando el RPC falla. Para un superadmin autenticado muestra sólo un código seguro `EVAL_RPC_*` y una causa accionable. `EVAL_RPC_42804` confirma un contrato de retorno incompatible y requiere `054`.
+
+Ejecute estas consultas de sólo lectura en Supabase SQL Editor. No requieren correo, UUID, nombre ni datos de cuenta:
+
+```sql
+-- Debe devolver una sola firma, el resultado declarado y execute_for_authenticated = true.
+SELECT
+  p.oid::regprocedure AS signature,
+  pg_get_function_arguments(p.oid) AS arguments,
+  pg_get_function_result(p.oid) AS result_contract,
+  p.prosecdef AS security_definer,
+  has_function_privilege('authenticated', p.oid, 'EXECUTE') AS execute_for_authenticated
+FROM pg_catalog.pg_proc p
+JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname = 'admin_observation_allocation_evaluators';
+```
+
+```sql
+-- Confirma que no existe una sobrecarga inesperada y que PostgREST ve exactamente integer.
+SELECT p.oid::regprocedure AS signature
+FROM pg_catalog.pg_proc p
+JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname = 'admin_observation_allocation_evaluators'
+ORDER BY p.oid::regprocedure::TEXT;
+```
+
+```sql
+-- Verifica el contrato almacenado de 054 sin mostrar cuerpos, usuarios ni secretos.
+SELECT
+  position('u.email::TEXT' IN pg_get_functiondef(p.oid)) > 0 AS email_cast_present,
+  position('u.rol::TEXT' IN pg_get_functiondef(p.oid)) > 0 AS role_cast_present,
+  position('count(a.id)::BIGINT' IN pg_get_functiondef(p.oid)) > 0 AS count_cast_present
+FROM pg_catalog.pg_proc p
+JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname = 'admin_observation_allocation_evaluators'
+  AND pg_get_function_identity_arguments(p.oid) = 'p_cuatrimestre_id integer';
+```
+
+Una llamada desde SQL Editor no reproduce la identidad de una solicitud PostgREST: `auth.uid()` no contiene la sesión del superadmin. Para ejecutar la ruta real, inicie sesión como superadmin y use un token de acceso vigente sólo en una terminal segura:
+
+```bash
+curl --fail-with-body --request POST "$SUPABASE_URL/rest/v1/rpc/admin_observation_allocation_evaluators" \
+  --header "apikey: $SUPABASE_ANON_KEY" \
+  --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{"p_cuatrimestre_id":1}'
+```
+
+Use un identificador de ciclo existente en lugar de `1`. La respuesta esperada es una lista de evaluadores o un error HTTP con código PostgreSQL/PostgREST; no comparta el token, las cabeceras ni la respuesta si incluye datos de cuenta.
 
 El ciclo se elige en la aplicación. Ningún CSV crea ni selecciona ciclos; su columna `CICLO`, si existe, sólo sirve para detectar diferencias o mezclas.
 
@@ -258,7 +353,7 @@ La importación Saeko ya no es un flujo operativo. `POST /api/admin/importar-sae
 ## Checklist de despliegue
 
 - [ ] Migraciones 030–040 aplicadas en el ambiente objetivo y registradas por el proceso de despliegue.
-- [ ] Migraciones 041–049 aplicadas y versionadas junto con el código que las consume.
+- [ ] Migraciones 041–054 aplicadas y versionadas junto con el código que las consume.
 - [ ] Caché de esquema recargada después de nuevas RPC.
 - [ ] Ciclo seleccionado antes de cada importación.
 - [ ] Reportes e incidencias de importación revisados.
@@ -266,6 +361,8 @@ La importación Saeko ya no es un flujo operativo. `POST /api/admin/importar-sae
 - [ ] `/admin/trazabilidad` accesible sólo para superadmin y sin datos sensibles en la lista.
 - [ ] Cada ruta `mi-actividad` permite sólo su rol correspondiente y muestra únicamente recibos con el `actor_id` de la sesión actual.
 - [ ] Un envío de autodiagnóstico, planeación, evaluación de coordinación u observación crea un recibo atribuido al actor; una operación con `service_role` no se presenta como recibo personal.
+- [ ] El estado de backfill de 051 está revisado en `/admin/asignaciones` y coordinación/observación se validan con cuentas distintas antes de abrir el ciclo.
+- [ ] La verificación manual de 052 cubre 24 docentes, metas explícitas por 10 y reparto equilibrado de los 14 restantes antes de operar el ciclo.
 - [ ] Un envío nativo exitoso muestra `student_evaluation.submitted` como actividad protegida; un envío fallido no deja ese evento.
 - [ ] El portal de estudiante muestra sólo asignaciones elegibles.
 - [ ] `Est.` y progreso se validan con agregados nativos, sin consultar Saeko ni datos individuales.

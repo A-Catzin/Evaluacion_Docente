@@ -1,9 +1,9 @@
 ---
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
-import { obtenerDocentes } from '../../services/docentes';
 import { db } from '../../lib/db';
 import { obtenerCalificacionesPorCuatrimestre, type CalificacionFinal } from '../../services/calificaciones';
+import { getMyAssignedTeacherIds } from '../../lib/teacherAssignments';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
@@ -15,7 +15,6 @@ if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
 const busqueda = Astro.url.searchParams.get('q') || '';
-const todos = await obtenerDocentes();
 const cliente = db();
 
 // Obtener usuario actual para filtrar docentes asignados
@@ -27,12 +26,16 @@ if (token && refresh) {
   if (s.user) userId = s.user.id;
 }
 
-// Docentes asignados al coordinador/observador
-let docentesAsignados = new Set<number>();
-if (userId) {
-  const { data: asigs } = await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', userId).eq('cuatrimestre_id', cuatrimestreId);
-  docentesAsignados = new Set((asigs||[]).map(a=>a.docente_id));
-}
+// The coordination scope controls the dashboard and results. Observation is separate.
+const docentesAsignados = userId
+  ? await getMyAssignedTeacherIds(cliente, 'coordinated', cuatrimestreId)
+  : new Set<number>();
+const docentesObservacion = userId
+  ? await getMyAssignedTeacherIds(cliente, 'observation', cuatrimestreId)
+  : new Set<number>();
+const { data: todos } = docentesAsignados.size
+  ? await cliente.from('docentes').select('id,nombre,apellidos,email,modalidad').in('id', [...docentesAsignados]).eq('activo', true).order('apellidos')
+  : { data: [] };
 
 // Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
 const asignadosIds = [...docentesAsignados];
@@ -46,12 +49,18 @@ const docentesEvaluados = new Set(
     .filter((row) => row.num_instrumentos_completados > 0 && docentesAsignados.has(row.docente_id))
     .map((row) => row.docente_id)
 );
-const docentes = todos.filter(d => docentesAsignados.has(d.id) && docentesEvaluados.has(d.id));
+const docentes = (todos || []).filter(d => docentesEvaluados.has(d.id));
 
 // Obtener observaciones, planeaciones y evaluaciones de coordinación para este cuatrimestre
-const { data: obsData } = await cliente.from('observaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId);
-const { data: planData } = await cliente.from('planeaciones').select('docente_id,estado').eq('cuatrimestre_id', cuatrimestreId);
-const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('docente_id').eq('cuatrimestre_id', cuatrimestreId);
+const { data: obsData } = docentesObservacion.size
+  ? await cliente.from('observaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesObservacion])
+  : { data: [] };
+const { data: planData } = docentesAsignados.size
+  ? await cliente.from('planeaciones').select('docente_id,estado').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesAsignados])
+  : { data: [] };
+const { data: coordData } = docentesAsignados.size
+  ? await cliente.from('evaluacion_coordinacion').select('docente_id').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesAsignados])
+  : { data: [] };
 
 const obsSet = new Set((obsData || []).map(o => o.docente_id));
 const planPendiente = new Set((planData || []).filter(p => p.estado === 'Pendiente').map(p => p.docente_id));
@@ -60,7 +69,7 @@ const coordSet = new Set((coordData || []).map(c => c.docente_id));
 
 interface EstadoDocente {
   docente: { id: number; nombre: string; apellidos: string; email: string; modalidad: string };
-  observacion: 'pendiente' | 'completada';
+  observacion: 'pendiente' | 'completada' | 'no_asignada';
   planeacion: 'pendiente' | 'completada' | 'no_aplica';
   coordinacion: 'pendiente' | 'completada';
   completo: boolean;
@@ -68,10 +77,11 @@ interface EstadoDocente {
 
 const estados: EstadoDocente[] = docentes.map(d => ({
   docente: { id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email, modalidad: d.modalidad || 'Escolarizado' },
-  observacion: obsSet.has(d.id) ? 'completada' : 'pendiente',
+  observacion: !docentesObservacion.has(d.id) ? 'no_asignada' : obsSet.has(d.id) ? 'completada' : 'pendiente',
   planeacion: planEvaluada.has(d.id) ? 'completada' : planPendiente.has(d.id) ? 'pendiente' : 'no_aplica',
   coordinacion: coordSet.has(d.id) ? 'completada' : 'pendiente',
-  completo: obsSet.has(d.id) && (planEvaluada.has(d.id) || planPendiente.has(d.id)) && coordSet.has(d.id),
+  completo: coordSet.has(d.id) && (planEvaluada.has(d.id) || planPendiente.has(d.id))
+    && (!docentesObservacion.has(d.id) || obsSet.has(d.id)),
 }));
 
 const pendientesObs = estados.filter(e => e.observacion === 'pendiente').length;
@@ -112,7 +122,7 @@ function buildPageUrl(p:number) {
       <div><h1 class="text-3xl font-bold text-tup mb-2">Panel de Coordinación</h1></div>
       <form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
-          {cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.clave} {c.nombre||''}</option>))}
+          {cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.nombre||''}</option>))}
         </select>
       </form>
     </div>
@@ -182,6 +192,8 @@ function buildPageUrl(p:number) {
                 )}
                 {e.observacion === 'pendiente' ? (
                   <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}${cuatrimestreQuery}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
+                ) : e.observacion === 'no_asignada' ? (
+                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-[10px] font-medium">—</span>
                 ) : (
                   <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Obs.</span>
                 )}
@@ -217,7 +229,7 @@ function buildPageUrl(p:number) {
                 </div>
               </div>
               <div class="flex gap-2">
-                <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}${cuatrimestreQuery}`} class="flex-1 text-center px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100" onclick="return confirm('¿Querés editar la observación de este docente?')">✏️ Editar Obs.</a>
+                {e.observacion !== 'no_asignada' && <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}${cuatrimestreQuery}`} class="flex-1 text-center px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100" onclick="return confirm('¿Deseas editar la observación de este docente?')">Editar Obs.</a>}
                 <a href={`/coordinador/planeaciones${qs}`} class="flex-1 text-center px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100">📋 Ver Plan.</a>
               </div>
             </div>

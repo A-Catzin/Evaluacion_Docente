@@ -1,131 +1,165 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { obtenerDocentes } from '../../services/docentes';
-import { db, dbAdmin } from '../../lib/db';
+import { requireRole } from '../../lib/auth';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
-import { fetchNativeStudentEvaluationScores } from '../../services/scoring';
+import { describeEvaluatorLoadFailure } from '../../lib/observationAllocationEvaluatorError';
 
-const cliente = db();
+const auth = await requireRole(Astro.cookies, ['superadmin']);
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
-const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
-const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
-const todos = await obtenerDocentes();
+const requestedCycleId = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10);
+const cuatrimestreId = cuatrimestres.some((cycle) => cycle.id === requestedCycleId)
+  ? requestedCycleId
+  : cuatrimestreActivo?.id || cuatrimestres[0]?.id || 0;
+const coordinadorSel = Astro.url.searchParams.get('coordinador') || '';
+const observadorSel = Astro.url.searchParams.get('observador') || '';
+const coordinatedSearch = (Astro.url.searchParams.get('coordinated_search') || '').slice(0, 120);
+const observationSearch = (Astro.url.searchParams.get('observation_search') || '').slice(0, 120);
+const coordinatedAll = Astro.url.searchParams.get('coordinated_scope') === 'all';
+const observationAll = Astro.url.searchParams.get('observation_scope') === 'all';
 
-// Evaluadores (coordinadores + observadores)
-const { data: evaluadores } = await cliente.from('usuarios').select('id,email,rol').in('rol', ['coordinador','observador']).order('email');
+const [assignmentResult, backfillResult, evaluatorResult, coordinatedCandidateResult, observationCandidateResult, evaluatorDiagnosticsResult] = await Promise.all([
+  auth.client.rpc('admin_teacher_assignment_list_v2', { p_cuatrimestre_id: cuatrimestreId }),
+  auth.client.rpc('admin_teacher_assignment_backfill_status', { p_cuatrimestre_id: cuatrimestreId }),
+  auth.client.rpc('admin_observation_allocation_evaluators', { p_cuatrimestre_id: cuatrimestreId }),
+  auth.client.rpc('admin_assignment_teacher_candidates', { p_cuatrimestre_id: cuatrimestreId, p_search: coordinatedSearch, p_include_all_active: coordinatedAll }),
+  auth.client.rpc('admin_assignment_teacher_candidates', { p_cuatrimestre_id: cuatrimestreId, p_search: observationSearch, p_include_all_active: observationAll }),
+  auth.client.rpc('admin_observation_allocation_evaluator_diagnostics', { p_cuatrimestre_id: cuatrimestreId }),
+]);
 
-// Docentes con evaluaciones
-const nativeScoreRows = await fetchNativeStudentEvaluationScores(dbAdmin(), cuatrimestreId);
-const evalsSet = new Set(nativeScoreRows.map((row) => row.docente_id));
-const docentes = todos.filter(d => evalsSet.has(d.id));
-
-// Cargar asignaciones existentes para el primer evaluador o el seleccionado
-const evaluadorSel = Astro.url.searchParams.get('evaluador') || '';
-let asignados: Set<number> = new Set();
-if (evaluadorSel) {
-  const { data: asigs } = await cliente.from('coordinador_docentes').select('docente_id').eq('coordinador_id', evaluadorSel).eq('cuatrimestre_id', cuatrimestreId);
-  asignados = new Set((asigs||[]).map(a=>a.docente_id));
-}
+const assignments = (assignmentResult.data || []) as Array<{ assignment_id: number; assignment_type: string; actor_id: string; docente_id: number; source: string }>;
+const evaluatorLoadFailed = Boolean(evaluatorResult.error);
+const evaluators = (evaluatorLoadFailed ? [] : evaluatorResult.data || []) as Array<{ evaluator_id: string; email: string; role: string; included: boolean; target_teacher_count: number | null; current_count: number }>;
+const coordinatedCandidates = coordinatedCandidateResult.data;
+const observationCandidates = observationCandidateResult.data;
+const evaluatorLoadFailure = evaluatorLoadFailed ? describeEvaluatorLoadFailure(evaluatorResult.error) : null;
+const evaluatorDiagnostics = (evaluatorDiagnosticsResult.data || []) as Array<{ diagnostic_code: string; account_count: number }>;
+const evaluatorDiagnosticsByCode = Object.fromEntries(evaluatorDiagnostics.map((item) => [item.diagnostic_code, Number(item.account_count)]));
+const evaluatorDiagnosticsUnavailable = Boolean(evaluatorDiagnosticsResult.error);
+const coordinadores = evaluators.filter((evaluator) => evaluator.role === 'coordinador');
+const observationEvaluators = evaluators;
+const coordinatedAssignments = new Map(assignments
+  .filter((assignment) => assignment.assignment_type === 'coordinated' && assignment.actor_id === coordinadorSel)
+  .map((assignment) => [Number(assignment.docente_id), assignment]));
+const observationAssignments = new Map(assignments
+  .filter((assignment) => assignment.assignment_type === 'observation' && assignment.actor_id === observadorSel)
+  .map((assignment) => [Number(assignment.docente_id), assignment]));
+const backfillResumen = (backfillResult.data || []) as Array<{ assignment_type: string; status: string; reason_code: string; assignment_count: number }>;
+const roleLabel = (role: string) => role === 'superadmin' ? 'Administrador' : role === 'coordinador' ? 'Coordinador' : 'Observador';
+const evaluatorLabels = Object.fromEntries(evaluators.map((evaluator) => [evaluator.evaluator_id, `${evaluator.email} (${roleLabel(evaluator.role)})`]));
 ---
 
 <LayoutAdmin titulo="Asignaciones — Admin">
-  <div class="animate-flotar-entrada">
-    <h1 class="text-3xl font-bold text-tup mb-6">Asignación de Observaciones</h1>
+  <div class="animate-flotar-entrada mx-auto max-w-7xl">
+    <h1 class="mb-2 text-3xl font-bold text-tup">Asignaciones por propósito</h1>
+    <p class="mb-6 text-sm text-slate-500">Las altas y revocaciones son independientes. Revocar una asignación nunca elimina docentes, usuarios, grupos ni capturas históricas.</p>
 
-    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
-      <form method="GET" class="flex gap-3 items-center">
-        <label class="text-sm font-medium text-slate-700">Evaluador:</label>
-        <select name="evaluador" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm flex-1" onchange="this.form.submit()">
-          <option value="">Seleccionar coordinador/observador...</option>
-          {evaluadores?.map(e => (<option value={e.id} selected={evaluadorSel === e.id}>{e.email} ({e.rol})</option>))}
+    <form method="GET" class="mb-6 grid gap-4 rounded-2xl bg-white p-4 shadow-tarjeta md:grid-cols-3">
+      <label class="text-sm font-medium text-slate-700">Cuatrimestre
+        <select name="cuatrimestre" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" onchange="this.form.submit()">
+          {cuatrimestres.map((cycle) => <option value={cycle.id} selected={cycle.id === cuatrimestreId}>{cycle.clave}</option>)}
         </select>
-        <label class="text-sm font-medium text-slate-700 ml-2">Cuatrimestre:</label>
-        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
-          {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
+      </label>
+      <label class="text-sm font-medium text-slate-700">Coordinador para coordinación
+        <select name="coordinador" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" onchange="this.form.submit()">
+          <option value="">Seleccionar coordinador</option>
+          {coordinadores.map((evaluator) => <option value={evaluator.evaluator_id} selected={evaluator.evaluator_id === coordinadorSel}>{evaluator.email}</option>)}
         </select>
-      </form>
+      </label>
+      <label class="text-sm font-medium text-slate-700">Evaluador para asignación manual
+        <select name="observador" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" onchange="this.form.submit()">
+          <option value="">Seleccionar evaluador</option>
+          {observationEvaluators.map((evaluator) => <option value={evaluator.evaluator_id} selected={evaluator.evaluator_id === observadorSel}>{evaluator.email} ({roleLabel(evaluator.role)})</option>)}
+        </select>
+      </label>
+    </form>
+
+    {backfillResumen.length > 0 && <div class="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600"><p class="mb-2 font-semibold text-slate-700">Estado del backfill de relaciones legadas</p><div class="flex flex-wrap gap-x-5 gap-y-2">{backfillResumen.map((row) => <span>{row.assignment_type}: {row.assignment_count} {row.status === 'backfilled' ? 'migradas' : 'requieren revisión'} ({row.reason_code})</span>)}</div></div>}
+
+    <div class="grid gap-6 xl:grid-cols-2">
+      <section class="overflow-hidden rounded-2xl bg-white shadow-tarjeta">
+        <div class="border-b p-5"><h2 class="text-xl font-bold text-tup">Docentes coordinados</h2><p class="mt-1 text-sm text-slate-500">Sólo coordinadores activos. Habilita coordinación, planeaciones, notificaciones y reportes del ciclo; no habilita observación.</p></div>
+        {coordinadorSel ? <div class="p-4">
+          <form method="GET" class="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <input type="hidden" name="cuatrimestre" value={cuatrimestreId} /><input type="hidden" name="coordinador" value={coordinadorSel} /><input type="hidden" name="observador" value={observadorSel} /><input type="hidden" name="observation_search" value={observationSearch} /><input type="hidden" name="observation_scope" value={observationAll ? 'all' : 'cycle'} />
+            <input name="coordinated_search" value={coordinatedSearch} placeholder="Buscar por nombre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+            <select name="coordinated_scope" class="rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="cycle" selected={!coordinatedAll}>Docentes del cuatrimestre</option><option value="all" selected={coordinatedAll}>Todos los docentes activos</option></select>
+            <button class="rounded-xl border border-tup px-3 py-2 text-sm font-semibold text-tup">Filtrar</button>
+          </form>
+          <p class="mb-3 text-xs text-slate-500">La vista inicial muestra docentes activos con al menos un grupo activo en este cuatrimestre. Selecciona filas y confirma la acción.</p>
+          <div class="mb-3 flex items-center justify-between text-xs text-slate-500"><span><span data-selected-count="coordinated">0</span> seleccionados</span><button type="button" class="text-tup hover:underline" data-select-assigned="coordinated">Seleccionar asignados visibles</button></div>
+          <div class="max-h-[42vh] space-y-1 overflow-y-auto" data-list="coordinated">
+            {(coordinatedCandidates || []).map((teacher: any) => { const assignment = coordinatedAssignments.get(Number(teacher.docente_id)); return <label class="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-slate-50"><input type="checkbox" data-selection="coordinated" data-assignment-id={assignment?.assignment_id || ''} value={teacher.docente_id} class="accent-tup" /><span class="text-sm">{teacher.nombre.toUpperCase()} {teacher.apellidos.toUpperCase()}</span>{assignment ? <span class="ml-auto rounded-md bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">Asignado</span> : <span class="ml-auto text-xs text-slate-400">Disponible</span>}</label>; })}
+            {(coordinatedCandidates || []).length === 0 && <p class="py-6 text-center text-sm text-slate-400">No hay docentes que coincidan con el filtro.</p>}
+          </div>
+          <div class="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" data-assign="coordinated" class="rounded-xl bg-tup py-3 text-sm font-semibold text-white hover:bg-tup/90">Asignar selección</button><button type="button" data-revoke="coordinated" class="rounded-xl border border-red-300 py-3 text-sm font-semibold text-red-700 hover:bg-red-50">Quitar selección</button></div>
+        </div> : <p class="p-8 text-center text-slate-400">Selecciona un coordinador activo.</p>}
+      </section>
+
+      <section class="overflow-hidden rounded-2xl bg-white shadow-tarjeta">
+        <div class="border-b p-5"><h2 class="text-xl font-bold text-tup">Docentes para observación</h2><p class="mt-1 text-sm text-slate-500">Administradores, coordinadores u observadores activos. Habilita únicamente la captura de observación y datos mínimos del docente/grupo.</p></div>
+        {observadorSel ? <div class="p-4">
+          <form method="GET" class="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <input type="hidden" name="cuatrimestre" value={cuatrimestreId} /><input type="hidden" name="coordinador" value={coordinadorSel} /><input type="hidden" name="observador" value={observadorSel} /><input type="hidden" name="coordinated_search" value={coordinatedSearch} /><input type="hidden" name="coordinated_scope" value={coordinatedAll ? 'all' : 'cycle'} />
+            <input name="observation_search" value={observationSearch} placeholder="Buscar por nombre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+            <select name="observation_scope" class="rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="cycle" selected={!observationAll}>Docentes del cuatrimestre</option><option value="all" selected={observationAll}>Todos los docentes activos</option></select>
+            <button class="rounded-xl border border-tup px-3 py-2 text-sm font-semibold text-tup">Filtrar</button>
+          </form>
+          <div class="mb-3 flex items-center justify-between text-xs text-slate-500"><span><span data-selected-count="observation">0</span> seleccionados</span><button type="button" class="text-tup hover:underline" data-select-assigned="observation">Seleccionar asignados visibles</button></div>
+          <div class="max-h-[42vh] space-y-1 overflow-y-auto" data-list="observation">
+            {(observationCandidates || []).map((teacher: any) => { const assignment = observationAssignments.get(Number(teacher.docente_id)); return <label class="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-slate-50"><input type="checkbox" data-selection="observation" data-assignment-id={assignment?.assignment_id || ''} value={teacher.docente_id} class="accent-tup" /><span class="text-sm">{teacher.nombre.toUpperCase()} {teacher.apellidos.toUpperCase()}</span>{assignment ? <span class="ml-auto rounded-md bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">Asignado</span> : <span class="ml-auto text-xs text-slate-400">Disponible</span>}</label>; })}
+            {(observationCandidates || []).length === 0 && <p class="py-6 text-center text-sm text-slate-400">No hay docentes que coincidan con el filtro.</p>}
+          </div>
+          <div class="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" data-assign="observation" class="rounded-xl bg-tup py-3 text-sm font-semibold text-white hover:bg-tup/90">Asignar selección</button><button type="button" data-revoke="observation" class="rounded-xl border border-red-300 py-3 text-sm font-semibold text-red-700 hover:bg-red-50">Quitar selección</button></div>
+        </div> : <p class="p-8 text-center text-slate-400">Selecciona un evaluador activo.</p>}
+      </section>
     </div>
 
-    {evaluadorSel ? (
-      <>
-        <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-4">
-          <input type="text" id="buscar-docente" placeholder="🔍 Buscar docente..." class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" oninput="filtrarDocs()" />
-        </div>
-        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-6">
-          <div class="px-6 py-3 border-b flex items-center justify-between">
-            <span class="text-sm text-slate-500"><span id="count-sel">0</span> de {docentes.length} seleccionados</span>
-            <div class="flex gap-2">
-              <button id="btn-select-all" class="text-xs text-tup hover:underline">Seleccionar todos</button>
-              <button id="btn-deselect-all" class="text-xs text-red-500 hover:underline">Desvincular todos</button>
-            </div>
-          </div>
-          <div class="max-h-[60vh] overflow-y-auto p-4 space-y-1" id="lista-docs">
-            {docentes.map(d => (
-              <label class="docente-item flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-                <input type="checkbox" name="docente" value={d.id} class="accent-tup" checked={asignados.has(d.id)} onchange="updateCount()" />
-                <span class="text-sm">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</span>
-                <span class="text-xs text-slate-400 ml-auto">{d.email}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <button id="btn-guardar" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90">Guardar Asignaciones</button>
-      </>
-    ) : (
-      <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">Selecciona un evaluador para ver sus docentes asignados.</div>
-    )}
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+    <section class="mt-6 overflow-hidden rounded-2xl bg-white shadow-tarjeta">
+      <div class="border-b p-5"><h2 class="text-xl font-bold text-tup">Asignación automática de observación</h2><p class="mt-1 text-sm text-slate-500">Las asignaciones manuales se conservan. Excluir a una persona sólo evita nuevas asignaciones automáticas; no desactiva su cuenta ni revoca sus asignaciones.</p></div>
+      <div class="p-5">
+        {evaluatorLoadFailed && <p class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">No se pudo cargar la lista de evaluadores. Código: <code>{evaluatorLoadFailure?.code}</code>. {evaluatorLoadFailure?.cause} No se muestran datos parciales.</p>}
+        {!evaluatorLoadFailed && evaluators.length === 0 && !evaluatorDiagnosticsUnavailable && <p class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">No hay evaluadores activos y resueltos. Diagnóstico sin datos personales: {evaluatorDiagnosticsByCode.eligible_active || 0} elegibles, {evaluatorDiagnosticsByCode.inactive_eligible_profile || 0} perfiles elegibles inactivos, {evaluatorDiagnosticsByCode.unresolved_profile || 0} perfiles pendientes, {evaluatorDiagnosticsByCode.auth_account_without_profile || 0} cuentas sin perfil y {evaluatorDiagnosticsByCode.profile_without_auth_account || 0} perfiles sin cuenta.</p>}
+        {!evaluatorLoadFailed && evaluators.length === 0 && evaluatorDiagnosticsUnavailable && <p class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">No hay evaluadores elegibles activos. El diagnóstico de cuentas no está disponible; verifica que la migración 053 esté aplicada.</p>}
+        <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="border-b bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-3 py-3">Incluir</th><th class="px-3 py-3">Evaluador</th><th class="px-3 py-3">Asignaciones actuales</th><th class="px-3 py-3">Meta explícita (opcional)</th></tr></thead><tbody class="divide-y">
+          {evaluators.map((evaluator) => <tr><td class="px-3 py-3"><input type="checkbox" data-pref-included checked={evaluator.included} class="accent-tup" /></td><td class="px-3 py-3"><span class="font-medium">{evaluator.email}</span><span class="ml-2 text-xs text-slate-500">{roleLabel(evaluator.role)}</span><input type="hidden" data-pref-id value={evaluator.evaluator_id} /></td><td class="px-3 py-3">{evaluator.current_count}</td><td class="px-3 py-3"><input type="number" min="0" max="10000" inputmode="numeric" data-pref-target value={evaluator.target_teacher_count ?? ''} placeholder="Sin meta" class="w-32 rounded-lg border border-slate-200 px-2 py-1.5" /></td></tr>)}
+          {evaluators.length === 0 && <tr><td colspan="4" class="px-3 py-8 text-center text-slate-400">{evaluatorLoadFailed ? 'La lista de evaluadores no está disponible.' : 'No hay evaluadores elegibles activos.'}</td></tr>}
+        </tbody></table></div>
+        <div class="mt-4 flex flex-wrap gap-3"><button id="save-preferences" type="button" disabled={evaluatorLoadFailed} class="rounded-xl border border-tup px-4 py-2.5 text-sm font-semibold text-tup disabled:cursor-not-allowed disabled:opacity-50">Guardar configuración</button><button id="preview-allocation" type="button" disabled={evaluatorLoadFailed} class="rounded-xl bg-tup px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Generar vista previa</button></div>
+        <p class="mt-3 text-xs text-slate-500">Una meta vacía participa en el reparto equilibrado del remanente. La vista previa usa un sorteo ordenado persistido y vence después de 15 minutos.</p>
+        <div id="allocation-preview" class="mt-5 hidden rounded-xl border border-slate-200 p-4"></div>
+      </div>
+    </section>
+    <div id="toast" class="fixed bottom-6 left-1/2 z-50 hidden -translate-x-1/2 rounded-xl px-6 py-3 text-sm font-medium shadow-modal"></div>
   </div>
 </LayoutAdmin>
 
-<script is:inline define:vars={{ evaluadorSel, cuatrimestreId }}>
-  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},3000)}
-
-  function updateCount() {
-    var c = document.querySelectorAll('input[name="docente"]:checked').length;
-    document.getElementById('count-sel').textContent = c;
-  }
-  updateCount();
-
-  document.getElementById('btn-select-all').addEventListener('click', function(){
-    document.querySelectorAll('input[name="docente"]').forEach(function(cb){ cb.checked = true; });
-    updateCount();
-  });
-  document.getElementById('btn-deselect-all').addEventListener('click', async function(){
-    if (!confirm('¿Desvincular TODOS los docentes de este evaluador en este cuatrimestre?')) return;
-    this.disabled = true; this.textContent = 'Desvinculando...';
+<script is:inline define:vars={{ coordinadorSel, observadorSel, cuatrimestreId, evaluatorLabels }}>
+  var allocationPreview = null;
+  function toast(message, isError) { var element = document.getElementById('toast'); element.textContent = message; element.className = 'fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl px-6 py-3 text-sm font-medium shadow-modal ' + (isError ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'); element.classList.remove('hidden'); setTimeout(function(){ element.classList.add('hidden'); }, 4000); }
+  function escapeHtml(value) { return String(value).replace(/[&<>"']/g, function(character) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]; }); }
+  function selected(type) { return Array.from(document.querySelectorAll('input[data-selection="' + type + '"]:checked')); }
+  function updateCount(type) { var element = document.querySelector('[data-selected-count="' + type + '"]'); if (element) element.textContent = String(selected(type).length); }
+  function setBusy(button, busy, text) { button.disabled = busy; if (busy) button.dataset.label = button.textContent; button.textContent = busy ? text : button.dataset.label; }
+  async function assignmentAction(type, revoke, button) {
+    var inputs = selected(type); var ids = revoke ? inputs.map(function(input) { return Number(input.dataset.assignmentId); }).filter(Boolean) : inputs.map(function(input) { return Number(input.value); });
+    if (!ids.length) { toast(revoke ? 'Selecciona al menos una asignación activa.' : 'Selecciona al menos un docente.', true); return; }
+    if (revoke && !confirm('Se revocarán ' + ids.length + ' asignaciones de este cuatrimestre. No se eliminarán docentes, usuarios, grupos ni capturas históricas. ¿Deseas continuar?')) return;
+    setBusy(button, true, revoke ? 'Revocando...' : 'Asignando...');
     try {
-      var res = await fetch('/api/admin/asignar-docentes', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ evaluador_id: evaluadorSel, docente_ids: [], cuatrimestre_id: cuatrimestreId })
-      });
-      if (res.ok) { toast('Todos los docentes desvinculados', false); document.querySelectorAll('input[name="docente"]').forEach(function(cb){ cb.checked = false; }); updateCount(); }
-      else { var j = await res.json(); toast(j.error||'Error', true); }
-    } catch(e) { toast('Error de conexión', true); }
-    this.disabled = false; this.textContent = 'Desvincular todos';
-  });
-
-  function filtrarDocs() {
-    var q = (document.getElementById('buscar-docente').value || '').toLowerCase();
-    document.querySelectorAll('.docente-item').forEach(function(item){
-      var txt = item.textContent.toLowerCase();
-      item.style.display = !q || txt.includes(q) ? '' : 'none';
-    });
+      var response = await fetch('/api/admin/asignar-docentes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revoke ? { action: 'revoke', assignment_type: type, assignment_ids: ids, cuatrimestre_id: cuatrimestreId } : { action: 'assign', assignment_type: type, evaluador_id: type === 'coordinated' ? coordinadorSel : observadorSel, docente_ids: ids, cuatrimestre_id: cuatrimestreId }) });
+      var payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'No fue posible actualizar las asignaciones');
+      toast((revoke ? 'Asignaciones revocadas: ' : 'Asignaciones activadas: ') + payload.count, false); setTimeout(function(){ location.reload(); }, 450);
+    } catch (error) { toast(error.message || 'Error de conexión', true); setBusy(button, false); }
   }
-
-  document.getElementById('btn-guardar').addEventListener('click', async function(){
-    var ids = Array.from(document.querySelectorAll('input[name="docente"]:checked')).map(function(cb){ return parseInt(cb.value); });
-    this.disabled = true; this.textContent = 'Guardando...';
-    try {
-      var res = await fetch('/api/admin/asignar-docentes', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ evaluador_id: evaluadorSel, docente_ids: ids, cuatrimestre_id: cuatrimestreId })
-      });
-      if (res.ok) { var d = await res.json(); toast('Guardado: ' + d.count + ' docentes asignados', false); }
-      else { var j = await res.json(); toast(j.error||'Error', true); }
-    } catch(e) { toast('Error de conexión', true); }
-    this.disabled = false; this.textContent = 'Guardar Asignaciones';
-  });
+  document.querySelectorAll('input[data-selection]').forEach(function(input){ input.addEventListener('change', function(){ updateCount(input.dataset.selection); }); });
+  document.querySelectorAll('[data-select-assigned]').forEach(function(button){ button.addEventListener('click', function(){ var type = button.dataset.selectAssigned; document.querySelectorAll('input[data-selection="' + type + '"][data-assignment-id]').forEach(function(input){ if (input.dataset.assignmentId) input.checked = true; }); updateCount(type); }); });
+  document.querySelectorAll('[data-assign]').forEach(function(button){ button.addEventListener('click', function(){ assignmentAction(button.dataset.assign, false, button); }); });
+  document.querySelectorAll('[data-revoke]').forEach(function(button){ button.addEventListener('click', function(){ assignmentAction(button.dataset.revoke, true, button); }); });
+  function preferences() { return Array.from(document.querySelectorAll('[data-pref-id]')).map(function(input) { var row = input.closest('tr'); var target = row.querySelector('[data-pref-target]').value.trim(); return { evaluator_id: input.value, included: row.querySelector('[data-pref-included]').checked, target_teacher_count: target === '' ? null : Number(target) }; }); }
+  async function allocationRequest(action, body) { var response = await fetch('/api/admin/observation-allocation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ action: action, cuatrimestre_id: cuatrimestreId }, body || {})) }); var payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'No fue posible completar la acción'); return payload; }
+  document.getElementById('save-preferences').addEventListener('click', async function(){ var button = this; setBusy(button, true, 'Guardando...'); try { var result = await allocationRequest('save_preferences', { preferences: preferences() }); allocationPreview = null; document.getElementById('allocation-preview').classList.add('hidden'); toast('Configuración guardada para ' + result.count + ' evaluadores.', false); } catch (error) { toast(error.message || 'Error de conexión', true); } setBusy(button, false); });
+  function renderPreview(preview) { var container = document.getElementById('allocation-preview'); var rows = Object.keys(preview.evaluator_counts || {}).map(function(id) { var count = preview.evaluator_counts[id]; var target = count.target === null ? 'Sin meta' : count.target; var notes = []; if (!count.included) notes.push('Excluido'); if (count.exceeds_target) notes.push('Ya supera su meta; se conserva'); if (count.target_shortfall) notes.push('Meta incompleta por falta de candidatos'); return '<tr class="border-t"><td class="px-2 py-2">' + escapeHtml(evaluatorLabels[id] || 'Evaluador') + '</td><td class="px-2 py-2 text-center">' + count.current + '</td><td class="px-2 py-2 text-center">' + target + '</td><td class="px-2 py-2 text-center">' + count.proposed + '</td><td class="px-2 py-2 text-center font-semibold">' + count.final + '</td><td class="px-2 py-2 text-xs text-slate-500">' + notes.join('. ') + '</td></tr>'; }).join(''); container.innerHTML = '<div class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="font-semibold text-slate-800">Vista previa del sorteo</h3><p class="text-xs text-slate-500">Candidatos disponibles: ' + preview.candidate_count + '. Semilla: <code>' + escapeHtml(preview.seed) + '</code></p></div><button id="confirm-allocation" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">Confirmar asignación</button></div><div class="mt-3 overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-2 py-2 text-left">Evaluador</th><th class="px-2 py-2">Actual</th><th class="px-2 py-2">Meta</th><th class="px-2 py-2">Propuesta</th><th class="px-2 py-2">Final</th><th class="px-2 py-2 text-left">Notas</th></tr></thead><tbody>' + rows + '</tbody></table></div>'; container.classList.remove('hidden'); document.getElementById('confirm-allocation').addEventListener('click', confirmAllocation); }
+  document.getElementById('preview-allocation').addEventListener('click', async function(){ var button = this; setBusy(button, true, 'Generando...'); try { var result = await allocationRequest('preview'); allocationPreview = result.preview; renderPreview(allocationPreview); } catch (error) { toast(error.message || 'Error de conexión', true); } setBusy(button, false); });
+  async function confirmAllocation() { if (!allocationPreview) return; if (!confirm('Se crearán sólo las asignaciones mostradas en esta vista previa. Las asignaciones manuales existentes se conservarán. ¿Deseas confirmar?')) return; var button = document.getElementById('confirm-allocation'); setBusy(button, true, 'Confirmando...'); try { var result = await allocationRequest('confirm', { preview_id: allocationPreview.preview_id, fingerprint: allocationPreview.fingerprint }); toast((result.result.already_confirmed ? 'La asignación ya estaba confirmada. ' : 'Asignación confirmada. ') + 'Nuevas asignaciones: ' + result.result.assigned_count, false); setTimeout(function(){ location.reload(); }, 500); } catch (error) { toast(error.message || 'Error de conexión', true); setBusy(button, false); } }
 </script>

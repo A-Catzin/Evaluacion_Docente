@@ -2,6 +2,7 @@
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+import { getMyAssignedTeacherIds } from '../../lib/teacherAssignments';
 
 const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -15,8 +16,14 @@ if (Astro.url.searchParams.has('cuatrimestre')) {
 }
 const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
 
-// Query con filtro de cuatrimestre + join a cuatrimestres
-const { data: raw } = await cliente.from('planeaciones').select('*, docentes(nombre,apellidos,email), asignaturas(nombre), cuatrimestres(clave)').eq('cuatrimestre_id', cuatrimestreId).order('fecha_subida', { ascending: false });
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+const docentesAsignados = await getMyAssignedTeacherIds(cliente, 'coordinated', cuatrimestreId);
+// Do not request planning metadata or PDF references before the coordination scope is known.
+const { data: raw } = docentesAsignados.size
+  ? await cliente.from('planeaciones').select('*, docentes(nombre,apellidos,email), asignaturas(nombre), cuatrimestres(clave)').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesAsignados]).order('fecha_subida', { ascending: false })
+  : { data: [] };
 
 interface Item { id: number; docente: string; email: string; asignatura: string; grupo: string; estado: string; puntaje: number|null; url: string; cuatrimestre: string; evaluacionDetalle: Record<string,{score:string}> | null; }
 const items: Item[] = [];
