@@ -46,6 +46,43 @@ const {
   @media (max-width: 640px) { html { font-size: 15px; } }
   button, a[role='button'] { min-height: 44px; min-width: 44px; }
   ::selection { background-color: rgba(30, 58, 95, 0.2); color: #1e3a5f; }
-  label:has(input:checked) { background-color: #1e3a5f !important; border-color: #1e3a5f !important; }
-  label:has(input:checked) span, label:has(input:checked) p { color: white !important; }
+  /* Opt-in selection cards keep every selected label readable without changing plain form labels. */
+  .selection-card {
+    position: relative;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, outline-color 150ms ease;
+  }
+  .selection-card:not(:has(input:disabled)):not(:has(input:checked)):hover {
+    background-color: #e8edf5;
+    border-color: #1e3a5f;
+  }
+  /* White on #1e3a5f is 11.5:1, exceeding WCAG AA for normal text. */
+  .selection-card:has(input:checked) {
+    background-color: #1e3a5f !important;
+    border-color: #1e3a5f !important;
+    color: #ffffff !important;
+  }
+  .selection-card:has(input:checked) :where(*) {
+    color: #ffffff !important;
+  }
+  .selection-card--na:has(input:checked) {
+    background-color: #78350f !important;
+    border-color: #78350f !important;
+  }
+  .selection-card:has(input:focus-visible) {
+    outline: 3px solid #1e3a5f;
+    outline-offset: 3px;
+  }
+  .selection-card:has(input:checked:focus-visible) { outline-color: #ffffff; }
+  .selection-card:has(input:disabled) {
+    cursor: not-allowed;
+    background-color: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #475569;
+  }
+  .selection-card:has(input:disabled) :where(*) { color: #475569 !important; }
+  .selection-card:has(input:user-invalid), .selection-card[aria-invalid="true"] { border-color: #b91c1c; }
+  .selection-card:has(input:checked:user-invalid) {
+    background-color: #991b1b !important;
+    border-color: #991b1b !important;
+  }
 </style>

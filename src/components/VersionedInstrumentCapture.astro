@@ -1,0 +1,187 @@
+---
+import { instrumentOptions, type VersionedInstrumentDefinition } from "../lib/versionedInstruments";
+
+type Teacher = { id: number; nombre: string; apellidos: string; campus?: string | null };
+type Group = { clave?: string | null; docente_id: number; asignatura_id: number };
+type Subject = { id: number; nombre: string };
+
+interface Props {
+  definition: VersionedInstrumentDefinition;
+  cuatrimestreId: number;
+  teachers: Teacher[];
+  groups?: Group[];
+  subjects?: Subject[];
+  selectedTeacherId?: number;
+  sourceRecordId?: number;
+  returnUrl: string;
+}
+
+const { definition, cuatrimestreId, teachers, groups = [], subjects = [], selectedTeacherId, sourceRecordId, returnUrl } = Astro.props;
+const options = instrumentOptions(definition);
+const isObservation = definition.purpose === "observation";
+const isPlanning = definition.purpose === "planning";
+const isCoordination = definition.purpose === "coordination";
+---
+
+<form id="versioned-instrument-form" class="space-y-6" data-purpose={definition.purpose}>
+  <section class="bg-white rounded-2xl p-6 shadow-tarjeta">
+    <h2 class="text-lg font-bold text-tup mb-4">Datos de identificación</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <label class="block text-sm font-medium text-slate-700">Docente
+        <select id="instrument-docente" required disabled={isPlanning} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm disabled:bg-slate-50">
+          <option value="">Seleccionar...</option>
+          {teachers.map((teacher) => <option value={teacher.id} selected={selectedTeacherId === teacher.id}>{teacher.nombre.toUpperCase()} {teacher.apellidos.toUpperCase()}</option>)}
+        </select>
+      </label>
+      {isObservation && <>
+        <label class="block text-sm font-medium text-slate-700">Asignatura
+          <select id="instrument-asignatura" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option></select>
+        </label>
+        <label class="block text-sm font-medium text-slate-700">Grupo
+          <select id="instrument-grupo" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option></select>
+        </label>
+      </>}
+      <p class="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-600">Instrumento: {definition.version}</p>
+    </div>
+  </section>
+
+  {definition.sections.map((section) => (
+    <section class="bg-white rounded-2xl p-6 shadow-tarjeta space-y-5">
+      <h2 class="text-lg font-bold text-tup">{section.title}</h2>
+      {section.items.map((item) => (
+        <div class="rounded-xl bg-slate-50 p-4" data-item={item.id}>
+          <p class="text-sm font-medium text-slate-800 mb-3">{item.code}. {item.label}</p>
+          {item.guidance && <p class="text-xs text-slate-500 mb-3">{item.guidance}</p>}
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {options.map((option) => <label class="selection-card cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-center text-xs"><input class="mr-1" type="radio" name={`item-${item.id}`} value={option.value} required />{option.label}</label>)}
+            {item.na_eligible && <label class="selection-card selection-card--na cursor-pointer rounded-lg border border-amber-300 px-3 py-2 text-center text-xs text-amber-800"><input class="mr-1" type="radio" name={`item-${item.id}`} value="na" />N/A</label>}
+          </div>
+          {item.na_eligible && <label class="mt-3 hidden text-xs text-slate-600" data-na-reason={item.id}>Motivo de N/A
+            <textarea class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" rows="2" maxlength="2000"></textarea>
+          </label>}
+        </div>
+      ))}
+      <label class="block text-sm font-medium text-slate-700">Evidencias, observaciones y acuerdos de seguimiento
+        <textarea data-evidence={section.id} required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"></textarea>
+      </label>
+    </section>
+  ))}
+
+  {isCoordination && <section class="bg-white rounded-2xl p-6 shadow-tarjeta space-y-4">
+    <h2 class="text-lg font-bold text-tup">Checklist administrativo</h2>
+    <p class="text-sm text-slate-500">No aporta puntaje ni peso al resultado final.</p>
+    {definition.administrative_checks.map((check) => <div class="rounded-xl bg-slate-50 p-4" data-check={check.id}>
+      <p class="text-sm font-medium text-slate-800 mb-2">{check.label}</p>
+      <div class="flex flex-wrap gap-3 text-xs">
+        <label class="selection-card inline-flex cursor-pointer items-center rounded-lg border border-slate-200 px-3 py-2"><input type="radio" name={`check-${check.id}`} value="complies" required /> <span class="ml-1">Cumple</span></label>
+        <label class="selection-card inline-flex cursor-pointer items-center rounded-lg border border-slate-200 px-3 py-2"><input type="radio" name={`check-${check.id}`} value="does_not_comply" /> <span class="ml-1">No cumple</span></label>
+        {check.na_eligible && <label class="selection-card selection-card--na inline-flex cursor-pointer items-center rounded-lg border border-amber-300 px-3 py-2 text-amber-800"><input type="radio" name={`check-${check.id}`} value="na" /> <span class="ml-1">N/A</span></label>}
+      </div>
+      {check.na_eligible && <label class="mt-2 hidden text-xs text-slate-600" data-check-na-reason={check.id}>Motivo de N/A
+        <textarea class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" rows="2" maxlength="2000"></textarea>
+      </label>}
+    </div>)}
+  </section>}
+
+  <section class="bg-white rounded-2xl p-6 shadow-tarjeta space-y-4">
+    <div id="na-summary" class="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900" aria-live="polite">N/A: 0 de 0 criterios.</div>
+    {isObservation && <>
+      <label class="block text-sm font-medium text-slate-700">Fortalezas observadas<textarea id="metadata-strengths" required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+      <label class="block text-sm font-medium text-slate-700">Área prioritaria de mejora<textarea id="metadata-priority" required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+      <label class="block text-sm font-medium text-slate-700">Recomendación pedagógica<textarea id="metadata-recommendation" required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+    </>}
+    <label class="block text-sm font-medium text-slate-700">Observaciones generales<textarea id="metadata-general" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+    <button type="submit" class="w-full rounded-xl bg-tup py-4 font-semibold text-white hover:bg-tup/90">Enviar instrumento</button>
+    <p id="instrument-message" class="text-sm" aria-live="polite"></p>
+  </section>
+</form>
+
+<script is:inline define:vars={{ definitionJson: JSON.stringify(definition), cuatrimestreId, groupsJson: JSON.stringify(groups), subjectsJson: JSON.stringify(subjects), sourceRecordId: sourceRecordId ?? null, returnUrl }}>
+  // @ts-ignore Astro injects this serialized prop through define:vars.
+  const definition = JSON.parse(definitionJson);
+  const groups = JSON.parse(groupsJson);
+  // @ts-ignore Astro injects this serialized prop through define:vars.
+  const subjects = JSON.parse(subjectsJson);
+  const form = document.getElementById("versioned-instrument-form");
+  const teacher = document.getElementById("instrument-docente");
+  const subject = document.getElementById("instrument-asignatura");
+  const group = document.getElementById("instrument-grupo");
+  const message = document.getElementById("instrument-message");
+  const answerInputs = Array.from(form.querySelectorAll("[data-item]"));
+
+  function setOptions(select, entries, label) {
+    if (!select) return;
+    select.innerHTML = '<option value="">Seleccionar...</option>';
+    entries.forEach(function(entry) { const option = document.createElement("option"); option.value = entry.id || entry.clave; option.textContent = label(entry); select.appendChild(option); });
+  }
+  function refreshSubjects() {
+    if (!subject || !teacher) return;
+    const ids = [...new Set(groups.filter(function(entry) { return entry.docente_id === Number(teacher.value); }).map(function(entry) { return entry.asignatura_id; }))];
+    setOptions(subject, subjects.filter(function(entry) { return ids.includes(entry.id); }), function(entry) { return entry.nombre; });
+    setOptions(group, [], function(entry) { return entry.clave; });
+  }
+  function refreshGroups() {
+    if (!group || !teacher || !subject) return;
+    setOptions(group, groups.filter(function(entry) { return entry.docente_id === Number(teacher.value) && entry.asignatura_id === Number(subject.value); }), function(entry) { return entry.clave || "Grupo"; });
+  }
+  if (teacher && !teacher.disabled) teacher.addEventListener("change", refreshSubjects);
+  if (subject) subject.addEventListener("change", refreshGroups);
+  if (teacher && teacher.value && subject) refreshSubjects();
+
+  function updateNaSummary() {
+    const values = answerInputs.map(function(entry) { return entry.querySelector("input[type=radio]:checked")?.value; }).filter(Boolean);
+    const naCount = values.filter(function(value) { return value === "na"; }).length;
+    const total = definition.sections.reduce(function(sum, section) { return sum + section.items.length; }, 0);
+    const percentage = total ? (naCount * 100 / total) : 0;
+    const invalid = naCount * 100 > total * 20;
+    const summary = document.getElementById("na-summary");
+    summary.textContent = "N/A: " + naCount + " de " + total + " criterios (" + percentage.toFixed(1) + "%). " + (invalid ? "La captura será inválida por exceso de N/A y no aportará puntaje oficial." : "Límite máximo válido: 20%.");
+    summary.className = "rounded-xl px-4 py-3 text-sm " + (invalid ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-900");
+  }
+  form.addEventListener("change", function(event) {
+    const input = event.target;
+    if (!input.matches("input[type=radio]")) return;
+    const item = input.closest("[data-item]");
+    if (item) { const reason = item.querySelector("[data-na-reason]"); if (reason) reason.classList.toggle("hidden", input.value !== "na"); }
+    const check = input.closest("[data-check]");
+    if (check) { const reason = check.querySelector("[data-check-na-reason]"); if (reason) reason.classList.toggle("hidden", input.value !== "na"); }
+    updateNaSummary();
+  });
+  updateNaSummary();
+
+  form.addEventListener("submit", async function(event) {
+    event.preventDefault();
+    const answers = [];
+    let missingReason = false;
+    answerInputs.forEach(function(entry) {
+      const itemId = entry.dataset.item;
+      const selected = entry.querySelector("input[type=radio]:checked");
+      const reason = entry.querySelector("[data-na-reason] textarea")?.value.trim() || null;
+      if (selected?.value === "na" && !reason) missingReason = true;
+      answers.push({ item_id: itemId, value: selected?.value === "na" ? "na" : Number(selected?.value), na_reason: reason });
+    });
+    const checks = Array.from(form.querySelectorAll("[data-check]")).map(function(entry) {
+      const checkId = entry.dataset.check;
+      const selected = entry.querySelector("input[type=radio]:checked");
+      const reason = entry.querySelector("[data-check-na-reason] textarea")?.value.trim() || null;
+      if (selected?.value === "na" && !reason) missingReason = true;
+      return { check_id: checkId, value: selected?.value, na_reason: reason };
+    });
+    if (missingReason) { message.textContent = "Cada N/A requiere un motivo."; message.className = "text-sm text-red-700"; return; }
+    const payload = {
+      version_id: definition.version_id, docente_id: Number(teacher.value), cuatrimestre_id: cuatrimestreId,
+      asignatura_id: subject ? Number(subject.value) : null, grupo: group ? group.value : null,
+      source_record_id: sourceRecordId, answers: answers,
+      evidence: definition.sections.map(function(section) { return { section_id: section.id, evidence: form.querySelector("[data-evidence='" + section.id + "']").value.trim() }; }),
+      checks: checks,
+      metadata: { strengths: document.getElementById("metadata-strengths")?.value.trim() || null, priority_area: document.getElementById("metadata-priority")?.value.trim() || null, recommendation: document.getElementById("metadata-recommendation")?.value.trim() || null, general_observations: document.getElementById("metadata-general")?.value.trim() || null }
+    };
+    const submit = form.querySelector("button[type=submit]"); submit.disabled = true;
+    const response = await fetch("/api/instrumentos/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const result = await response.json();
+    if (!response.ok) { message.textContent = result.error || "No fue posible guardar el instrumento."; message.className = "text-sm text-red-700"; submit.disabled = false; return; }
+    message.textContent = result.validity_status === "invalid_excessive_na" ? "Instrumento guardado como inválido por exceso de N/A; no aporta puntaje oficial." : "Instrumento guardado como válido.";
+    message.className = result.validity_status === "invalid_excessive_na" ? "text-sm text-amber-800" : "text-sm text-emerald-700";
+    setTimeout(function() { location.href = returnUrl; }, 1500);
+  });
+</script>

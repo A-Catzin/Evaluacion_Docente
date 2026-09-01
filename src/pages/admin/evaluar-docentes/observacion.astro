@@ -14,28 +14,28 @@ const qs = params.toString() ? `?${params.toString()}` : '';
     <p class="text-slate-500 mb-8">Selecciona el tipo de observación que deseas realizar</p>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <a href={`/admin/evaluar-docentes/observacion-escolarizado${qs}`} class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center group">
+        <a href={`/coordinador/captura/observacion-escolarizado${qs}`} class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center group">
         <div class="w-16 h-16 mx-auto rounded-2xl bg-tup/10 flex items-center justify-center mb-4 group-hover:bg-tup/20 transition-colors">
           <span class="text-3xl">🏫</span>
         </div>
         <h2 class="text-lg font-bold text-tup mb-2">Escolarizado</h2>
-        <p class="text-sm text-slate-500">45 reactivos en 8 secciones. Evaluación completa de clase presencial.</p>
+        <p class="text-sm text-slate-500">Versión 1.2 con escala 1 a 3 y evidencia por dimensión.</p>
       </a>
 
-      <a href={`/admin/evaluar-docentes/observacion-virtual${qs}`} class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center group">
+        <a href={`/coordinador/captura/observacion-virtual${qs}`} class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center group">
         <div class="w-16 h-16 mx-auto rounded-2xl bg-blue-100 flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
           <span class="text-3xl">💻</span>
         </div>
         <h2 class="text-lg font-bold text-tup mb-2">Virtual</h2>
-        <p class="text-sm text-slate-500">20 reactivos en 6 secciones. Evaluación de clase en línea.</p>
+        <p class="text-sm text-slate-500">Versión 1.2 con todos los criterios virtuales.</p>
       </a>
 
-      <a href={`/admin/evaluar-docentes/observacion-ejecutivo${qs}`} class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center group">
+        <a href={`/coordinador/captura/observacion-ejecutivo${qs}`} class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center group">
         <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-100 flex items-center justify-center mb-4 group-hover:bg-amber-200 transition-colors">
           <span class="text-3xl">💼</span>
         </div>
         <h2 class="text-lg font-bold text-tup mb-2">Ejecutivo</h2>
-        <p class="text-sm text-slate-500">17 reactivos en 5 secciones. Evaluación de clase ejecutiva.</p>
+        <p class="text-sm text-slate-500">Versión 1.2 para sesión sabatina y trabajo autónomo.</p>
       </a>
     </div>
   </div>

@@ -11,6 +11,8 @@ const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
 const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
 const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
+const docenteIdParam = parseInt(Astro.url.searchParams.get('docente_id') || '');
+const docenteIdSolicitado = Number.isSafeInteger(docenteIdParam) && docenteIdParam > 0 ? docenteIdParam : null;
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
@@ -21,9 +23,13 @@ const refresh = Astro.cookies.get('sb-refresh-token')?.value;
 if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
 const docentesAsignados = await getMyAssignedTeacherIds(cliente, 'coordinated', cuatrimestreId);
 // Do not request planning metadata or PDF references before the coordination scope is known.
-const { data: raw } = docentesAsignados.size
-  ? await cliente.from('planeaciones').select('*, docentes(nombre,apellidos,email), asignaturas(nombre), cuatrimestres(clave)').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesAsignados]).order('fecha_subida', { ascending: false })
-  : { data: [] };
+let raw: any[] = [];
+if (docentesAsignados.size && (!docenteIdSolicitado || docentesAsignados.has(docenteIdSolicitado))) {
+  let query = cliente.from('planeaciones').select('*, docentes(nombre,apellidos,email), asignaturas(nombre), cuatrimestres(clave)').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesAsignados]);
+  if (docenteIdSolicitado) query = query.eq('docente_id', docenteIdSolicitado);
+  const { data } = await query.order('fecha_subida', { ascending: false });
+  raw = data || [];
+}
 
 interface Item { id: number; docente: string; email: string; asignatura: string; grupo: string; estado: string; puntaje: number|null; url: string; cuatrimestre: string; evaluacionDetalle: Record<string,{score:string}> | null; }
 const items: Item[] = [];
@@ -44,7 +50,11 @@ for (const p of (raw || [])) {
     email: doc?.email || '',
     asignatura: asig?.nombre || String((p as any).asignatura_id),
     grupo: (p as any).grupo as string,
-    estado: (p as any).estado as string,
+    estado: (p as any).evaluacion_detalle?.versioned_submission_id && (p as any).puntaje_promedio == null
+      ? 'Inválido por exceso de N/A'
+      : (p as any).evaluacion_detalle?.versioned_submission_id
+        ? 'Válido'
+        : ((p as any).estado as string),
     puntaje: (p as any).puntaje_promedio as number|null,
     url: urlFirmada,
     cuatrimestre: cuatri?.clave || '',
@@ -55,10 +65,10 @@ const pendientes = items.filter(i => i.estado === 'Pendiente');
 const evaluadas = items.filter(i => i.estado !== 'Pendiente');
 ---
 
-<LayoutCoordinador titulo="Planeaciones — Coordinador">
+<LayoutCoordinador titulo="Planeaciones — Coordinación">
   <div class="animate-flotar-entrada max-w-5xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-3xl font-bold text-tup">Evaluación de Planeaciones</h1>
+      <div><h1 class="text-3xl font-bold text-tup">Evaluación de Planeaciones</h1>{docenteIdSolicitado && <p class="mt-1 text-sm text-slate-500">Mostrando sólo las planeaciones del docente seleccionado.</p>}</div>
       <form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
           {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}

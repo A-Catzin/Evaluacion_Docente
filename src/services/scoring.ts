@@ -29,7 +29,7 @@ export function calcObservationScore(row: ObservationRow): number {
 export const WEIGHTS = { ee: 0.35, coord: 0.20, plan: 0.15, obs: 0.25, auto: 0.05 } as const;
 
 export type ModalityProfile = {
-  weights: Required<InstrumentScores>;
+  weights: Required<Omit<InstrumentScores, 'invalidPurposes'>>;
   expectedInstrumentCount: number;
 };
 
@@ -64,6 +64,7 @@ export interface InstrumentScores {
   plan?: number;
   obs?: number;
   auto?: number;
+  invalidPurposes?: Array<'coordination' | 'planning' | 'observation'>;
 }
 
 const scoreFormatter = new Intl.NumberFormat('es-MX', {
@@ -172,7 +173,9 @@ export function calcFinalScore(scores: InstrumentScores, modalidad?: string | nu
   }
   final = Math.round(final);
 
-  const category = getCategory(final, count, profile.expectedInstrumentCount);
+  const category = scores.invalidPurposes?.length
+    ? 'Parcial con instrumento inválido'
+    : getCategory(final, count, profile.expectedInstrumentCount);
 
   return { final, instrumentCount: count, expectedInstrumentCount: profile.expectedInstrumentCount, category };
 }
@@ -194,22 +197,34 @@ export async function fetchCuatrimestreScores(
   docenteId: number,
   cuatrimestreId: number
 ): Promise<InstrumentScores> {
-  const [eeData, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] =
+  const [eeData, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, versionedResult] =
     await Promise.all([
       fetchNativeStudentEvaluationScores(cl, cuatrimestreId),
       cl.from('evaluacion_coordinacion').select('score_normalizado').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
       cl.from('planeaciones').select('puntaje_promedio').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado'),
       cl.from('observaciones').select(OBSERVATION_SELECT).eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId),
       cl.from('autodiagnosticos').select('puntaje_total').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
+      cl.rpc('versioned_instrument_score_rows', { p_cuatrimestre_id: cuatrimestreId }),
     ]);
+
+  const versionedRows = ((versionedResult.data || []) as Array<{ docente_id: number; purpose: 'coordination' | 'planning' | 'observation'; validity_status: string; normalized_score: number | null; submitted_at: string }>)
+    .filter((row) => Number(row.docente_id) === docenteId)
+    .sort((left, right) => String(right.submitted_at).localeCompare(String(left.submitted_at)));
+  const latestVersioned = new Map<'coordination' | 'planning' | 'observation', typeof versionedRows[number]>();
+  for (const row of versionedRows) if (!latestVersioned.has(row.purpose)) latestVersioned.set(row.purpose, row);
 
   const ee = aggregateNativeScoresByTeacher(eeData).get(docenteId);
   const coordValue = (coordData as any[])?.[0]?.score_normalizado;
-  const coord = coordValue != null ? Number(coordValue) : undefined;
+  const coordCapture = latestVersioned.get('coordination');
+  const coord = coordCapture?.validity_status === 'valid'
+    ? Number(coordCapture.normalized_score)
+    : coordCapture ? undefined : coordValue != null ? Number(coordValue) : undefined;
   const planRows = (planData as any[]) || [];
-  const plan = planRows.length
+  const legacyPlan = planRows.length
     ? planRows.reduce((sum: number, row: any) => sum + Number(row.puntaje_promedio ?? 0), 0) / planRows.length
     : undefined;
+  const planCapture = latestVersioned.get('planning');
+  const plan = planCapture?.validity_status === 'valid' ? Number(planCapture.normalized_score) : planCapture ? undefined : legacyPlan;
   let obs: number | undefined;
   for (const o of (obsData as any[]) || []) {
     obs = calcObservationScore(o);
@@ -217,7 +232,13 @@ export async function fetchCuatrimestreScores(
   const autoValue = (diagData as any[])?.[0]?.puntaje_total;
   const auto = autoValue != null ? (Number(autoValue) / 120) * 100 : undefined;
 
-  return { ee, coord, plan, obs, auto };
+  const observationCapture = latestVersioned.get('observation');
+  if (observationCapture?.validity_status === 'valid') obs = Number(observationCapture.normalized_score);
+  if (observationCapture?.validity_status === 'invalid_excessive_na') obs = undefined;
+  const invalidPurposes = [...latestVersioned.values()]
+    .filter((row) => row.validity_status === 'invalid_excessive_na')
+    .map((row) => row.purpose);
+  return { ee, coord, plan, obs, auto, invalidPurposes };
 }
 
 export async function fetchBatchScoresPorDocente(
@@ -227,13 +248,14 @@ export async function fetchBatchScoresPorDocente(
 ): Promise<Map<number, InstrumentScores>> {
   if (!docenteIds.length) return new Map();
 
-  const [eeData, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] =
+  const [eeData, { data: coordData }, { data: planData }, { data: obsData }, { data: diagData }, versionedResult] =
     await Promise.all([
       fetchNativeStudentEvaluationScores(cl, cuatrimestreId),
       cl.from('evaluacion_coordinacion').select('docente_id,score_normalizado').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
       cl.from('planeaciones').select('docente_id,puntaje_promedio').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado'),
       cl.from('observaciones').select(`docente_id,${OBSERVATION_SELECT}`).in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId),
       cl.from('autodiagnosticos').select('docente_id,puntaje_total').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
+      cl.rpc('versioned_instrument_score_rows', { p_cuatrimestre_id: cuatrimestreId }),
     ]);
 
   const eeMap = aggregateNativeScoresByTeacher(eeData);
@@ -262,16 +284,29 @@ export async function fetchBatchScoresPorDocente(
     if (!diagMap.has(d.docente_id) && d.puntaje_total != null) diagMap.set(d.docente_id, (Number(d.puntaje_total) / 120) * 100);
   }
 
+  const versionedByTeacher = new Map<number, Map<string, any>>();
+  for (const row of ((versionedResult.data || []) as any[]).sort((left, right) => String(right.submitted_at).localeCompare(String(left.submitted_at)))) {
+    if (!docenteIds.includes(Number(row.docente_id))) continue;
+    const byPurpose = versionedByTeacher.get(Number(row.docente_id)) || new Map<string, any>();
+    if (!byPurpose.has(row.purpose)) byPurpose.set(row.purpose, row);
+    versionedByTeacher.set(Number(row.docente_id), byPurpose);
+  }
   const result = new Map<number, InstrumentScores>();
   for (const id of docenteIds) {
     const planAcc = planMap.get(id);
     const plan = planAcc ? planAcc.sum / planAcc.count : undefined;
+    const versioned = versionedByTeacher.get(id);
+    const validScore = (purpose: string, fallback: number | undefined) => {
+      const capture = versioned?.get(purpose);
+      return capture ? capture.validity_status === 'valid' ? Number(capture.normalized_score) : undefined : fallback;
+    };
     result.set(id, {
       ee: eeMap.get(id),
-      coord: coordMap.get(id),
-      plan,
-      obs: obsMap.get(id),
+      coord: validScore('coordination', coordMap.get(id)),
+      plan: validScore('planning', plan),
+      obs: validScore('observation', obsMap.get(id)),
       auto: diagMap.get(id),
+      invalidPurposes: [...(versioned?.values() || [])].filter((capture) => capture.validity_status === 'invalid_excessive_na').map((capture) => capture.purpose),
     });
   }
   return result;

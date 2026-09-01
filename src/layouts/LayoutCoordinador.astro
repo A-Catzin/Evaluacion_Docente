@@ -17,33 +17,34 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
   <div class="min-h-screen">
     <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200/50 px-4 sm:px-6 h-14 flex items-center justify-between">
       <div class="flex items-center gap-4">
-        <button id="nav-toggle" class="sm:hidden text-slate-600 p-1" onclick="document.getElementById('nav-menu').classList.toggle('hidden')">
+        <button id="nav-toggle" class="lg:hidden text-slate-600 p-1" onclick="document.getElementById('nav-menu').classList.toggle('hidden')">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
-        <a href={`/coordinador/dashboard${qs}`} class="font-semibold text-tup text-sm sm:text-base">SED-360 · Coordinador </a>
-        <nav class="hidden sm:flex gap-1">
-          <a href={`/coordinador/dashboard${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Dashboard</a>
-          <a href={`/coordinador/captura/coordinacion${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Ev. Coordi.</a>
+          <a href={`/coordinador/dashboard${qs}`} class="font-semibold text-tup text-sm sm:text-base">SED-360 · Coordinación</a>
+        <nav class="hidden lg:flex gap-1">
+          <a href={`/coordinador/dashboard${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Portafolios</a>
+          <a href={`/coordinador/captura/coordinacion${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Coordinación</a>
           <a href={`/coordinador/captura/observacion${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Observación</a>
           <a href={`/coordinador/planeaciones${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Planeaciones</a>
-           <a href={`/coordinador/reportes${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Reportes</a>
-           <a href={`/avisos${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Avisos</a>
-          <a href="/coordinador/mi-actividad" class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mi actividad</a>
-        </nav>
-      </div>
-      <div class="flex items-center gap-3">
-        <NotificationBell />
-      <a href="/api/auth/signout" class="text-xs text-slate-400 hover:text-red-500">Salir</a>
+          <a href={`/coordinador/reportes${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Reportes</a>
+            <a href={`/avisos${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Avisos</a>
+            <a href="/coordinador/mi-actividad" class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mi actividad</a>
+          </nav>
+        </div>
+        <div class="flex items-center gap-3">
+          <NotificationBell />
+          <a href="/api/auth/signout" class="text-xs text-slate-400 hover:text-red-500">Salir</a>
+        </div>
     </header>
     <!-- Menú móvil -->
-    <nav id="nav-menu" class="sm:hidden hidden bg-white border-b border-slate-200 px-4 py-2 space-y-1">
-      <a href={`/coordinador/dashboard${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📊 Dashboard</a>
-      <a href={`/coordinador/captura/coordinacion${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📋 Ev. Coordinación</a>
-      <a href={`/coordinador/captura/observacion${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">👁️ Observación</a>
-      <a href={`/coordinador/planeaciones${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📄 Planeaciones</a>
-       <a href={`/coordinador/reportes${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📊 Reportes</a>
-       <a href={`/avisos${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">📢 Avisos</a>
-      <a href="/coordinador/mi-actividad" class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">🧾 Mi actividad</a>
+    <nav id="nav-menu" class="lg:hidden hidden bg-white border-b border-slate-200 px-4 py-2 space-y-1">
+      <a href={`/coordinador/dashboard${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Portafolios</a>
+      <a href={`/coordinador/captura/coordinacion${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Evaluación de coordinación</a>
+      <a href={`/coordinador/captura/observacion${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Observación de clase</a>
+      <a href={`/coordinador/planeaciones${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Planeaciones</a>
+      <a href={`/coordinador/reportes${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Reportes de desempeño</a>
+      <a href={`/avisos${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Avisos</a>
+      <a href="/coordinador/mi-actividad" class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Mi actividad</a>
     </nav>
     <main class="p-4 sm:p-6 max-w-7xl mx-auto"><slot /></main>
   </div>

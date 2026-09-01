@@ -200,6 +200,8 @@ export interface CalificacionFinal {
   tiene_comentarios_foco_rojo?: boolean;
   tiene_comentarios_criticos?: boolean;
   num_instrumentos_completados: number;
+  instrument_validity?: Record<string, string>;
+  has_invalid_instrument?: boolean;
 }
 
 export interface Docente360Feedback {

@@ -45,13 +45,13 @@ const categorias = (cats || []).map(c => {
           {c.desc0 && (<p class="text-xs text-slate-500 mb-1"><b>(0) Insuficiente:</b> {c.desc0}</p>)}
           <div class="flex flex-wrap gap-2 mt-3 mb-3">
             {[2,1,0].map(v => (
-              <label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:border-tup cursor-pointer group has-[:checked]:bg-[#1e3a5f] has-[:checked]:text-white">
+              <label class="selection-card flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 cursor-pointer">
                 <input type="radio" name={`score_${c.id}`} value={v} required class="sr-only peer" />
                 <span class="text-sm font-bold">{v}</span>
-                <span class="text-[10px] text-slate-400 group-has-[:checked]:text-white/70">{v===2?'Satisfactorio':v===1?'Suficiente':'Insuficiente'}</span>
+                <span class="text-[10px] text-slate-400">{v===2?'Satisfactorio':v===1?'Suficiente':'Insuficiente'}</span>
               </label>
             ))}
-            <label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:border-amber-500 cursor-pointer has-[:checked]:bg-amber-500 has-[:checked]:text-white">
+            <label class="selection-card selection-card--na flex items-center gap-2 px-4 py-2 rounded-xl border border-amber-300 cursor-pointer text-amber-800">
               <input type="radio" name={`score_${c.id}`} value="na" class="sr-only peer" />
               <span class="text-sm font-bold">N/A</span>
             </label>
@@ -107,7 +107,7 @@ const categorias = (cats || []).map(c => {
     if (!cat) return;
     var items = val === '2' ? cat.obs2 : val === '1' ? cat.obs1 : cat.obs0;
     itemsDiv.innerHTML = items.map(function(item, i) {
-      return '<label class="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer text-xs"><input type="checkbox" name="obs_' + catId + '" value="' + i + '" class="mt-0.5 accent-tup" /><span>' + item + '</span></label>';
+      return '<label class="selection-card flex items-start gap-2 rounded-lg border border-transparent p-2 cursor-pointer text-xs"><input type="checkbox" name="obs_' + catId + '" value="' + i + '" class="mt-0.5 accent-tup" /><span>' + item + '</span></label>';
     }).join('');
   }
 

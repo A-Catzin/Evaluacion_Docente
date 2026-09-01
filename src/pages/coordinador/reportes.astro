@@ -16,6 +16,8 @@ const modo = (Astro.url.searchParams.get('modo') || 'individual') as 'individual
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
 const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
 const cuatrimestreSel = cuatrimestres.find(c => c.id === cuatrimestreId);
+const docenteIdParam = parseInt(Astro.url.searchParams.get('docente_id') || '');
+const docenteIdSolicitado = Number.isSafeInteger(docenteIdParam) && docenteIdParam > 0 ? docenteIdParam : null;
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -58,7 +60,7 @@ if (modo === 'individual') {
 
   individualData = {
     docentes: todasLasCalificaciones
-      .filter((row) => ids.includes(row.docente_id) && row.num_instrumentos_completados > 0)
+      .filter((row) => ids.includes(row.docente_id) && row.num_instrumentos_completados > 0 && (!docenteIdSolicitado || row.docente_id === docenteIdSolicitado))
       .map((row) => ({
         id: row.docente_id,
         nombre: String(row.docente_nombre ?? ''),
@@ -71,7 +73,7 @@ if (modo === 'individual') {
         obs: row.score_observacion,
         auto: row.score_autoevaluacion,
         final: row.calificacion_final,
-        category: String(row.categoria_final ?? ''),
+        category: row.has_invalid_instrument ? 'Parcial con instrumento inválido' : String(row.categoria_final ?? ''),
         instrumentCount: row.num_instrumentos_completados,
       }))
       .sort((a, b) => a.apellidos.localeCompare(b.apellidos)),
@@ -136,12 +138,13 @@ if (modo === 'general') {
     <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
       <div>
         <h1 class="text-3xl font-bold text-tup">Reportes de Desempeño</h1>
-        <p class="text-slate-500">{modo === 'individual' ? `${individualData?.docentes?.length || 0} docentes asignados · ${cuatrimestreSel?.clave || ''}` : 'Reporte general comparativo'}</p>
+        <p class="text-slate-500">{modo === 'individual' ? `${individualData?.docentes?.length || 0} docentes coordinados · ${cuatrimestreSel?.clave || ''}` : 'Reporte general comparativo'}</p>
       </div>
     </div>
 
     <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
       <form method="GET" class="flex flex-wrap gap-4 items-center">
+        {docenteIdSolicitado && <input type="hidden" name="docente_id" value={docenteIdSolicitado} />}
         <div class="flex items-center gap-2">
           <label class="text-sm font-medium text-slate-700">Modo:</label>
           <select name="modo" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
@@ -177,7 +180,7 @@ if (modo === 'general') {
 
     {modo === 'individual' && (
       (individualData?.docentes || []).length === 0 ? (
-        <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No tienes docentes asignados en este cuatrimestre.</div>
+        <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">{docenteIdSolicitado ? 'El docente seleccionado no tiene resultados disponibles en este ciclo.' : 'No tienes docentes coordinados con resultados en este cuatrimestre.'}</div>
       ) : (
         <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
           <div class="overflow-x-auto">

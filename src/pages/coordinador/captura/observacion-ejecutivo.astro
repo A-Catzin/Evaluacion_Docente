@@ -1,85 +1,15 @@
 ---
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
-import { obtenerCampus } from '../../../services/catalogos';
+import VersionedInstrumentCapture from '../../../components/VersionedInstrumentCapture.astro';
+import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
 import { db } from '../../../lib/db';
-import { OBSERVATION_INSTRUMENT_DEFINITIONS } from '../../../lib/observationDefinitions';
-import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 import { getMyAssignedTeacherIds } from '../../../lib/teacherAssignments';
-
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
-const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
-const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
-const cuatrimestreClave = cuatrimestre?.clave || '26-2';
-
-const cliente = db();
-const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
-const docentesAsignados = await getMyAssignedTeacherIds(cliente, 'observation', cuatrimestreId);
-const { data: docentesData } = docentesAsignados.size
-  ? await cliente.from('docentes').select('id,nombre,apellidos,email,oferta_academica,campus,modalidad').in('id', [...docentesAsignados]).eq('activo', true).order('apellidos')
-  : { data: [] };
-const docentes = docentesData || [];
-const campusList = await obtenerCampus();
-const { data: obsGrupos } = await cliente.from('grupos').select('id,clave,docente_id,asignatura_id').in('docente_id', docentes.map(d=>d.id)).eq('cuatrimestre_id', cuatrimestreId);
-const { data: obsAsignaturas } = await cliente.from('asignaturas').select('id,nombre');
-const CICLOS = ['26-2','26-3','27-1','27-2','27-3'];
-const docenteIdParam = Astro.url.searchParams.get('docente_id');
-const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docenteIdParam)) : null;
-
-const SECCIONES = OBSERVATION_INSTRUMENT_DEFINITIONS['ejecutivo-v1'].sections;
+import { getActiveInstrumentDefinition } from '../../../lib/versionedInstruments';
+const client = db(); const activeCycle = await obtenerCuatrimestreActivo(); const cycleId = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10) || activeCycle?.id || 0;
+const token = Astro.cookies.get('sb-access-token')?.value; const refresh = Astro.cookies.get('sb-refresh-token')?.value; if (token && refresh) await client.auth.setSession({ access_token: token, refresh_token: refresh });
+const ids = await getMyAssignedTeacherIds(client, 'observation', cycleId);
+const { data: teachers } = ids.size ? await client.from('docentes').select('id,nombre,apellidos,campus').in('id', [...ids]).eq('activo', true).order('apellidos') : { data: [] };
+const { data: groups } = ids.size ? await client.from('grupos').select('clave,docente_id,asignatura_id').in('docente_id', [...ids]).eq('cuatrimestre_id', cycleId) : { data: [] };
+const { data: subjects } = await client.from('asignaturas').select('id,nombre').order('nombre'); const definition = await getActiveInstrumentDefinition(client, 'observation_ejecutivo'); const selectedTeacherId = Number.parseInt(Astro.url.searchParams.get('docente_id') || '', 10) || undefined;
 ---
-
-<LayoutCoordinador titulo="Observación Ejecutiva">
-  <div class="animate-flotar-entrada max-w-4xl mx-auto">
-    <h1 class="text-3xl font-bold text-tup mb-2">Observación de Clase — Ejecutiva</h1>
-    <p class="text-slate-500 mb-6">17 reactivos · 5 secciones · Escala 1-5 + N/A</p>
-    <form id="form-obs" class="space-y-6">
-      <div class="bg-white rounded-2xl p-6 shadow-tarjeta">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-slate-700 mb-1">Docente *</label><input type="text" id="buscar-docente" placeholder="🔍 Buscar docente..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm mb-1"  autocomplete="off" /><select id="docente_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option>{docentes.map(d => (<option value={d.id} selected={docentePre?.id===d.id}>{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</option>))}</select></div>
-          <div><label class="block text-sm font-medium text-slate-700 mb-1">Asignatura *</label><select id="asignatura_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Primero selecciona el docente</option></select></div>
-          <div><label class="block text-sm font-medium text-slate-700 mb-1">Grupo *</label><select id="grupo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Primero selecciona la materia</option></select></div>
-          <div><label class="block text-sm font-medium text-slate-700 mb-1">Ciclo *</label><input type="text" id="ciclo" readonly value={cuatrimestreClave} class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600" /></div>
-          <div class="sm:col-span-2"><label class="block text-sm font-medium text-slate-700 mb-2">Campus *</label><div class="flex flex-wrap gap-2">{campusList.map(c => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-tup/5"><input type="radio" name="campus" value={c.nombre} required class="accent-tup" /><span class="text-sm">{c.nombre}</span></label>))}</div></div>
-        </div>
-      </div>
-      {SECCIONES.map(sec => (
-        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-          <button type="button" class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50" onclick="this.parentElement.querySelector('.sc').classList.toggle('hidden');this.querySelector('svg').classList.toggle('rotate-180')"><h3 class="font-bold text-tup">{sec.title}</h3><svg class="w-5 h-5 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button>
-          <div class="sc px-6 pb-6 space-y-4">
-            {sec.fields.map((field,i) => (<div class="p-4 rounded-xl bg-slate-50"><p class="text-sm font-medium text-slate-700 mb-3">{i+1}. {field.text}</p><div class="flex gap-2">{[1,2,3,4,5,'N/A'].map(v => (<label class="flex-1 flex flex-col items-center p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer  "><input type="radio" name={field.key} value={v} class="sr-only peer" /><span class="text-sm font-bold ">{v}</span></label>))}</div></div>))}
-            <textarea name={`obs_${sec.id}`} placeholder="Observaciones..." rows={2} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
-          </div>
-        </div>
-      ))}
-      <div class="bg-white rounded-2xl p-6 shadow-tarjeta space-y-4">
-        <textarea id="com_evaluador" placeholder="Comentarios adicionales (opcional)" rows={3} class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
-        <button type="submit" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90">Enviar Observación Ejecutiva</button>
-      </div>
-    </form>
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
-  </div>
-</LayoutCoordinador>
-
-<script is:inline define:vars={{ cuatrimestreId: cuatrimestre?.id, obsGruposJson: JSON.stringify(obsGrupos||[]), obsAsigsJson: JSON.stringify(obsAsignaturas||[]) }}>
-  var gruposObs=JSON.parse(obsGruposJson);var asigsObs=JSON.parse(obsAsigsJson);
-  function actualizarAsignaturas(){var did=parseInt(document.getElementById('docente_id').value);var sel=document.getElementById('asignatura_id');sel.innerHTML='<option value="">Seleccionar...</option>';if(!did)return;var ids=[...new Set(gruposObs.filter(function(g){return g.docente_id===did}).map(function(g){return g.asignatura_id}))];ids.forEach(function(aid){var a=asigsObs.find(function(x){return x.id===aid});if(a){var o=document.createElement('option');o.value=a.id;o.textContent=a.nombre;sel.appendChild(o)}});document.getElementById('grupo').innerHTML='<option value="">Primero selecciona la materia</option>'}
-  function actualizarGruposObs(){var aid=parseInt(document.getElementById('asignatura_id').value);var did=parseInt(document.getElementById('docente_id').value);var sel=document.getElementById('grupo');sel.innerHTML='<option value="">Seleccionar...</option>';if(!aid||!did)return;gruposObs.filter(function(g){return g.docente_id===did&&g.asignatura_id===aid}).forEach(function(g){var o=document.createElement('option');o.value=g.clave||g.id;o.textContent=g.clave||('Grupo '+g.id);sel.appendChild(o)})}
-  document.getElementById('docente_id').addEventListener('change',function(){actualizarAsignaturas()});document.getElementById('asignatura_id').addEventListener('change',function(){actualizarGruposObs()});
-  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
-  function filtrarDocentes(q){var sel=document.getElementById('docente_id');var term=(q||'').toLowerCase();for(var i=1;i<sel.options.length;i++){sel.options[i].style.display=!term||sel.options[i].text.toLowerCase().includes(term)?'':'none'}}
-  document.getElementById('form-obs').addEventListener('submit',async function(e){
-    e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Enviando...';
-    var data={docente_id:parseInt(document.getElementById('docente_id').value),asignatura_id:parseInt(document.getElementById('asignatura_id').value),grupo:document.getElementById('grupo').value,ciclo:document.getElementById('ciclo').value,campus:document.querySelector('input[name="campus"]:checked')?.value,cuatrimestre_id:cuatrimestreId,instrument_version:'ejecutivo-v1'};
-    if(!data.docente_id||!data.asignatura_id||!data.grupo||!data.ciclo||!data.campus){toast('Completa todos los campos',true);btn.disabled=false;btn.textContent='Enviar Observación Ejecutiva';return}
-    var prefs=['cco','cme','ccom','cso','cge'];var counts=[4,4,4,2,3];
-    prefs.forEach(function(p,si){for(var i=1;i<=counts[si];i++){var rb=document.querySelector('input[name="'+p+i+'"]:checked');if(rb)data[p+i]=rb.value==='N/A'?0:parseInt(rb.value)}});
-    prefs.forEach(function(p){var obs=document.querySelector('textarea[name="obs_'+p+'"]');if(obs&&obs.value.trim())data['obs_'+p]=obs.value.trim()});
-    data.comentario_evaluador=document.getElementById('com_evaluador').value.trim()||null;
-    try{var res=await fetch('/api/coordinador/observacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('Observación guardada',false);setTimeout(function(){location.href='/coordinador/dashboard?cuatrimestre='+cuatrimestreId},1500)}else{var j=await res.json();toast(j.error||'Error',true);btn.disabled=false;btn.textContent='Enviar Observación Ejecutiva'}}catch(err){toast('Error de conexión',true);btn.disabled=false;btn.textContent='Enviar Observación Ejecutiva'}
-  });
-document.addEventListener("input", function(e){ if(e.target.id==="buscar-docente") filtrarDocentes(e.target.value); });
-</script>
+<LayoutCoordinador titulo="Observación Ejecutiva"><div class="animate-flotar-entrada max-w-4xl mx-auto"><h1 class="text-3xl font-bold text-tup mb-2">Observación de clase ejecutiva</h1><p class="text-slate-500 mb-6">Versión 1.2 · Escala 1 a 3 · sesión sabatina y trabajo autónomo.</p>{definition ? <VersionedInstrumentCapture definition={definition} cuatrimestreId={cycleId} teachers={teachers || []} groups={groups || []} subjects={subjects || []} selectedTeacherId={selectedTeacherId} returnUrl={`/coordinador/dashboard?cuatrimestre=${cycleId}`} /> : <div class="rounded-2xl bg-amber-50 p-6 text-amber-900">No hay una versión vigente del instrumento.</div>}</div></LayoutCoordinador>

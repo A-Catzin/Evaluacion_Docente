@@ -43,7 +43,7 @@ const cardsConResultados = aggData
     obs: row.score_observacion,
     auto: row.score_autoevaluacion,
     final: row.calificacion_final,
-    category: String(row.categoria_final ?? 'No iniciado'),
+    category: row.has_invalid_instrument ? 'Parcial con instrumento inválido' : String(row.categoria_final ?? 'No iniciado'),
     instruments: row.num_instrumentos_completados,
     expected: row.num_instrumentos_esperados,
   }))

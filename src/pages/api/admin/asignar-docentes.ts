@@ -12,7 +12,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   try {
     const body = await request.json();
-    const { action, assignment_type, evaluador_id, docente_ids, assignment_ids, cuatrimestre_id } = body as Record<string, unknown>;
+    const { action, assignment_type, evaluador_id, docente_ids, assignment_ids, cuatrimestre_id, include_all_active } = body as Record<string, unknown>;
     if (action === 'revoke') {
       if ((assignment_type !== 'coordinated' && assignment_type !== 'observation') || !Array.isArray(assignment_ids)
         || !Number.isSafeInteger(cuatrimestre_id)) {
@@ -31,7 +31,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ success: true, count: data }), { status: 200 });
     }
     if ((assignment_type !== 'coordinated' && assignment_type !== 'observation') || typeof evaluador_id !== 'string'
-      || !Array.isArray(docente_ids) || !Number.isSafeInteger(cuatrimestre_id)) {
+      || !Array.isArray(docente_ids) || !Number.isSafeInteger(cuatrimestre_id) || typeof include_all_active !== 'boolean') {
       return new Response(JSON.stringify({ error: 'Datos inválidos' }), { status: 400 });
     }
     const ids = docente_ids.map(Number);
@@ -46,6 +46,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       p_actor_id: evaluador_id,
       p_cuatrimestre_id: cuatrimestre_id,
       p_docente_ids: ids,
+      p_include_all_active: include_all_active,
     });
     if (error) return new Response(JSON.stringify({ error: 'No se pudieron guardar las asignaciones' }), { status: 400 });
     return new Response(JSON.stringify({ success: true, count: data }), { status: 200 });

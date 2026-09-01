@@ -100,7 +100,7 @@ El scoring de SED-360 se precalcula y persiste para que dashboards y reportes le
 ### Tablas y vistas
 
 - **`calificaciones_finales`** — guarda el score de cada instrumento (`score_encuesta_estudiantil`, `score_coordinacion`, `score_planeacion`, `score_observacion`, `score_autoevaluacion`), la calificación final ponderada, la categoría, la versión del cálculo y la marca de tiempo. Es la fuente de verdad para los resultados de un docente en un cuatrimestre.
-- **`docente_modalidad_historica`** — congela la modalidad del docente (`Escolarizada`, `Ejecutivo`, etc.) para el par `(docente, cuatrimestre)` en el momento del primer cálculo. Esto evita que cambios posteriores del catálogo de docentes alteren scores históricos.
+- **`docente_modalidad_historica`** — congela la modalidad del docente (`Escolarizado`, `Ejecutivo`, etc.) para el par `(docente, cuatrimestre)` en el momento del primer cálculo. Esto evita que cambios posteriores del catálogo de docentes alteren scores históricos.
 - **`resultados_agregados`** — vista materializada que une `calificaciones_finales` con el catálogo de `docentes`. Los dashboards de admin y coordinador la usan para listados y KPIs.
 
 ### Fuente única de verdad

@@ -1,175 +1,31 @@
 ---
 import LayoutCoordinador from '../../../../layouts/LayoutCoordinador.astro';
+import VersionedInstrumentCapture from '../../../../components/VersionedInstrumentCapture.astro';
 import { db } from '../../../../lib/db';
 import { obtenerUrlFirmadaDesdeUrlAlmacenada } from '../../../../lib/storage';
 import { canManageCoordinatedTeacher } from '../../../../lib/teacherAssignments';
+import { getActiveInstrumentDefinition } from '../../../../lib/versionedInstruments';
 
-const id = parseInt(Astro.params.id || '0');
+const id = Number.parseInt(Astro.params.id || '0', 10);
 const backSearch = Astro.url.search || '';
-const cliente = db();
+const client = db();
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
-const { data: plan } = await cliente.from('planeaciones').select('*').eq('id', id).maybeSingle();
-if (!plan) return Astro.redirect(`/coordinador/planeaciones${backSearch}`);
-if (!await canManageCoordinatedTeacher(cliente, Number(plan.docente_id), Number(plan.cuatrimestre_id))) {
-  return Astro.redirect(`/coordinador/planeaciones${backSearch}`);
-}
-
-let urlFirmada = plan.url_pdf;
-try {
-  const signed = await obtenerUrlFirmadaDesdeUrlAlmacenada(plan.url_pdf, 'planeaciones', 3600);
-  if (signed !== plan.url_pdf) urlFirmada = signed;
-} catch {}
-
-const { data: docente } = await cliente.from('docentes').select('nombre,apellidos').eq('id', plan.docente_id).maybeSingle();
-const { data: asignatura } = await cliente.from('asignaturas').select('nombre').eq('id', plan.asignatura_id).maybeSingle();
-
-// Cargar categorias desde la BD (editables via /admin/instrumentos)
-const { data: cats } = await cliente.from('instrumento_preguntas').select('*').eq('instrumento', 'planeacion').eq('tipo_respuesta', 'categoria').eq('activa', true).order('orden');
-const categorias = (cats || []).map(c => {
-  const ops = (c.opciones || {}) as Record<string, any>;
-  return { id: c.seccion, label: `${c.orden}. ${c.texto}`, desc2: ops.desc2 || '', desc1: ops.desc1 || '', desc0: ops.desc0 || '', obs2: ops.obs2 || [], obs1: ops.obs1 || [], obs0: ops.obs0 || [] };
-});
-
-if (categorias.length === 0) {
-  // Fallback: si no hay categorias en BD, usar hardcodeadas
-  // (este bloque se remueve cuando la migracion 014 este aplicada)
-}
-
+if (token && refresh) await client.auth.setSession({ access_token: token, refresh_token: refresh });
+const { data: plan } = await client.from('planeaciones').select('id,docente_id,cuatrimestre_id,asignatura_id,grupo,url_pdf').eq('id', id).maybeSingle();
+if (!plan || !await canManageCoordinatedTeacher(client, Number(plan.docente_id), Number(plan.cuatrimestre_id))) return Astro.redirect(`/coordinador/planeaciones${backSearch}`);
+const { data: teacher } = await client.from('docentes').select('id,nombre,apellidos').eq('id', plan.docente_id).maybeSingle();
+const { data: subject } = await client.from('asignaturas').select('nombre').eq('id', plan.asignatura_id).maybeSingle();
+let pdfUrl = plan.url_pdf;
+try { pdfUrl = await obtenerUrlFirmadaDesdeUrlAlmacenada(plan.url_pdf, 'planeaciones', 3600); } catch {}
+const definition = await getActiveInstrumentDefinition(client, 'planning');
 ---
-
 <LayoutCoordinador titulo="Evaluar Planeación">
-  <div class="animate-flotar-entrada max-w-3xl mx-auto">
-    <a href={`/coordinador/planeaciones${backSearch}`} class="text-sm text-tup hover:underline mb-4 inline-block">← Volver</a>
-    <h1 class="text-3xl font-bold text-tup mb-2">Evaluar Planeación Docente</h1>
-    <p class="text-slate-500 mb-1">{docente?.nombre} {docente?.apellidos} · {asignatura?.nombre || ''} · Grupo {plan.grupo}</p>
-    <a href={urlFirmada} target="_blank" class="text-sm text-tup hover:underline mb-6 inline-block">📄 Ver PDF de la planeación</a>
-
-    <form id="form-eval" class="space-y-4">
-      <input type="hidden" id="plan_id" value={plan.id} />
-
-      {categorias.map((c, ci) => (
-        <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
-          <p class="font-semibold text-slate-800 mb-2">{c.label}</p>
-          {c.desc2 && (<p class="text-xs text-slate-500 mb-1"><b>(2) Satisfactorio:</b> {c.desc2}</p>)}
-          {c.desc1 && (<p class="text-xs text-slate-500 mb-1"><b>(1) Suficiente:</b> {c.desc1}</p>)}
-          {c.desc0 && (<p class="text-xs text-slate-500 mb-1"><b>(0) Insuficiente:</b> {c.desc0}</p>)}
-          <div class="flex flex-wrap gap-2 mt-3 mb-3">
-            {[2,1,0].map(v => (
-              <label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:border-tup cursor-pointer group has-[:checked]:bg-[#1e3a5f] has-[:checked]:text-white">
-                <input type="radio" name={`score_${c.id}`} value={v} required class="sr-only peer" />
-                <span class="text-sm font-bold">{v}</span>
-                <span class="text-[10px] text-slate-400 group-has-[:checked]:text-white/70">{v===2?'Satisfactorio':v===1?'Suficiente':'Insuficiente'}</span>
-              </label>
-            ))}
-            <label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:border-amber-500 cursor-pointer has-[:checked]:bg-amber-500 has-[:checked]:text-white">
-              <input type="radio" name={`score_${c.id}`} value="na" class="sr-only peer" />
-              <span class="text-sm font-bold">N/A</span>
-            </label>
-          </div>
-          <div id={`obs_${c.id}`} class="hidden space-y-4">
-            <div id={`obs_items_${c.id}`} class="space-y-1.5 max-h-60 overflow-y-auto border border-slate-100 rounded-xl p-3"></div>
-            <textarea name={`otros_${c.id}`} placeholder="Otros (opcional)..." rows={1} class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs resize-none"></textarea>
-          </div>
-        </div>
-      ))}
-
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Observaciones Generales (opcional)</label>
-          <textarea id="obs_generales" rows={3} placeholder="Comentarios generales sobre la planeación..." class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Estado *</label>
-          <select id="estado" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm"><option value="">Seleccionar...</option><option value="Aprobado">Aprobado</option><option value="Corrección">Corrección</option></select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Retroalimentación para el docente (opcional)</label>
-          <textarea id="retro" rows={3} placeholder="Comentarios que el docente podrá ver..." class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
-        </div>
-        <button type="submit" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90">Enviar Evaluación</button>
-      </div>
-    </form>
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+  <div class="animate-flotar-entrada max-w-4xl mx-auto">
+    <a href={`/coordinador/planeaciones${backSearch}`} class="mb-4 inline-block text-sm text-tup hover:underline">← Volver</a>
+    <h1 class="text-3xl font-bold text-tup mb-2">Evaluar planeación didáctica</h1>
+    <p class="text-slate-500 mb-2">{teacher?.nombre} {teacher?.apellidos} · {subject?.nombre} · Grupo {plan.grupo}</p>
+    <a href={pdfUrl} target="_blank" class="mb-6 inline-block text-sm text-tup hover:underline">Ver PDF de la planeación</a>
+    {definition && teacher ? <VersionedInstrumentCapture definition={definition} cuatrimestreId={plan.cuatrimestre_id} teachers={[teacher]} selectedTeacherId={teacher.id} sourceRecordId={plan.id} returnUrl={`/coordinador/planeaciones${backSearch}`} /> : <div class="rounded-2xl bg-amber-50 p-6 text-amber-900">No hay una versión vigente del instrumento.</div>}
   </div>
 </LayoutCoordinador>
-
-<script is:inline define:vars={{ obsData: JSON.stringify(categorias), returnUrl: `/coordinador/planeaciones${backSearch}` }}>
-  var catData = JSON.parse(obsData);
-  var scores = {};
-
-  // Delegated event listener para todos los radios de puntuacion
-  document.addEventListener('change', function(e) {
-    var target = e.target;
-    if (!target || !target.name || !target.name.startsWith('score_')) return;
-    var catId = target.name.replace('score_', '');
-    toggleObs(catId, target.value);
-  });
-
-  function toggleObs(catId, val) {
-    var obsDiv = document.getElementById('obs_' + catId);
-    var itemsDiv = document.getElementById('obs_items_' + catId);
-    scores[catId] = val;
-    if (val === 'na') {
-      obsDiv.classList.add('hidden');
-      return;
-    }
-    obsDiv.classList.remove('hidden');
-    var cat = catData.find(function(c) { return c.id === catId; });
-    if (!cat) return;
-    var items = val === '2' ? cat.obs2 : val === '1' ? cat.obs1 : cat.obs0;
-    itemsDiv.innerHTML = items.map(function(item, i) {
-      return '<label class="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer text-xs"><input type="checkbox" name="obs_' + catId + '" value="' + i + '" class="mt-0.5 accent-tup" /><span>' + item + '</span></label>';
-    }).join('');
-  }
-
-  function toast(m,e){var t=document.getElementById('toast');t.textContent=m;t.className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-sm font-medium shadow-modal '+(e?'bg-red-600 text-white':'bg-emerald-600 text-white');t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},4000)}
-
-  document.getElementById('form-eval').addEventListener('submit', async function(e) {
-    e.preventDefault(); var btn = this.querySelector('button[type="submit"]'); btn.disabled = true; btn.textContent = 'Enviando...';
-    
-    // Validar que todas las categorias tengan puntuacion
-    var allScored = true;
-    catData.forEach(function(c) {
-      if (!scores[c.id]) { allScored = false; }
-    });
-    if (!allScored) { toast('Asigna puntuación a todas las categorías', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; return; }
-    if (!document.getElementById('estado').value) { toast('Selecciona el estado', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; return; }
-
-    // Calcular puntaje segun formula: sum / (2 * (12 - n/a_count))
-    var sum = 0, naCount = 0;
-    catData.forEach(function(c) {
-      if (scores[c.id] === 'na') { naCount++; return; }
-      sum += parseInt(scores[c.id]);
-    });
-    var denom = 2 * (12 - naCount);
-    var puntaje = denom > 0 ? Math.round((sum / denom) * 100) : 0;
-
-    // Recopilar detalle
-    var detalle = {};
-    catData.forEach(function(c) {
-      detalle[c.id] = { score: scores[c.id], obs: [], otros: '' };
-      var checkboxes = document.querySelectorAll('input[name="obs_' + c.id + '"]:checked');
-      checkboxes.forEach(function(cb) { detalle[c.id].obs.push(parseInt(cb.value)); });
-      var otrosEl = document.querySelector('textarea[name="otros_' + c.id + '"]');
-      if (otrosEl && otrosEl.value.trim()) detalle[c.id].otros = otrosEl.value.trim();
-    });
-
-    var data = {
-      id: parseInt(document.getElementById('plan_id').value),
-      puntaje: puntaje,
-      estado: document.getElementById('estado').value,
-      comentario_retroalimentacion: document.getElementById('retro').value.trim() || null,
-      evaluacion_detalle: detalle,
-      observaciones_generales: document.getElementById('obs_generales').value.trim() || null,
-      no_aplica_count: naCount
-    };
-
-    try {
-      var res = await fetch('/api/coordinador/planeacion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-      if (res.ok) { toast('Evaluación guardada — Puntaje: ' + puntaje + '%', false); setTimeout(function() { location.href = returnUrl; }, 1500); }
-      else { var j = await res.json(); toast(j.error || 'Error', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; }
-    } catch(err) { toast('Error de conexión', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; }
-  });
-</script>

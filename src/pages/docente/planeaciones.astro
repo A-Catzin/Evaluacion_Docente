@@ -63,7 +63,11 @@ for (const p of (planeacionesRaw || [])) {
     id: (p as Record<string,unknown>).id as number,
     asignatura: ((p as Record<string,unknown>).asignaturas as {nombre:string})?.nombre || String((p as Record<string,unknown>).asignatura_id),
     grupo: (p as Record<string,unknown>).grupo as string,
-    estado: (p as Record<string,unknown>).estado as string,
+    estado: (p as Record<string, any>).evaluacion_detalle?.versioned_submission_id && (p as Record<string, any>).puntaje_promedio == null
+      ? 'Inválido por exceso de N/A'
+      : (p as Record<string, any>).evaluacion_detalle?.versioned_submission_id
+        ? 'Válido'
+        : ((p as Record<string,unknown>).estado as string),
     puntaje: (p as Record<string,unknown>).puntaje_promedio as number | null,
     url: urlFirmada,
     evaluacionDetalle: ((p as Record<string,unknown>).evaluacion_detalle as Record<string,{score:string}> | null) || null,
@@ -91,7 +95,7 @@ for (const p of (planeacionesRaw || [])) {
       <div class="bg-slate-50 rounded-xl p-4 text-xs font-mono">
         <p class="font-medium mb-1">Nomenclatura estandarizada:</p>
         <code>Asignatura_Grupo_Modalidad_ApellidoDocente_{cuatrimestre?.clave || 'XX-X'}.pdf</code>
-        <p class="mt-1 ">Ejemplo: <code>Fundamentos_Enfermeria_3A_Escolarizada_Perez_{cuatrimestre?.clave || 'XX-X'}.pdf</code></p>
+        <p class="mt-1 ">Ejemplo: <code>Fundamentos_Enfermeria_3A_Escolarizado_Perez_{cuatrimestre?.clave || 'XX-X'}.pdf</code></p>
       </div>
       <p>Por favor, asegúrese de completar correctamente la información solicitada y de adjuntar el archivo correspondiente conforme a los lineamientos establecidos.</p>
       <p class="font-medium text-slate-500">Agradecemos su colaboración, responsabilidad académica y compromiso con la mejora continua y la calidad educativa institucional.</p>
@@ -122,7 +126,7 @@ for (const p of (planeacionesRaw || [])) {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><label class="block text-sm font-medium text-slate-700 mb-1">Asignatura *</label><select id="asignatura_id" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Seleccionar...</option>{materiasDisponibles?.map(a => (<option value={a.id}>{a.nombre}</option>))}</select></div>
           <div><label class="block text-sm font-medium text-slate-700 mb-1">Grupo *</label><select id="grupo" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option value="">Primero selecciona la materia</option></select></div>
-          <div><label class="block text-sm font-medium text-slate-700 mb-1">Modalidad</label><select id="modalidad" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option>Escolarizada</option></select></div>
+          <div><label class="block text-sm font-medium text-slate-700 mb-1">Modalidad</label><select id="modalidad" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"><option>Escolarizado</option></select></div>
           <div><label class="block text-sm font-medium text-slate-700 mb-1">Archivo PDF *</label><input type="file" id="archivo" accept=".pdf" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-tup file:text-white" /></div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">

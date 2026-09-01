@@ -67,12 +67,12 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     );
 
     const header =
-      "Nombre,Apellidos,Email,EE,Coordinación,Planeación,Observación,Autodiagnóstico,Final,Categoría,Instrumentos";
+      "Nombre,Apellidos,Email,EE,Coordinación,Planeación,Observación,Autodiagnóstico,Final,Estado,Categoría,Instrumentos";
     const rows: string[] = [];
     for (const d of docentes || []) {
       const cal = califPorDocente.get(d.id);
       rows.push(
-        `"${d.nombre}","${d.apellidos}","${d.email}",${formatScoreCsv(cal?.score_encuesta_estudiantil)},${formatScoreCsv(cal?.score_coordinacion)},${formatScoreCsv(cal?.score_planeacion)},${formatScoreCsv(cal?.score_observacion)},${formatScoreCsv(cal?.score_autoevaluacion)},${cal && cal.num_instrumentos_completados > 0 ? formatScoreCsv(cal.calificacion_final) : "—"},"${cal?.categoria_final ?? "No iniciado"}",${cal ? `${cal.num_instrumentos_completados}/${cal.num_instrumentos_esperados}` : "0/5"}`,
+        `"${d.nombre}","${d.apellidos}","${d.email}",${formatScoreCsv(cal?.score_encuesta_estudiantil)},${formatScoreCsv(cal?.score_coordinacion)},${formatScoreCsv(cal?.score_planeacion)},${formatScoreCsv(cal?.score_observacion)},${formatScoreCsv(cal?.score_autoevaluacion)},${cal && cal.num_instrumentos_completados > 0 ? formatScoreCsv(cal.calificacion_final) : "—"},"${cal?.has_invalid_instrument ? "Inválido por exceso de N/A" : cal?.num_instrumentos_completados ? "Válido" : "Pendiente"}","${cal?.categoria_final ?? "No iniciado"}",${cal ? `${cal.num_instrumentos_completados}/${cal.num_instrumentos_esperados}` : "0/5"}`,
       );
     }
 

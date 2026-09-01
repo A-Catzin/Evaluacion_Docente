@@ -28,7 +28,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
     const { data: scores, error: scoreError } = await client
       .from('calificaciones_finales')
-      .select('docente_id,score_encuesta_estudiantil,score_coordinacion,score_planeacion,score_observacion,score_autoevaluacion,calificacion_final,categoria_final,num_instrumentos_completados,num_instrumentos_esperados')
+      .select('docente_id,score_encuesta_estudiantil,score_coordinacion,score_planeacion,score_observacion,score_autoevaluacion,calificacion_final,categoria_final,num_instrumentos_completados,num_instrumentos_esperados,has_invalid_instrument')
       .eq('cuatrimestre_id', cuatrimestreId)
       .gt('num_instrumentos_completados', 0);
     if (scoreError) throw scoreError;
@@ -59,16 +59,17 @@ export const GET: APIRoute = async ({ cookies, url }) => {
           formatScoreCsv(score.score_coordinacion),
           formatScoreCsv(score.score_planeacion),
           formatScoreCsv(score.score_observacion),
-          formatScoreCsv(score.score_autoevaluacion),
-          formatScoreCsv(score.calificacion_final),
-          score.categoria_final,
+           formatScoreCsv(score.score_autoevaluacion),
+           formatScoreCsv(score.calificacion_final),
+           score.has_invalid_instrument ? 'Inválido por exceso de N/A' : 'Válido',
+           score.categoria_final,
           `${score.num_instrumentos_completados}/${score.num_instrumentos_esperados}`,
         ];
       });
     const csv = toCsv([[
       'Nombre', 'Apellidos', 'Correo', 'Campus', 'Modalidad', 'Encuesta estudiantil',
       'Coordinación', 'Planeación', 'Observación', 'Autodiagnóstico', 'Calificación final',
-      'Categoría', 'Instrumentos',
+       'Estado', 'Categoría', 'Instrumentos',
     ], ...rows]);
     const safeKey = String(cycle.clave).replace(/[^A-Za-z0-9_-]/g, '_');
     return new Response(csv, {

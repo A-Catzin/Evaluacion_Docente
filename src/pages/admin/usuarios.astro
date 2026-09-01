@@ -425,7 +425,7 @@ function buildPageUrl(p:number) {
     var filtered = docentesList.filter(function(d){
       return !filtro || (d.nombre+' '+d.apellidos).toLowerCase().includes(filtro);
     });
-    document.getElementById('lista-docs').innerHTML=filtered.map(function(d){return'<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="docente_id" value="'+d.id+'" class="accent-tup" /><span>'+d.nombre+' '+d.apellidos+'</span></label>'}).join('')||'<span class="text-slate-400 text-xs">Sin resultados</span>';
+    document.getElementById('lista-docs').innerHTML=filtered.map(function(d){return'<label class="selection-card flex items-center gap-2 rounded-lg border border-transparent p-2 cursor-pointer"><input type="checkbox" name="docente_id" value="'+d.id+'" class="accent-tup" /><span>'+d.nombre+' '+d.apellidos+'</span></label>'}).join('')||'<span class="text-slate-400 text-xs">Sin resultados</span>';
   }
   function filtrarDocs(){ renderDocs(document.getElementById('filtro-docs').value); }
   document.getElementById('btn-agregar').addEventListener('click',function(){document.getElementById('modal-agregar').classList.remove('hidden');document.getElementById('modal-agregar').classList.add('flex')});

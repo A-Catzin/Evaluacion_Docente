@@ -22,7 +22,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     userId = auth.user.id;
   } catch (error) {
     if (error instanceof AuthError) return error.response;
-    return new Response(JSON.stringify({ error: "Error interno" }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Error interno" }), {
+      status: 500,
+    });
   }
 
   try {
@@ -35,48 +37,114 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ error: "Solo docentes" }), {
         status: 403,
       });
-    const { data: docente } = await cl.from("docentes").select("campus,turno").eq("id", u.entidad_id).maybeSingle();
-    if (!docente) return new Response(JSON.stringify({ error: "No fue posible verificar tu perfil docente" }), { status: 403 });
+    const { data: docente } = await cl
+      .from("docentes")
+      .select("campus,turno")
+      .eq("id", u.entidad_id)
+      .maybeSingle();
+    if (!docente)
+      return new Response(
+        JSON.stringify({ error: "No fue posible verificar tu perfil docente" }),
+        { status: 403 },
+      );
 
     const formData = await request.formData();
     const file = formData.get("file");
 
     if (!file || !(file instanceof File))
-      return new Response(JSON.stringify({ error: "Archivo requerido o inválido" }), {
-        status: 400,
-      });
+      return new Response(
+        JSON.stringify({ error: "Archivo requerido o inválido" }),
+        {
+          status: 400,
+        },
+      );
 
     const modalidad = formData.get("modalidad") as string;
-    if (modalidad && modalidad !== "Escolarizada")
+    if (modalidad && modalidad !== "Escolarizado")
       return new Response(
         JSON.stringify({
-          error: "Solo se aceptan planeaciones en modalidad Escolarizada",
+          error: "Solo se aceptan planeaciones en modalidad Escolarizado",
         }),
         { status: 400 },
       );
 
-    const cuatrimestreId = parsePositiveInteger(formData.get("cuatrimestre_id"));
+    const cuatrimestreId = parsePositiveInteger(
+      formData.get("cuatrimestre_id"),
+    );
     const asignaturaId = parsePositiveInteger(formData.get("asignatura_id"));
     const grupo = String(formData.get("grupo") || "").trim();
-    if (!cuatrimestreId || !asignaturaId || !grupo) return new Response(JSON.stringify({ error: "Asignatura, grupo o cuatrimestre inválido" }), { status: 400 });
-    const accessDenied = await requireTeacherPlanningSubmissionOpen(cl, cuatrimestreId);
+    if (!cuatrimestreId || !asignaturaId || !grupo)
+      return new Response(
+        JSON.stringify({ error: "Asignatura, grupo o cuatrimestre inválido" }),
+        { status: 400 },
+      );
+    const accessDenied = await requireTeacherPlanningSubmissionOpen(
+      cl,
+      cuatrimestreId,
+    );
     if (accessDenied) return accessDenied;
     const pdfValidation = validatePlanningPdf(file);
-    if (!pdfValidation.ok) return new Response(JSON.stringify({ error: pdfValidation.error }), { status: 400 });
+    if (!pdfValidation.ok)
+      return new Response(JSON.stringify({ error: pdfValidation.error }), {
+        status: 400,
+      });
 
     const planId = parsePositiveInteger(formData.get("plan_id"));
     if (planId) {
-      const { data } = await cl.from("planeaciones").select("docente_id,cuatrimestre_id,asignatura_id,grupo,modalidad,estado").eq("id", planId).maybeSingle();
-      const plan = data as { docente_id: number; cuatrimestre_id: number; asignatura_id: number; grupo: string; modalidad: string; estado: string } | null;
-      if (!plan || plan.estado !== "Corrección" || plan.docente_id !== u.entidad_id || plan.cuatrimestre_id !== cuatrimestreId || plan.asignatura_id !== asignaturaId || plan.grupo !== grupo) {
-        return new Response(JSON.stringify({ error: "La planeación a reenviar no corresponde a tu carga del cuatrimestre." }), { status: 403 });
+      const { data } = await cl
+        .from("planeaciones")
+        .select(
+          "docente_id,cuatrimestre_id,asignatura_id,grupo,modalidad,estado",
+        )
+        .eq("id", planId)
+        .maybeSingle();
+      const plan = data as {
+        docente_id: number;
+        cuatrimestre_id: number;
+        asignatura_id: number;
+        grupo: string;
+        modalidad: string;
+        estado: string;
+      } | null;
+      if (
+        !plan ||
+        plan.estado !== "Corrección" ||
+        plan.docente_id !== u.entidad_id ||
+        plan.cuatrimestre_id !== cuatrimestreId ||
+        plan.asignatura_id !== asignaturaId ||
+        plan.grupo !== grupo
+      ) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "La planeación a reenviar no corresponde a tu carga del cuatrimestre.",
+          }),
+          { status: 403 },
+        );
       }
     }
-    const group = await resolveTeacherPlanningGroup(cl, u.entidad_id, cuatrimestreId, asignaturaId, grupo);
-    if (!group) return new Response(JSON.stringify({ error: "La asignatura y el grupo no corresponden a tu carga escolarizada del cuatrimestre." }), { status: 403 });
+    const group = await resolveTeacherPlanningGroup(
+      cl,
+      u.entidad_id,
+      cuatrimestreId,
+      asignaturaId,
+      grupo,
+    );
+    if (!group)
+      return new Response(
+        JSON.stringify({
+          error:
+            "La asignatura y el grupo no corresponden a tu carga escolarizada del cuatrimestre.",
+        }),
+        { status: 403 },
+      );
     const comentarioRaw = formData.get("comentario") as string | null;
     const moderacion = validarComentarioOpcional(comentarioRaw, 500);
-    if (!moderacion.valido) return new Response(JSON.stringify({ error: moderacion.error, code: "comment_rejected" }), { status: 400 });
+    if (!moderacion.valido)
+      return new Response(
+        JSON.stringify({ error: moderacion.error, code: "comment_rejected" }),
+        { status: 400 },
+      );
     const path = buildPlanningPdfPath(cuatrimestreId, u.entidad_id);
     const buffer = await file.arrayBuffer();
 
@@ -121,7 +189,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       comentario_docente: moderacion.valorNormalizado,
       campus: docente.campus || "",
       turno: docente.turno || "",
-      estado: planId ? "Pendiente" : undefined,
+      estado: "Pendiente",
     };
 
     let dbErr = null;
@@ -139,6 +207,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         ...datos,
         docente_id: u.entidad_id,
         cuatrimestre_id: cuatrimestreId,
+        no_aplica_count: null,
       });
       dbErr = error;
     }

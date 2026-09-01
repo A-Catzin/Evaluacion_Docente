@@ -2,247 +2,192 @@
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { db } from '../../lib/db';
-import { obtenerCalificacionesPorCuatrimestre, type CalificacionFinal } from '../../services/calificaciones';
+import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 import { getMyAssignedTeacherIds } from '../../lib/teacherAssignments';
+import {
+  buildCoordinatedPortfolio,
+  buildObservationPortfolio,
+  coordinatedPortfolioLinks,
+  observationPortfolioLinks,
+  type PortfolioTeacher,
+} from '../../lib/coordinatorDashboardPortfolio';
 
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
 const cuatrimestreId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
-const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
-const cuatrimestreQuery = cuatrimestreId ? `&cuatrimestre=${cuatrimestreId}` : '';
+const cuatrimestreSel = cuatrimestres.find((cuatrimestre) => cuatrimestre.id === cuatrimestreId);
 if (Astro.url.searchParams.has('cuatrimestre')) {
-  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 }
+
 const busqueda = Astro.url.searchParams.get('q') || '';
 const cliente = db();
-
-// Obtener usuario actual para filtrar docentes asignados
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
 let userId = '';
 if (token && refresh) {
-  const { data: s } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
-  if (s.user) userId = s.user.id;
+  const { data: session } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+  userId = session.user?.id || '';
 }
 
-// The coordination scope controls the dashboard and results. Observation is separate.
-const docentesAsignados = userId
-  ? await getMyAssignedTeacherIds(cliente, 'coordinated', cuatrimestreId)
-  : new Set<number>();
-const docentesObservacion = userId
-  ? await getMyAssignedTeacherIds(cliente, 'observation', cuatrimestreId)
-  : new Set<number>();
-const { data: todos } = docentesAsignados.size
-  ? await cliente.from('docentes').select('id,nombre,apellidos,email,modalidad').in('id', [...docentesAsignados]).eq('activo', true).order('apellidos')
-  : { data: [] };
-
-// Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
-const asignadosIds = [...docentesAsignados];
-let todasLasCalificaciones: CalificacionFinal[] = [];
-if (asignadosIds.length > 0) {
-  todasLasCalificaciones = await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId);
+async function getPortfolioTeachers(ids: Set<number>): Promise<PortfolioTeacher[]> {
+  if (!ids.size) return [];
+  const { data } = await cliente
+    .from('docentes')
+    .select('id,nombre,apellidos,modalidad')
+    .in('id', [...ids])
+    .eq('activo', true)
+    .order('apellidos');
+  return (data || []).map((teacher) => ({
+    id: teacher.id,
+    nombre: teacher.nombre,
+    apellidos: teacher.apellidos,
+    modalidad: teacher.modalidad,
+  }));
 }
 
-const docentesEvaluados = new Set(
-  todasLasCalificaciones
-    .filter((row) => row.num_instrumentos_completados > 0 && docentesAsignados.has(row.docente_id))
-    .map((row) => row.docente_id)
+const [docentesCoordinadosIds, docentesObservacionIds] = userId
+  ? await Promise.all([
+      getMyAssignedTeacherIds(cliente, 'coordinated', cuatrimestreId),
+      getMyAssignedTeacherIds(cliente, 'observation', cuatrimestreId),
+    ])
+  : [new Set<number>(), new Set<number>()];
+
+const [docentesCoordinados, docentesObservacion, coordinacionData, planeacionData, observacionData, calificaciones] = await Promise.all([
+  getPortfolioTeachers(docentesCoordinadosIds),
+  getPortfolioTeachers(docentesObservacionIds),
+  docentesCoordinadosIds.size
+    ? cliente.from('evaluacion_coordinacion').select('docente_id').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesCoordinadosIds])
+    : Promise.resolve({ data: [] as { docente_id: number }[] }),
+  docentesCoordinadosIds.size
+    ? cliente.from('planeaciones').select('docente_id,estado').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesCoordinadosIds])
+    : Promise.resolve({ data: [] as { docente_id: number; estado: string }[] }),
+  docentesObservacionIds.size
+    ? cliente.from('observaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesObservacionIds])
+    : Promise.resolve({ data: [] as { docente_id: number }[] }),
+  docentesCoordinadosIds.size ? obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId) : Promise.resolve([]),
+]);
+
+const coordinatedPortfolio = buildCoordinatedPortfolio(
+  docentesCoordinados,
+  new Set((coordinacionData.data || []).map((evaluation) => evaluation.docente_id)),
+  (planeacionData.data || []).map((planning) => ({ docenteId: planning.docente_id, estado: planning.estado })),
+  new Set(calificaciones.filter((score) => score.num_instrumentos_completados > 0).map((score) => score.docente_id)),
 );
-const docentes = (todos || []).filter(d => docentesEvaluados.has(d.id));
+const observationPortfolio = buildObservationPortfolio(
+  docentesObservacion,
+  new Set((observacionData.data || []).map((observation) => observation.docente_id)),
+);
 
-// Obtener observaciones, planeaciones y evaluaciones de coordinación para este cuatrimestre
-const { data: obsData } = docentesObservacion.size
-  ? await cliente.from('observaciones').select('docente_id').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesObservacion])
-  : { data: [] };
-const { data: planData } = docentesAsignados.size
-  ? await cliente.from('planeaciones').select('docente_id,estado').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesAsignados])
-  : { data: [] };
-const { data: coordData } = docentesAsignados.size
-  ? await cliente.from('evaluacion_coordinacion').select('docente_id').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesAsignados])
-  : { data: [] };
-
-const obsSet = new Set((obsData || []).map(o => o.docente_id));
-const planPendiente = new Set((planData || []).filter(p => p.estado === 'Pendiente').map(p => p.docente_id));
-const planEvaluada = new Set((planData || []).filter(p => p.estado !== 'Pendiente').map(p => p.docente_id));
-const coordSet = new Set((coordData || []).map(c => c.docente_id));
-
-interface EstadoDocente {
-  docente: { id: number; nombre: string; apellidos: string; email: string; modalidad: string };
-  observacion: 'pendiente' | 'completada' | 'no_asignada';
-  planeacion: 'pendiente' | 'completada' | 'no_aplica';
-  coordinacion: 'pendiente' | 'completada';
-  completo: boolean;
+function matchesSearch(teacher: PortfolioTeacher) {
+  const normalized = busqueda.trim().toLocaleLowerCase();
+  return !normalized || `${teacher.nombre} ${teacher.apellidos}`.toLocaleLowerCase().includes(normalized);
 }
 
-const estados: EstadoDocente[] = docentes.map(d => ({
-  docente: { id: d.id, nombre: d.nombre, apellidos: d.apellidos, email: d.email, modalidad: d.modalidad || 'Escolarizado' },
-  observacion: !docentesObservacion.has(d.id) ? 'no_asignada' : obsSet.has(d.id) ? 'completada' : 'pendiente',
-  planeacion: planEvaluada.has(d.id) ? 'completada' : planPendiente.has(d.id) ? 'pendiente' : 'no_aplica',
-  coordinacion: coordSet.has(d.id) ? 'completada' : 'pendiente',
-  completo: coordSet.has(d.id) && (planEvaluada.has(d.id) || planPendiente.has(d.id))
-    && (!docentesObservacion.has(d.id) || obsSet.has(d.id)),
-}));
-
-const pendientesObs = estados.filter(e => e.observacion === 'pendiente').length;
-const pendientesPlan = estados.filter(e => e.planeacion === 'pendiente').length;
-const pendientesCoord = estados.filter(e => e.coordinacion === 'pendiente').length;
-const completadosObs = estados.filter(e => e.observacion === 'completada').length;
-const completadosPlan = estados.filter(e => e.planeacion === 'completada').length;
-const faltantes = estados.filter(e => !e.completo);
-const completados = estados.filter(e => e.completo);
-
-// Filtrar por busqueda si aplica
-let estadosMostrar = estados;
-if (busqueda) {
-  const t = busqueda.toLowerCase();
-  estadosMostrar = estados.filter(e => `${e.docente.nombre} ${e.docente.apellidos}`.toLowerCase().includes(t) || e.docente.apellidos.toLowerCase().includes(t) || e.docente.email.toLowerCase().includes(t));
-}
-const faltantesF = estadosMostrar.filter(e => !e.completo);
-const completadosF = estadosMostrar.filter(e => e.completo);
-
-// Paginación
-const page = parseInt(Astro.url.searchParams.get('page')||'1');
-const limit = 12;
-const totalEstados = estadosMostrar.length;
-const totalPages = Math.ceil(totalEstados / limit);
-const estadosPag = estadosMostrar.slice((page - 1) * limit, page * limit);
-const faltantesPag = estadosPag.filter(e => !e.completo);
-const completadosPag = estadosPag.filter(e => e.completo);
-function buildPageUrl(p:number) {
-  const params = new URLSearchParams(Astro.url.searchParams.toString());
-  params.set('page', String(p));
-  return `?${params.toString()}`;
-}
+const coordinatedRows = coordinatedPortfolio.filter((row) => matchesSearch(row.teacher));
+const observationRows = observationPortfolio.filter((row) => matchesSearch(row.teacher));
+const coordinationPending = coordinatedPortfolio.filter((row) => !row.coordinationCompleted).length;
+const planningPending = coordinatedPortfolio.reduce((total, row) => total + row.planningPending, 0);
+const observationPending = observationPortfolio.filter((row) => !row.observationCompleted).length;
+const resultsAvailable = coordinatedPortfolio.filter((row) => row.resultsAvailable).length;
+const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
 ---
 
-<LayoutCoordinador titulo="Dashboard — Coordinador">
-  <div class="animate-flotar-entrada">
-    <div class="flex items-center justify-between mb-4">
-      <div><h1 class="text-3xl font-bold text-tup mb-2">Panel de Coordinación</h1></div>
+<LayoutCoordinador titulo="Panel de coordinación">
+  <div class="animate-flotar-entrada space-y-8">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p class="text-sm font-medium text-tup">Ciclo seleccionado: {cuatrimestreSel?.clave || cuatrimestreSel?.nombre || 'Sin ciclo'}</p>
+        <h1 class="mt-1 text-3xl font-bold text-tup">Portafolios de coordinación</h1>
+        <p class="mt-2 max-w-3xl text-sm text-slate-500">Las asignaciones de coordinación y de observación se gestionan por separado. Una no concede acceso a la otra.</p>
+      </div>
       <form method="GET" class="flex items-center gap-2">
-        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
-          {cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.nombre||''}</option>))}
+        <label for="cuatrimestre" class="text-sm font-medium text-slate-700">Ciclo</label>
+        <select id="cuatrimestre" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map((cuatrimestre) => (<option value={cuatrimestre.id} selected={cuatrimestre.id === cuatrimestreId}>{cuatrimestre.clave || cuatrimestre.nombre || ''}</option>))}
         </select>
       </form>
     </div>
 
-    <!-- Buscador -->
-    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
-      <form method="GET" class="flex gap-3">
-        <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
-        <input type="text" name="q" value={busqueda} placeholder="🔍 Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
-        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href={`/coordinador/dashboard${qs}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
-      </form>
-    </div>
+    <form method="GET" class="flex flex-wrap gap-3 rounded-2xl bg-white p-4 shadow-tarjeta">
+      <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
+      <label for="buscar-docente" class="sr-only">Buscar en ambos portafolios</label>
+      <input id="buscar-docente" type="search" name="q" value={busqueda} placeholder="Buscar docente por nombre o apellidos" class="min-w-0 flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-tup" />
+      <button type="submit" class="rounded-xl bg-tup px-4 py-2.5 text-sm font-medium text-white">Buscar</button>
+      {busqueda && <a href={`/coordinador/dashboard${qs}`} class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600">Limpiar</a>}
+    </form>
 
-    <!-- KPIs -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-[10px] text-slate-400 uppercase">CA Pend.</p>
-        <p class="text-xl font-bold text-amber-600">{pendientesCoord}</p>
+    <section aria-labelledby="coordinados-title" class="rounded-2xl border border-tup/15 bg-white shadow-tarjeta">
+      <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 p-5 sm:p-6">
+        <div>
+          <h2 id="coordinados-title" class="text-xl font-bold text-tup">Docentes coordinados</h2>
+          <p class="mt-1 text-sm text-slate-500">Evaluación de coordinación, planeaciones, desempeño y reportes del ciclo.</p>
+        </div>
+        <span class="rounded-full bg-tup/10 px-3 py-1 text-sm font-semibold text-tup">{coordinatedPortfolio.length} asignados</span>
       </div>
-      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-[10px] text-slate-400 uppercase">Obs. Pend.</p>
-        <p class="text-xl font-bold text-amber-600">{pendientesObs}</p>
+      <div class="grid grid-cols-2 gap-px border-b border-slate-100 bg-slate-100 sm:grid-cols-4">
+        <div class="bg-white p-4"><p class="text-xs font-medium uppercase tracking-wide text-slate-500">Coordinación pendiente</p><p class="mt-1 text-2xl font-bold text-amber-600">{coordinationPending}</p></div>
+        <div class="bg-white p-4"><p class="text-xs font-medium uppercase tracking-wide text-slate-500">Planeaciones pendientes</p><p class="mt-1 text-2xl font-bold text-amber-600">{planningPending}</p></div>
+        <div class="bg-white p-4"><p class="text-xs font-medium uppercase tracking-wide text-slate-500">Con resultados</p><p class="mt-1 text-2xl font-bold text-emerald-600">{resultsAvailable}</p></div>
+        <div class="bg-white p-4"><p class="text-xs font-medium uppercase tracking-wide text-slate-500">Sin resultados aún</p><p class="mt-1 text-2xl font-bold text-slate-700">{coordinatedPortfolio.length - resultsAvailable}</p></div>
       </div>
-      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-[10px] text-slate-400 uppercase">Plan. Pend.</p>
-        <p class="text-xl font-bold text-amber-600">{pendientesPlan}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-[10px] text-slate-400 uppercase">CA Lista</p>
-        <p class="text-xl font-bold text-emerald-600">{estados.filter(e => e.coordinacion === 'completada').length}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-[10px] text-slate-400 uppercase">Obs. Lista</p>
-        <p class="text-xl font-bold text-emerald-600">{estados.filter(e => e.observacion === 'completada').length}</p>
-      </div>
-      <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
-        <p class="text-[10px] text-slate-400 uppercase">Plan. Lista</p>
-        <p class="text-xl font-bold text-emerald-600">{estados.filter(e => e.planeacion === 'completada').length}</p>
-      </div>
-    </div>
-
-    <!-- Pendientes de evaluar -->
-    <div class="mb-8">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="w-3 h-3 rounded-full bg-amber-500"></span>
-        <h2 class="text-lg font-bold text-slate-700">Pendientes de Evaluar ({faltantesF.length})</h2>
-      </div>
-      {faltantesPag.length === 0 ? (
-        <div class="bg-white rounded-2xl p-8 text-center text-slate-400 shadow-tarjeta">¡Todos evaluados!</div>
+      {coordinatedRows.length === 0 ? (
+        <div class="p-10 text-center text-sm text-slate-500">{busqueda ? 'No hay docentes coordinados que coincidan con la búsqueda.' : 'No tienes docentes coordinados asignados en este ciclo.'}</div>
       ) : (
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {faltantesPag.map(e => (
-            <div class="bg-white rounded-xl p-4 shadow-tarjeta border border-amber-100">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{e.docente.nombre.charAt(0)}</div>
-                <div class="flex-1 min-w-0">
-                  <p class="font-medium text-slate-800 text-sm truncate">{e.docente.nombre.toUpperCase()} {e.docente.apellidos.toUpperCase()}</p>
-                  <p class="text-xs text-slate-400 truncate">{e.docente.email}</p>
-                </div>
-              </div>
-              <div class="flex gap-1.5">
-                {e.coordinacion === 'pendiente' ? (
-                  <a href={`/coordinador/captura/coordinacion?docente_id=${e.docente.id}${cuatrimestreQuery}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-purple-600 text-white text-[10px] font-medium hover:bg-purple-700">CA</a>
-                ) : (
-                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ CA</span>
-                )}
-                {e.observacion === 'pendiente' ? (
-                  <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}${cuatrimestreQuery}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-tup text-white text-[10px] font-medium hover:bg-tup/90">Obs.</a>
-                ) : e.observacion === 'no_asignada' ? (
-                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-[10px] font-medium">—</span>
-                ) : (
-                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Obs.</span>
-                )}
-                {e.planeacion === 'pendiente' ? (
-                  <a href={`/coordinador/planeaciones${qs}`} class="flex-1 text-center px-2 py-1.5 rounded-lg bg-dorado text-white text-[10px] font-medium hover:bg-dorado/90">Plan.</a>
-                ) : e.planeacion === 'no_aplica' ? (
-                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-[10px] font-medium">—</span>
-                ) : (
-                  <span class="flex-1 text-center px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-medium">✅ Plan.</span>
-                )}
-              </div>
-            </div>
-          ))}
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[760px] text-sm">
+            <caption class="sr-only">Docentes con asignación activa de coordinación</caption>
+            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-5 py-3">Docente</th><th class="px-4 py-3">Coordinación</th><th class="px-4 py-3">Planeaciones</th><th class="px-4 py-3">Resultados</th><th class="px-5 py-3 text-right">Acciones</th></tr></thead>
+            <tbody class="divide-y divide-slate-100">
+              {coordinatedRows.map((row) => {
+                const links = coordinatedPortfolioLinks(cuatrimestreId, row.teacher.id);
+                return <tr class="align-top hover:bg-slate-50/70">
+                  <td class="px-5 py-4"><p class="font-semibold text-slate-800">{row.teacher.nombre} {row.teacher.apellidos}</p><p class="mt-1 text-xs text-slate-500">{row.teacher.modalidad || 'Modalidad no registrada'}</p></td>
+                  <td class="px-4 py-4"><span class={`rounded-full px-2.5 py-1 text-xs font-medium ${row.coordinationCompleted ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{row.coordinationCompleted ? 'Registrada' : 'Pendiente'}</span></td>
+                  <td class="px-4 py-4"><p class="font-medium text-slate-700">{row.planningSubmitted} entregada{row.planningSubmitted === 1 ? '' : 's'}</p><p class="mt-1 text-xs text-slate-500">{row.planningPending} pendiente{row.planningPending === 1 ? '' : 's'} · {row.planningReviewed} evaluada{row.planningReviewed === 1 ? '' : 's'}</p></td>
+                  <td class="px-4 py-4"><span class={`rounded-full px-2.5 py-1 text-xs font-medium ${row.resultsAvailable ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{row.resultsAvailable ? 'Disponibles' : 'Sin consolidar'}</span></td>
+                  <td class="px-5 py-4"><div class="flex flex-wrap justify-end gap-2">
+                    {!row.coordinationCompleted && <a href={links.coordination} aria-label={`Evaluar coordinación de ${row.teacher.nombre} ${row.teacher.apellidos}`} class="rounded-lg bg-tup px-3 py-1.5 text-xs font-medium text-white">Evaluar coordinación</a>}
+                    <a href={links.planning} aria-label={`Revisar planeaciones de ${row.teacher.nombre} ${row.teacher.apellidos}`} class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700">Planeaciones</a>
+                    <a href={links.results} aria-label={`Ver resultados de ${row.teacher.nombre} ${row.teacher.apellidos}`} class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700">Resultados</a>
+                  </div></td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
         </div>
       )}
-    </div>
+    </section>
 
-    <!-- Ya evaluados -->
-          {completadosPag.length > 0 && (
-      <div>
-        <div class="flex items-center gap-2 mb-4">
-          <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
-          <h2 class="text-lg font-bold text-slate-700">Ya Evaluados ({completadosPag.length})</h2>
+    <section aria-labelledby="observacion-title" class="rounded-2xl border border-sky-200 bg-white shadow-tarjeta">
+      <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 p-5 sm:p-6">
+        <div>
+          <h2 id="observacion-title" class="text-xl font-bold text-sky-800">Docentes para observar</h2>
+          <p class="mt-1 text-sm text-slate-500">Sólo para la captura de observación de clase en este ciclo.</p>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {completadosPag.map(e => (
-            <div class="bg-emerald-50/50 rounded-xl p-4 border border-emerald-100 opacity-80">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">{e.docente.nombre.charAt(0)}</div>
-                <div class="flex-1 min-w-0">
-                  <p class="font-medium text-slate-700 text-sm truncate">{e.docente.nombre.toUpperCase()} {e.docente.apellidos.toUpperCase()}</p>
-                  <p class="text-xs ">Completado</p>
-                </div>
-              </div>
-              <div class="flex gap-2">
-                {e.observacion !== 'no_asignada' && <a href={`/coordinador/captura/observacion?docente_id=${e.docente.id}${cuatrimestreQuery}`} class="flex-1 text-center px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100" onclick="return confirm('¿Deseas editar la observación de este docente?')">Editar Obs.</a>}
-                <a href={`/coordinador/planeaciones${qs}`} class="flex-1 text-center px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100">📋 Ver Plan.</a>
-              </div>
-            </div>
-          ))}
+        <span class="rounded-full bg-sky-100 px-3 py-1 text-sm font-semibold text-sky-800">{observationPortfolio.length} asignados · {observationPending} pendientes</span>
+      </div>
+      {observationRows.length === 0 ? (
+        <div class="p-10 text-center text-sm text-slate-500">{busqueda ? 'No hay docentes para observar que coincidan con la búsqueda.' : 'No tienes docentes asignados para observación en este ciclo.'}</div>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[560px] text-sm">
+            <caption class="sr-only">Docentes con asignación activa de observación</caption>
+            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-5 py-3">Docente</th><th class="px-4 py-3">Estado de observación</th><th class="px-5 py-3 text-right">Acción</th></tr></thead>
+            <tbody class="divide-y divide-slate-100">
+              {observationRows.map((row) => {
+                const links = observationPortfolioLinks(cuatrimestreId, row.teacher.id);
+                return <tr class="hover:bg-slate-50/70">
+                  <td class="px-5 py-4"><p class="font-semibold text-slate-800">{row.teacher.nombre} {row.teacher.apellidos}</p><p class="mt-1 text-xs text-slate-500">{row.teacher.modalidad || 'Modalidad no registrada'}</p></td>
+                  <td class="px-4 py-4"><span class={`rounded-full px-2.5 py-1 text-xs font-medium ${row.observationCompleted ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{row.observationCompleted ? 'Registrada' : 'Pendiente'}</span></td>
+                  <td class="px-5 py-4 text-right">{row.observationCompleted ? <span class="text-xs font-medium text-emerald-700">Observación registrada</span> : <a href={links.observation} aria-label={`Iniciar observación de ${row.teacher.nombre} ${row.teacher.apellidos}`} class="inline-flex rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-medium text-white">Iniciar observación</a>}</td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
         </div>
-      </div>
-    )}
-    {totalPages > 1 && (
-      <div class="flex items-center justify-center gap-3 mt-8">
-        {page > 1 && <a href={buildPageUrl(page-1)} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">← Anterior</a>}
-        <span class="text-sm text-slate-400">Página {page} de {totalPages}</span>
-        {page < totalPages && <a href={buildPageUrl(page+1)} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Siguiente →</a>}
-      </div>
-    )}
+      )}
+    </section>
   </div>
 </LayoutCoordinador>

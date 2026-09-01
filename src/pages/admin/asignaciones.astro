@@ -18,24 +18,37 @@ const observationSearch = (Astro.url.searchParams.get('observation_search') || '
 const coordinatedAll = Astro.url.searchParams.get('coordinated_scope') === 'all';
 const observationAll = Astro.url.searchParams.get('observation_scope') === 'all';
 
-const [assignmentResult, backfillResult, evaluatorResult, coordinatedCandidateResult, observationCandidateResult, evaluatorDiagnosticsResult] = await Promise.all([
+const [assignmentResult, backfillResult, evaluatorResult, coordinatedCandidateResult, observationCandidateResult, evaluatorDiagnosticsResult, teacherCandidateDiagnosticsResult] = await Promise.all([
   auth.client.rpc('admin_teacher_assignment_list_v2', { p_cuatrimestre_id: cuatrimestreId }),
   auth.client.rpc('admin_teacher_assignment_backfill_status', { p_cuatrimestre_id: cuatrimestreId }),
   auth.client.rpc('admin_observation_allocation_evaluators', { p_cuatrimestre_id: cuatrimestreId }),
   auth.client.rpc('admin_assignment_teacher_candidates', { p_cuatrimestre_id: cuatrimestreId, p_search: coordinatedSearch, p_include_all_active: coordinatedAll }),
   auth.client.rpc('admin_assignment_teacher_candidates', { p_cuatrimestre_id: cuatrimestreId, p_search: observationSearch, p_include_all_active: observationAll }),
   auth.client.rpc('admin_observation_allocation_evaluator_diagnostics', { p_cuatrimestre_id: cuatrimestreId }),
+  auth.client.rpc('admin_assignment_teacher_candidate_diagnostics', { p_cuatrimestre_id: cuatrimestreId }),
 ]);
 
 const assignments = (assignmentResult.data || []) as Array<{ assignment_id: number; assignment_type: string; actor_id: string; docente_id: number; source: string }>;
 const evaluatorLoadFailed = Boolean(evaluatorResult.error);
 const evaluators = (evaluatorLoadFailed ? [] : evaluatorResult.data || []) as Array<{ evaluator_id: string; email: string; role: string; included: boolean; target_teacher_count: number | null; current_count: number }>;
-const coordinatedCandidates = coordinatedCandidateResult.data;
-const observationCandidates = observationCandidateResult.data;
+const teacherCandidateLoadError = coordinatedCandidateResult.error || observationCandidateResult.error;
+const teacherCandidateLoadFailed = Boolean(teacherCandidateLoadError);
+const teacherCandidateFailureCode = typeof teacherCandidateLoadError?.code === 'string' && /^[A-Za-z0-9]{2,16}$/.test(teacherCandidateLoadError.code)
+  ? `DOCENTES_RPC_${teacherCandidateLoadError.code.toUpperCase()}`
+  : 'DOCENTES_RPC_UNKNOWN';
+const coordinatedCandidates = teacherCandidateLoadFailed ? [] : coordinatedCandidateResult.data || [];
+const observationCandidates = teacherCandidateLoadFailed ? [] : observationCandidateResult.data || [];
 const evaluatorLoadFailure = evaluatorLoadFailed ? describeEvaluatorLoadFailure(evaluatorResult.error) : null;
 const evaluatorDiagnostics = (evaluatorDiagnosticsResult.data || []) as Array<{ diagnostic_code: string; account_count: number }>;
 const evaluatorDiagnosticsByCode = Object.fromEntries(evaluatorDiagnostics.map((item) => [item.diagnostic_code, Number(item.account_count)]));
 const evaluatorDiagnosticsUnavailable = Boolean(evaluatorDiagnosticsResult.error);
+const teacherCandidateDiagnostics = (teacherCandidateDiagnosticsResult.data || []) as Array<{ active_teacher_count: number; cycle_eligible_teacher_count: number; legacy_active_group_count: number }>;
+const teacherCandidateDiagnosticsUnavailable = Boolean(teacherCandidateDiagnosticsResult.error);
+const teacherCandidateCounts = teacherCandidateDiagnostics[0] && {
+  active_teacher_count: Number(teacherCandidateDiagnostics[0].active_teacher_count),
+  cycle_eligible_teacher_count: Number(teacherCandidateDiagnostics[0].cycle_eligible_teacher_count),
+  legacy_active_group_count: Number(teacherCandidateDiagnostics[0].legacy_active_group_count),
+};
 const coordinadores = evaluators.filter((evaluator) => evaluator.role === 'coordinador');
 const observationEvaluators = evaluators;
 const coordinatedAssignments = new Map(assignments
@@ -77,6 +90,9 @@ const evaluatorLabels = Object.fromEntries(evaluators.map((evaluator) => [evalua
     {backfillResumen.length > 0 && <div class="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600"><p class="mb-2 font-semibold text-slate-700">Estado del backfill de relaciones legadas</p><div class="flex flex-wrap gap-x-5 gap-y-2">{backfillResumen.map((row) => <span>{row.assignment_type}: {row.assignment_count} {row.status === 'backfilled' ? 'migradas' : 'requieren revisión'} ({row.reason_code})</span>)}</div></div>}
 
     <div class="grid gap-6 xl:grid-cols-2">
+      {teacherCandidateLoadFailed && <div class="xl:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">No se pudo cargar la lista de docentes candidatos. Código: <code>{teacherCandidateFailureCode}</code>. No se muestran datos parciales; verifica que la migración 055 esté aplicada y que la caché de PostgREST se haya recargado.</div>}
+      {!teacherCandidateLoadFailed && !teacherCandidateDiagnosticsUnavailable && <div class="xl:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">Docentes activos: <strong>{teacherCandidateCounts?.active_teacher_count || 0}</strong>. Con actividad académica en este cuatrimestre: <strong>{teacherCandidateCounts?.cycle_eligible_teacher_count || 0}</strong>. Grupos activos heredados sin bandera <code>activo</code>: <strong>{teacherCandidateCounts?.legacy_active_group_count || 0}</strong>. {teacherCandidateCounts?.cycle_eligible_teacher_count === 0 ? 'No hay docentes elegibles en el cuatrimestre; no es un error de carga.' : 'La vista inicial muestra este conjunto elegible.'}</div>}
+      {!teacherCandidateLoadFailed && teacherCandidateDiagnosticsUnavailable && <div class="xl:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">La lista de docentes se cargó, pero el diagnóstico de elegibilidad no está disponible. Verifica que la migración 055 esté aplicada.</div>}
       <section class="overflow-hidden rounded-2xl bg-white shadow-tarjeta">
         <div class="border-b p-5"><h2 class="text-xl font-bold text-tup">Docentes coordinados</h2><p class="mt-1 text-sm text-slate-500">Sólo coordinadores activos. Habilita coordinación, planeaciones, notificaciones y reportes del ciclo; no habilita observación.</p></div>
         {coordinadorSel ? <div class="p-4">
@@ -89,8 +105,8 @@ const evaluatorLabels = Object.fromEntries(evaluators.map((evaluator) => [evalua
           <p class="mb-3 text-xs text-slate-500">La vista inicial muestra docentes activos con al menos un grupo activo en este cuatrimestre. Selecciona filas y confirma la acción.</p>
           <div class="mb-3 flex items-center justify-between text-xs text-slate-500"><span><span data-selected-count="coordinated">0</span> seleccionados</span><button type="button" class="text-tup hover:underline" data-select-assigned="coordinated">Seleccionar asignados visibles</button></div>
           <div class="max-h-[42vh] space-y-1 overflow-y-auto" data-list="coordinated">
-            {(coordinatedCandidates || []).map((teacher: any) => { const assignment = coordinatedAssignments.get(Number(teacher.docente_id)); return <label class="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-slate-50"><input type="checkbox" data-selection="coordinated" data-assignment-id={assignment?.assignment_id || ''} value={teacher.docente_id} class="accent-tup" /><span class="text-sm">{teacher.nombre.toUpperCase()} {teacher.apellidos.toUpperCase()}</span>{assignment ? <span class="ml-auto rounded-md bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">Asignado</span> : <span class="ml-auto text-xs text-slate-400">Disponible</span>}</label>; })}
-            {(coordinatedCandidates || []).length === 0 && <p class="py-6 text-center text-sm text-slate-400">No hay docentes que coincidan con el filtro.</p>}
+            {coordinatedCandidates.map((teacher: any) => { const assignment = coordinatedAssignments.get(Number(teacher.docente_id)); return <label class="selection-card flex cursor-pointer items-center gap-3 rounded-lg border border-transparent p-2"><input type="checkbox" data-selection="coordinated" data-assignment-id={assignment?.assignment_id || ''} value={teacher.docente_id} class="accent-tup" /><span class="text-sm">{teacher.nombre.toUpperCase()} {teacher.apellidos.toUpperCase()}</span>{assignment ? <span class="ml-auto rounded-md bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">Asignado</span> : <span class="ml-auto text-xs text-slate-400">Disponible</span>}</label>; })}
+            {!teacherCandidateLoadFailed && coordinatedCandidates.length === 0 && <p class="py-6 text-center text-sm text-slate-400">No hay docentes que coincidan con el filtro.</p>}
           </div>
           <div class="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" data-assign="coordinated" class="rounded-xl bg-tup py-3 text-sm font-semibold text-white hover:bg-tup/90">Asignar selección</button><button type="button" data-revoke="coordinated" class="rounded-xl border border-red-300 py-3 text-sm font-semibold text-red-700 hover:bg-red-50">Quitar selección</button></div>
         </div> : <p class="p-8 text-center text-slate-400">Selecciona un coordinador activo.</p>}
@@ -107,8 +123,8 @@ const evaluatorLabels = Object.fromEntries(evaluators.map((evaluator) => [evalua
           </form>
           <div class="mb-3 flex items-center justify-between text-xs text-slate-500"><span><span data-selected-count="observation">0</span> seleccionados</span><button type="button" class="text-tup hover:underline" data-select-assigned="observation">Seleccionar asignados visibles</button></div>
           <div class="max-h-[42vh] space-y-1 overflow-y-auto" data-list="observation">
-            {(observationCandidates || []).map((teacher: any) => { const assignment = observationAssignments.get(Number(teacher.docente_id)); return <label class="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-slate-50"><input type="checkbox" data-selection="observation" data-assignment-id={assignment?.assignment_id || ''} value={teacher.docente_id} class="accent-tup" /><span class="text-sm">{teacher.nombre.toUpperCase()} {teacher.apellidos.toUpperCase()}</span>{assignment ? <span class="ml-auto rounded-md bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">Asignado</span> : <span class="ml-auto text-xs text-slate-400">Disponible</span>}</label>; })}
-            {(observationCandidates || []).length === 0 && <p class="py-6 text-center text-sm text-slate-400">No hay docentes que coincidan con el filtro.</p>}
+            {observationCandidates.map((teacher: any) => { const assignment = observationAssignments.get(Number(teacher.docente_id)); return <label class="selection-card flex cursor-pointer items-center gap-3 rounded-lg border border-transparent p-2"><input type="checkbox" data-selection="observation" data-assignment-id={assignment?.assignment_id || ''} value={teacher.docente_id} class="accent-tup" /><span class="text-sm">{teacher.nombre.toUpperCase()} {teacher.apellidos.toUpperCase()}</span>{assignment ? <span class="ml-auto rounded-md bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">Asignado</span> : <span class="ml-auto text-xs text-slate-400">Disponible</span>}</label>; })}
+            {!teacherCandidateLoadFailed && observationCandidates.length === 0 && <p class="py-6 text-center text-sm text-slate-400">No hay docentes que coincidan con el filtro.</p>}
           </div>
           <div class="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" data-assign="observation" class="rounded-xl bg-tup py-3 text-sm font-semibold text-white hover:bg-tup/90">Asignar selección</button><button type="button" data-revoke="observation" class="rounded-xl border border-red-300 py-3 text-sm font-semibold text-red-700 hover:bg-red-50">Quitar selección</button></div>
         </div> : <p class="p-8 text-center text-slate-400">Selecciona un evaluador activo.</p>}
@@ -134,7 +150,7 @@ const evaluatorLabels = Object.fromEntries(evaluators.map((evaluator) => [evalua
   </div>
 </LayoutAdmin>
 
-<script is:inline define:vars={{ coordinadorSel, observadorSel, cuatrimestreId, evaluatorLabels }}>
+<script is:inline define:vars={{ coordinadorSel, observadorSel, cuatrimestreId, coordinatedAll, observationAll, evaluatorLabels }}>
   var allocationPreview = null;
   function toast(message, isError) { var element = document.getElementById('toast'); element.textContent = message; element.className = 'fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl px-6 py-3 text-sm font-medium shadow-modal ' + (isError ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'); element.classList.remove('hidden'); setTimeout(function(){ element.classList.add('hidden'); }, 4000); }
   function escapeHtml(value) { return String(value).replace(/[&<>"']/g, function(character) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]; }); }
@@ -147,7 +163,7 @@ const evaluatorLabels = Object.fromEntries(evaluators.map((evaluator) => [evalua
     if (revoke && !confirm('Se revocarán ' + ids.length + ' asignaciones de este cuatrimestre. No se eliminarán docentes, usuarios, grupos ni capturas históricas. ¿Deseas continuar?')) return;
     setBusy(button, true, revoke ? 'Revocando...' : 'Asignando...');
     try {
-      var response = await fetch('/api/admin/asignar-docentes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revoke ? { action: 'revoke', assignment_type: type, assignment_ids: ids, cuatrimestre_id: cuatrimestreId } : { action: 'assign', assignment_type: type, evaluador_id: type === 'coordinated' ? coordinadorSel : observadorSel, docente_ids: ids, cuatrimestre_id: cuatrimestreId }) });
+      var response = await fetch('/api/admin/asignar-docentes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revoke ? { action: 'revoke', assignment_type: type, assignment_ids: ids, cuatrimestre_id: cuatrimestreId } : { action: 'assign', assignment_type: type, evaluador_id: type === 'coordinated' ? coordinadorSel : observadorSel, docente_ids: ids, cuatrimestre_id: cuatrimestreId, include_all_active: type === 'coordinated' ? coordinatedAll : observationAll }) });
       var payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'No fue posible actualizar las asignaciones');
       toast((revoke ? 'Asignaciones revocadas: ' : 'Asignaciones activadas: ') + payload.count, false); setTimeout(function(){ location.reload(); }, 450);
     } catch (error) { toast(error.message || 'Error de conexión', true); setBusy(button, false); }

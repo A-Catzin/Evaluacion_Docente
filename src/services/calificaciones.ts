@@ -30,6 +30,8 @@ export interface CalificacionFinal {
   num_instrumentos_esperados: number;
   version_calculo: string;
   calculada_en: string;
+  instrument_validity: Record<string, string>;
+  has_invalid_instrument: boolean;
   // Info del docente; se completa cuando el dashboard la necesita.
   docente_nombre?: string | null;
   docente_apellidos?: string | null;
@@ -37,7 +39,7 @@ export interface CalificacionFinal {
   docente_campus?: string | null;
 }
 
-const VERSION_CALCULO = "v2.1";
+const VERSION_CALCULO = "v2.2-versioned-instruments";
 
 function round2(value: number | null | undefined): number | null {
   if (value == null || !Number.isFinite(value)) return null;
@@ -71,6 +73,9 @@ export function rowToCalificacion(
     num_instrumentos_esperados: Number(row.num_instrumentos_esperados),
     version_calculo: String(row.version_calculo ?? VERSION_CALCULO),
     calculada_en: String(row.calculada_en ?? ""),
+    instrument_validity:
+      (row.instrument_validity as Record<string, string> | null) ?? {},
+    has_invalid_instrument: Boolean(row.has_invalid_instrument),
   };
 }
 
@@ -114,7 +119,7 @@ export async function calcularCalificacionDocenteInline(
     );
   }
 
-  const modalidad = String(docente?.modalidad ?? "Escolarizada");
+  const modalidad = String(docente?.modalidad ?? "Escolarizado");
   const final = calcFinalScore(scores, modalidad);
   const profile = obtenerPerfilModalidad(modalidad);
 
@@ -134,6 +139,13 @@ export async function calcularCalificacionDocenteInline(
     num_instrumentos_esperados: profile.expectedInstrumentCount,
     version_calculo: `${VERSION_CALCULO}-inline`,
     calculada_en: new Date().toISOString(),
+    instrument_validity: Object.fromEntries(
+      (scores.invalidPurposes || []).map((purpose) => [
+        purpose,
+        "invalid_excessive_na",
+      ]),
+    ),
+    has_invalid_instrument: (scores.invalidPurposes || []).length > 0,
     docente_nombre: docenteInfo?.nombre ?? null,
     docente_apellidos: docenteInfo?.apellidos ?? null,
     docente_email: docenteInfo?.email ?? null,
@@ -337,7 +349,7 @@ async function obtenerModalidadSnapshot(
     throw new Error(`No se encontró el docente ${docenteId}`);
   }
 
-  const snapshot = String(docente.modalidad ?? "Escolarizada");
+  const snapshot = String(docente.modalidad ?? "Escolarizado");
 
   const { error: errorSnapshot } = await client.rpc(
     "tomar_snapshot_modalidad",
@@ -392,6 +404,13 @@ export async function recalcularCalificacionDocente(
     num_instrumentos_esperados: profile.expectedInstrumentCount,
     version_calculo: VERSION_CALCULO,
     calculada_en: new Date().toISOString(),
+    instrument_validity: Object.fromEntries(
+      (scores.invalidPurposes || []).map((purpose) => [
+        purpose,
+        "invalid_excessive_na",
+      ]),
+    ),
+    has_invalid_instrument: (scores.invalidPurposes || []).length > 0,
   };
 
   const { data, error } = await client.rpc("upsert_calificacion_final", {

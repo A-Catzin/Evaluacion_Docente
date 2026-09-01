@@ -77,7 +77,7 @@ const prompts = [
               <p id={`help-${index}`} class="mt-2 text-xs text-slate-500">Selecciona una valoración del 1 al 5.</p>
               <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-6">
                 {Array.from({ length: prompt.range }, (_, answer) => answer + 1).map((answer) => (
-                  <label class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium text-slate-700 hover:border-tup" for={`answer-${index}-${answer}`}>
+                  <label class="selection-card flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium text-slate-700" for={`answer-${index}-${answer}`}>
                     <input id={`answer-${index}-${answer}`} type="radio" name={`answer-${index}`} value={answer} class="h-4 w-4 accent-tup" />
                     <span>{prompt.labels?.[answer - 1] || answer}</span>
                   </label>

@@ -23,6 +23,8 @@ const RUTAS_PUBLICAS = [
 
 const ROLES_POR_RUTA: Record<string, string[]> = {
   "/admin": ["superadmin"],
+  "/coordinador/reportes": ["coordinador", "superadmin"],
+  "/coordinador/planeaciones": ["coordinador", "superadmin"],
   "/coordinador": ["coordinador", "superadmin", "observador"],
   "/docente": ["docente", "superadmin", "coordinador"],
   "/estudiante": ["estudiante"],

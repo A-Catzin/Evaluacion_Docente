@@ -117,7 +117,7 @@ function resolveTable(builder: MockQueryBuilder) {
         error: null,
       };
     }
-    return { data: { modalidad: "Escolarizada" }, error: null };
+    return { data: { modalidad: "Escolarizado" }, error: null };
   }
 
   if (table === "grupos" && operation === "select") {
@@ -214,7 +214,7 @@ function resolveCalificacionFinal(builder: MockQueryBuilder) {
         id: 1,
         docente_id: 1,
         cuatrimestre_id: 10,
-        modalidad_snapshot: "Escolarizada",
+        modalidad_snapshot: "Escolarizado",
         score_encuesta_estudiantil: 80,
         score_coordinacion: 90,
         score_planeacion: 70,
@@ -224,7 +224,7 @@ function resolveCalificacionFinal(builder: MockQueryBuilder) {
         categoria_final: "Distinguido",
         num_instrumentos_completados: 5,
         num_instrumentos_esperados: 5,
-        version_calculo: "v2.1",
+        version_calculo: "v2.2-versioned-instruments",
         calculada_en: "2025-01-01T00:00:00Z",
       },
     ];
@@ -318,9 +318,9 @@ describe("calificaciones", () => {
 
       expect(result.docente_id).toBe(1);
       expect(result.cuatrimestre_id).toBe(10);
-      expect(result.modalidad_snapshot).toBe("Escolarizada");
+      expect(result.modalidad_snapshot).toBe("Escolarizado");
       expect(result.num_instrumentos_esperados).toBe(5);
-      expect(result.version_calculo).toBe("v2.1");
+      expect(result.version_calculo).toBe("v2.2-versioned-instruments");
       expect(result.calificacion_final).toBe(
         Math.round(80 * 0.35 + 90 * 0.2 + 70 * 0.15 + 80 * 0.25 + 100 * 0.05),
       );
@@ -329,14 +329,14 @@ describe("calificaciones", () => {
       expect(capturedSnapshotCall).toMatchObject({
         p_docente_id: 1,
         p_cuatrimestre_id: 10,
-        p_modalidad: "Escolarizada",
+        p_modalidad: "Escolarizado",
         p_fuente: "primer_score",
       });
 
       expect(capturedUpsertPayload).toMatchObject({
         docente_id: 1,
         cuatrimestre_id: 10,
-        modalidad_snapshot: "Escolarizada",
+        modalidad_snapshot: "Escolarizado",
         score_encuesta_estudiantil: 80,
         score_coordinacion: 90,
         score_planeacion: 70,
@@ -344,7 +344,7 @@ describe("calificaciones", () => {
         score_autoevaluacion: 100,
         num_instrumentos_completados: 5,
         num_instrumentos_esperados: 5,
-        version_calculo: "v2.1",
+        version_calculo: "v2.2-versioned-instruments",
       });
     });
 
@@ -368,7 +368,7 @@ describe("calificaciones", () => {
         id: 7,
         docente_id: 2,
         cuatrimestre_id: 20,
-        modalidad_snapshot: "Escolarizada",
+        modalidad_snapshot: "Escolarizado",
         score_encuesta_estudiantil: 75,
         score_coordinacion: 80,
         score_planeacion: null,
@@ -398,7 +398,7 @@ describe("calificaciones", () => {
       expect(result).not.toBeNull();
       expect(result?.docente_id).toBe(1);
       expect(result?.cuatrimestre_id).toBe(10);
-      expect(result?.version_calculo).toBe("v2.1-inline");
+      expect(result?.version_calculo).toBe("v2.2-versioned-instruments-inline");
     });
   });
 

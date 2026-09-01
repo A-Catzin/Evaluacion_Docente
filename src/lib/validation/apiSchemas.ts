@@ -72,6 +72,35 @@ export const ToggleVisibilidadSchema = z.object({
   visible: z.boolean(),
 });
 
+export const VersionedInstrumentSubmissionSchema = z.object({
+  version_id: z.string().uuid(),
+  docente_id: z.number().int().positive(),
+  cuatrimestre_id: z.number().int().positive(),
+  asignatura_id: z.number().int().positive().nullable().optional(),
+  grupo: z.string().max(120).nullable().optional(),
+  source_record_id: z.number().int().positive().nullable().optional(),
+  answers: z.array(z.object({
+    item_id: z.string().uuid(),
+    value: z.union([z.number().int(), z.literal("na")]),
+    na_reason: z.string().max(MAX_NOTA_SECCION_LONGITUD).nullable().optional(),
+  })).min(1),
+  evidence: z.array(z.object({
+    section_id: z.string().uuid(),
+    evidence: z.string().min(1).max(MAX_NOTA_SECCION_LONGITUD),
+  })),
+  checks: z.array(z.object({
+    check_id: z.string().uuid(),
+    value: z.enum(["complies", "does_not_comply", "na"]),
+    na_reason: z.string().max(MAX_NOTA_SECCION_LONGITUD).nullable().optional(),
+  })).default([]),
+  metadata: z.object({
+    strengths: z.string().max(MAX_COMENTARIO_LONGITUD).nullable().optional(),
+    priority_area: z.string().max(MAX_COMENTARIO_LONGITUD).nullable().optional(),
+    recommendation: z.string().max(MAX_COMENTARIO_LONGITUD).nullable().optional(),
+    general_observations: z.string().max(MAX_COMENTARIO_LONGITUD).nullable().optional(),
+  }).strict().default({}),
+});
+
 export const RunIdQuerySchema = z.object({
   run_id: z.coerce.number().int().positive(),
 });

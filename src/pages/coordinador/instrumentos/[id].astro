@@ -1,0 +1,16 @@
+---
+import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
+import { db } from '../../../lib/db';
+
+const client = db();
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (token && refresh) await client.auth.setSession({ access_token: token, refresh_token: refresh });
+const { data } = await client.rpc('get_versioned_instrument_submission_detail', { p_submission_id: Astro.params.id });
+if (!data) return Astro.redirect('/coordinador/dashboard');
+const detail = data as any;
+const snapshot = detail.submission.definition_snapshot;
+const answers = new Map<string, any>((detail.answers || []).map((answer: any) => [answer.item_id, answer]));
+const evidence = new Map<string, string>((detail.evidence || []).map((entry: any) => [entry.section_id, entry.evidence]));
+---
+<LayoutCoordinador titulo="Instrumento histórico"><div class="animate-flotar-entrada max-w-4xl mx-auto"><h1 class="text-3xl font-bold text-tup mb-2">{snapshot.title}</h1><p class="mb-6 text-slate-500">Versión {snapshot.version} · {detail.submission.validity_status === 'valid' ? 'Válido' : 'Inválido por exceso de N/A'}</p>{snapshot.sections.map((section: any) => <section class="mb-5 rounded-2xl bg-white p-6 shadow-tarjeta"><h2 class="font-bold text-tup">{section.title}</h2><div class="mt-3 space-y-3">{section.items.map((item: any) => { const answer = answers.get(item.id); return <div class="rounded-xl bg-slate-50 p-3 text-sm"><p>{item.code}. {item.label}</p><p class="mt-1 font-medium">{answer?.is_na ? `N/A: ${answer.na_reason}` : answer?.numeric_value}</p></div>; })}</div><p class="mt-4 whitespace-pre-wrap text-sm text-slate-600">{evidence.get(section.id)}</p></section>)}</div></LayoutCoordinador>

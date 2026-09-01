@@ -66,7 +66,7 @@ const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docente
           <div class="sm:col-span-2">
             <label class="block text-sm font-medium text-slate-700 mb-2">Campus *</label>
             <div class="flex flex-wrap gap-2">
-              {campusList.map(c => (<label class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 cursor-pointer hover:bg-tup/5"><input type="radio" name="campus" value={c.nombre} required class="accent-tup" /><span class="text-sm">{c.nombre}</span></label>))}
+              {campusList.map(c => (<label class="selection-card flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 cursor-pointer"><input type="radio" name="campus" value={c.nombre} required class="accent-tup" /><span class="text-sm">{c.nombre}</span></label>))}
             </div>
           </div>
         </div>
@@ -84,7 +84,7 @@ const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docente
                 <p class="text-sm font-medium text-slate-700 mb-3">{i+1}. {item}</p>
                 <div class="flex gap-2">
                   {[1,2,3,4,5].map(v => (
-                    <label class="flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 hover:border-tup cursor-pointer  ">
+                    <label class="selection-card flex-1 flex flex-col items-center gap-1 p-2 rounded-lg border-2 border-slate-200 cursor-pointer">
                       <input type="radio" name={`${cat.id}${i+1}`} value={v} required class="sr-only peer" />
                       <span class="text-sm font-bold ">{v}</span>
                       <span class="text-[9px] ">{['Insuf.','Defic.','Acept.','Bueno','Excel.'][v-1]}</span>
