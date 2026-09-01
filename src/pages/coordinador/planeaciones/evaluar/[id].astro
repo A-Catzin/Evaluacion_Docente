@@ -17,7 +17,7 @@ if (!plan || !await canManageCoordinatedTeacher(client, Number(plan.docente_id),
 const { data: teacher } = await client.from('docentes').select('id,nombre,apellidos').eq('id', plan.docente_id).maybeSingle();
 const { data: subject } = await client.from('asignaturas').select('nombre').eq('id', plan.asignatura_id).maybeSingle();
 let pdfUrl = plan.url_pdf;
-try { pdfUrl = await obtenerUrlFirmadaDesdeUrlAlmacenada(plan.url_pdf, 'planeaciones', 3600); } catch {}
+try { pdfUrl = await obtenerUrlFirmadaDesdeUrlAlmacenada(plan.url_pdf, 3600); } catch {}
 const definition = await getActiveInstrumentDefinition(client, 'planning');
 ---
 <LayoutCoordinador titulo="Evaluar Planeación">

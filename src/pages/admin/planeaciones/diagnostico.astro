@@ -1,0 +1,57 @@
+---
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../../lib/auth';
+
+await requireRole(Astro.cookies, ['superadmin']);
+---
+
+<LayoutAdmin titulo="Diagnóstico de carga de planeaciones">
+  <section class="mx-auto max-w-3xl animate-flotar-entrada">
+    <a href="/admin/planeaciones/acceso" class="text-sm text-tup hover:underline">← Volver al acceso de planeaciones</a>
+    <div class="mt-4 rounded-2xl bg-white p-6 shadow-tarjeta">
+      <h1 class="text-2xl font-bold text-tup">Diagnóstico de carga de planeaciones</h1>
+      <p class="mt-2 text-sm text-slate-600">Comprueba la autenticación de base de datos y la conexión de listado de R2 sin leer archivos, crear objetos ni mostrar valores de configuración.</p>
+      <button id="run-diagnostic" class="mt-5 rounded-xl bg-tup px-5 py-2.5 text-sm font-semibold text-white">Ejecutar diagnóstico</button>
+      <p id="diagnostic-status" class="mt-4 text-sm text-slate-600" role="status"></p>
+      <dl id="diagnostic-results" class="mt-4 hidden divide-y rounded-xl border border-slate-200 text-sm"></dl>
+    </div>
+  </section>
+</LayoutAdmin>
+
+<script is:inline>
+  var button = document.getElementById('run-diagnostic');
+  var status = document.getElementById('diagnostic-status');
+  var results = document.getElementById('diagnostic-results');
+   var labels = {
+    enabled: 'R2 disponible', accountIdPresent: 'Identificador de cuenta presente', accessKeyPresent: 'Clave de acceso presente',
+    secretAccessKeyPresent: 'Clave secreta presente', bucketPresent: 'Bucket configurado', publicUrlPresent: 'URL pública presente',
+    publicUrlHttps: 'URL pública HTTPS válida'
+   };
+   var diagnosticMessages = {
+     r2_config_missing: 'configuración requerida incompleta',
+     r2_public_url_invalid: 'URL pública HTTPS inválida', r2_list_ok: 'conexión de listado correcta',
+     r2_access_denied: 'acceso denegado', r2_bucket_not_found: 'bucket no encontrado',
+     r2_connection_failed: 'conexión no disponible'
+   };
+  function row(label, value) {
+    var item = document.createElement('div'); item.className = 'flex items-center justify-between gap-4 px-4 py-3';
+    var title = document.createElement('dt'); title.textContent = label;
+    var result = document.createElement('dd'); result.textContent = value; result.className = value === 'Sí' ? 'font-medium text-emerald-700' : 'font-medium text-red-700';
+    item.append(title, result); results.appendChild(item);
+  }
+  button.addEventListener('click', async function() {
+    button.disabled = true; status.textContent = 'Ejecutando diagnóstico seguro...'; results.replaceChildren(); results.classList.add('hidden');
+    try {
+      var response = await fetch('/api/admin/planeaciones/diagnostico', { method: 'POST' });
+      var data = await response.json().catch(function() { return {}; });
+      if (!response.ok) { status.textContent = 'No fue posible ejecutar el diagnóstico (' + (data.code || 'diagnostic_request_failed') + ').'; return; }
+       status.textContent = 'Base de datos: ' + data.database.code + '. R2: ' + (diagnosticMessages[data.r2.code] || 'estado no reconocido') + '. Límite seguro de PDF: ' + Math.round(data.upload.maxPdfBytes / 1024 / 1024) + ' MB.';
+      Object.keys(labels).forEach(function(key) { row(labels[key], data.r2.configuration[key] ? 'Sí' : 'No'); });
+      results.classList.remove('hidden');
+    } catch {
+      status.textContent = 'No fue posible ejecutar el diagnóstico (diagnostic_request_failed).';
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>

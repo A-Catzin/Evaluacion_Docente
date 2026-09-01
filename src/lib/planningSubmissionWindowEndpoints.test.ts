@@ -67,4 +67,15 @@ describe("planning write endpoint guards", () => {
       );
     }
   });
+
+  it("returns safe categorized storage and persistence failures", () => {
+    for (const endpoint of uploadEndpoints) {
+      const source = readFileSync(new URL(endpoint, root), "utf8");
+      expect(source).toContain('code: "storage_upload_failed"');
+      expect(source).toContain('code: "planning_persistence_rejected"');
+      expect(source).toContain('code: "planning_persistence_failed"');
+      expect(source).not.toContain("+ dbErr.message");
+      expect(source).not.toContain("+ dbError.message");
+    }
+  });
 });

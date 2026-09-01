@@ -10,7 +10,7 @@ const selectedCycle = Number.parseInt(selectedValue, 10);
 const cuatrimestreId = Number.isSafeInteger(selectedCycle) && selectedCycle > 0 ? selectedCycle : activeCycle?.id || null;
 const { data, error } = await auth.client.rpc('institutional_notice_list', { p_cuatrimestre_id: cuatrimestreId });
 if (error) throw error;
-const notices = (data || []).map((notice: any) => ({ ...notice, imageUrl: notice.image_path && estaHabilitadoR2() ? obtenerUrlPublica('avisos', notice.image_path) : null }));
+const notices = (data || []).map((notice: any) => ({ ...notice, imageUrl: notice.image_path && estaHabilitadoR2() ? obtenerUrlPublica(notice.image_path) : null }));
 ---
 
 <BaseLayout titulo="Avisos institucionales">

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseCancunDateTimeLocal,
   parsePlanningWindowInput,
+  MAX_PLANNING_PDF_BYTES,
   planningSubmissionMessage,
   planningWindowFromRpc,
   validatePlanningPdf,
@@ -34,5 +35,6 @@ describe("planning window input", () => {
     expect(validatePlanningPdf(new File(["pdf"], "plan.pdf", { type: "application/pdf" }))).toMatchObject({ ok: true });
     expect(validatePlanningPdf(new File(["pdf"], "plan.exe", { type: "application/pdf" }))).toMatchObject({ ok: false });
     expect(validatePlanningPdf(new File(["pdf"], "plan.pdf", { type: "text/plain" }))).toMatchObject({ ok: false });
+    expect(validatePlanningPdf(new File([new Uint8Array(MAX_PLANNING_PDF_BYTES + 1)], "plan.pdf", { type: "application/pdf" }))).toMatchObject({ ok: false });
   });
 });

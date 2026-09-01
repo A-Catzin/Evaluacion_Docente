@@ -68,7 +68,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       if (!imageValidation.ok) return json({ error: imageValidation.error }, 400);
       if (!estaHabilitadoR2()) return json({ error: 'El almacenamiento institucional no está disponible.' }, 503);
       imagePath = `avisos/${crypto.randomUUID()}.${imageValidation.extension}`;
-      await subirArchivo('avisos', imagePath, await image.arrayBuffer(), image.type);
+      await subirArchivo(imagePath, await image.arrayBuffer(), image.type);
       imageAltText = String(form.get('image_alt_text') || '').trim();
     } else if (form.get('remove_image') === 'true') {
       imagePath = null;

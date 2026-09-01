@@ -60,6 +60,10 @@ supabase/
 | `npm run test` | Ejecutar tests en modo watch con Vitest |
 | `npm run test:run` | Ejecutar tests una sola vez (CI) |
 
+## Configuración de R2
+
+R2 se habilita automáticamente cuando están presentes `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` y una `R2_PUBLIC_URL` HTTPS válida. Si falta alguna variable o la URL no es válida, R2 queda deshabilitado de forma segura sin mostrar valores. Copiar `.env.example` para desarrollo local. Los cambios de variables en Vercel requieren un nuevo despliegue; ejecutar luego el diagnóstico de planeaciones como superadministrador o verificar localmente con `node --env-file=.env scripts/check-r2.mjs`.
+
 ## Migraciones y datos sensibles
 
 El directorio `supabase/migrations/` contiene migraciones de schema versionadas. En el repositorio se mantienen explícitamente:

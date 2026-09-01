@@ -15,7 +15,7 @@ const roles = [
   ['superadmin', 'Superadministración'], ['coordinador', 'Coordinación'], ['docente', 'Docentes'], ['estudiante', 'Estudiantes'], ['observador', 'Observación'],
 ];
 const selectedRoles = new Set(editing?.target_roles || []);
-const imageUrl = editing?.image_path && estaHabilitadoR2() ? obtenerUrlPublica('avisos', editing.image_path) : null;
+const imageUrl = editing?.image_path && estaHabilitadoR2() ? obtenerUrlPublica(editing.image_path) : null;
 const expiresAtValue = editing?.expires_at ? new Date(editing.expires_at).toISOString().slice(0, 16) : '';
 ---
 

@@ -12,7 +12,7 @@ if (!plan) return Astro.redirect(`/admin/planeaciones${backSearch}`);
 
 let urlFirmada = plan.url_pdf;
 try {
-  const signed = await obtenerUrlFirmadaDesdeUrlAlmacenada(plan.url_pdf, 'planeaciones', 3600);
+  const signed = await obtenerUrlFirmadaDesdeUrlAlmacenada(plan.url_pdf, 3600);
   if (signed !== plan.url_pdf) urlFirmada = signed;
 } catch {}
 
@@ -68,9 +68,18 @@ const categorias = (cats || []).map(c => {
           <label class="block text-sm font-medium text-slate-700 mb-1">Observaciones Generales (opcional)</label>
           <textarea id="obs_generales" rows={3} placeholder="Comentarios generales sobre la planeación..." class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Estado *</label>
-          <select id="estado" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm"><option value="">Seleccionar...</option><option value="Aprobado">Aprobado</option><option value="Corrección">Corrección</option></select>
+        <div class="min-w-0">
+          <label id="estado-label" class="mb-1 block text-sm font-medium text-slate-700">Estado *</label>
+          <input id="estado" name="estado" type="hidden" value="" />
+          <button id="estado-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="estado-listbox" aria-labelledby="estado-label estado-trigger-value" class="w-full min-w-0 max-w-full inline-flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-left text-sm text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-tup focus-visible:ring-offset-2">
+            <span id="estado-trigger-value">Seleccionar...</span>
+            <svg aria-hidden="true" class="h-4 w-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6" /></svg>
+          </button>
+          <div id="estado-listbox" role="listbox" tabindex="-1" aria-labelledby="estado-label" hidden class="fixed z-[60] max-h-[min(20rem,calc(100vh-1rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-modal focus:outline-none focus-visible:ring-2 focus-visible:ring-tup focus-visible:ring-offset-2">
+            <div id="estado-option-empty" role="option" aria-selected="true" data-status-option data-value="" class="cursor-pointer rounded-lg px-3 py-2 text-slate-700">Seleccionar...</div>
+            <div id="estado-option-approved" role="option" aria-selected="false" data-status-option data-value="Aprobado" class="cursor-pointer rounded-lg px-3 py-2 text-slate-700">Aprobado</div>
+            <div id="estado-option-correction" role="option" aria-selected="false" data-status-option data-value="Corrección" class="cursor-pointer rounded-lg px-3 py-2 text-slate-700">Corrección</div>
+          </div>
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Retroalimentación para el docente (opcional)</label>
@@ -82,6 +91,201 @@ const categorias = (cats || []).map(c => {
     <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
 </LayoutAdmin>
+
+<script>
+  import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom';
+
+  const form = document.getElementById('form-eval') as HTMLFormElement | null;
+  const input = document.getElementById('estado') as HTMLInputElement | null;
+  const trigger = document.getElementById('estado-trigger') as HTMLButtonElement | null;
+  const triggerValue = document.getElementById('estado-trigger-value');
+  const listbox = document.getElementById('estado-listbox');
+
+  if (form && input && trigger && triggerValue && listbox) {
+    const pageWindow = window as Window & { __planningEvaluationStatusControlCleanup?: () => void };
+    pageWindow.__planningEvaluationStatusControlCleanup?.();
+
+    const options = Array.from(listbox.querySelectorAll<HTMLElement>('[data-status-option]'));
+    let activeIndex = 0;
+    let isOpen = false;
+    let cleanupAutoUpdate: (() => void) | undefined;
+
+    // Portaling prevents transformed or scrolling form containers from clipping the popup.
+    document.body.appendChild(listbox);
+
+    function selectedIndex() {
+      const index = options.findIndex((option) => option.dataset.value === input.value);
+      return index >= 0 ? index : 0;
+    }
+
+    function setActive(index: number) {
+      activeIndex = Math.max(0, Math.min(index, options.length - 1));
+      options.forEach((option, optionIndex) => {
+        option.classList.toggle('ring-2', optionIndex === activeIndex);
+        option.classList.toggle('ring-inset', optionIndex === activeIndex);
+        option.classList.toggle('ring-tup', optionIndex === activeIndex);
+      });
+      listbox.setAttribute('aria-activedescendant', options[activeIndex].id);
+      options[activeIndex].scrollIntoView({ block: 'nearest' });
+    }
+
+    function syncSelection() {
+      const selected = selectedIndex();
+      options.forEach((option, optionIndex) => {
+        const isSelected = optionIndex === selected;
+        option.setAttribute('aria-selected', String(isSelected));
+        option.classList.toggle('bg-tup', isSelected);
+        option.classList.toggle('text-white', isSelected);
+        option.classList.toggle('text-slate-700', !isSelected);
+      });
+      triggerValue.textContent = options[selected].textContent;
+      setActive(selected);
+    }
+
+    function updatePosition() {
+      const viewportGutter = 16;
+      listbox.style.width = `${Math.min(trigger.getBoundingClientRect().width, window.innerWidth - viewportGutter)}px`;
+
+      computePosition(trigger, listbox, {
+        placement: 'bottom-start',
+        strategy: 'fixed',
+        middleware: [offset(6), flip({ padding: 8 }), shift({ padding: 8 })],
+      }).then(({ x, y, strategy }) => {
+        Object.assign(listbox.style, { left: `${x}px`, position: strategy, top: `${y}px` });
+      });
+    }
+
+    function onDocumentClick(event: MouseEvent) {
+      const target = event.target;
+      if (target instanceof Node && (trigger.contains(target) || listbox.contains(target))) return;
+      close(false);
+    }
+
+    function close(returnFocus: boolean) {
+      if (!isOpen) return;
+      isOpen = false;
+      cleanupAutoUpdate?.();
+      cleanupAutoUpdate = undefined;
+      document.removeEventListener('click', onDocumentClick);
+      trigger.setAttribute('aria-expanded', 'false');
+      listbox.hidden = true;
+      if (returnFocus) trigger.focus();
+    }
+
+    function open(index = selectedIndex(), moveFocus = false) {
+      if (!isOpen) {
+        isOpen = true;
+        listbox.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        cleanupAutoUpdate = autoUpdate(trigger, listbox, updatePosition);
+        document.addEventListener('click', onDocumentClick);
+      }
+      setActive(index);
+      if (moveFocus) listbox.focus();
+    }
+
+    function selectActiveOption() {
+      const option = options[activeIndex];
+      input.value = option.dataset.value || '';
+      syncSelection();
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      close(true);
+    }
+
+    function moveFocus(direction: 1 | -1) {
+      const focusable = Array.from(document.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      const currentIndex = focusable.indexOf(trigger);
+      focusable[currentIndex + direction]?.focus();
+    }
+
+    function onTriggerKeydown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && isOpen) {
+        event.preventDefault();
+        close(false);
+        return;
+      }
+      if (event.key === 'Tab' && isOpen) {
+        close(false);
+        return;
+      }
+      const indexByKey: Record<string, number> = { ArrowDown: activeIndex + 1, ArrowUp: activeIndex - 1, Home: 0, End: options.length - 1 };
+      if (event.key in indexByKey) {
+        event.preventDefault();
+        open(indexByKey[event.key], true);
+        return;
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open(selectedIndex(), true);
+      }
+    }
+
+    function onListboxKeydown(event: KeyboardEvent) {
+      const indexByKey: Record<string, number> = { ArrowDown: activeIndex + 1, ArrowUp: activeIndex - 1, Home: 0, End: options.length - 1 };
+      if (event.key in indexByKey) {
+        event.preventDefault();
+        setActive(indexByKey[event.key]);
+        return;
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectActiveOption();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close(true);
+        return;
+      }
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        close(false);
+        moveFocus(event.shiftKey ? -1 : 1);
+      }
+    }
+
+    function onListboxClick(event: MouseEvent) {
+      if (!(event.target instanceof Element)) return;
+      const option = event.target.closest<HTMLElement>('[data-status-option]');
+      if (!option) return;
+      setActive(options.indexOf(option));
+      selectActiveOption();
+    }
+
+    function teardown() {
+      close(false);
+      form.removeEventListener('submit', onFormTeardown);
+      form.removeEventListener('reset', onFormReset);
+      trigger.removeEventListener('click', onTriggerClick);
+      trigger.removeEventListener('keydown', onTriggerKeydown);
+      listbox.removeEventListener('keydown', onListboxKeydown);
+      listbox.removeEventListener('click', onListboxClick);
+      window.removeEventListener('pagehide', teardown);
+      document.removeEventListener('astro:before-swap', teardown);
+      listbox.remove();
+      if (pageWindow.__planningEvaluationStatusControlCleanup === teardown) delete pageWindow.__planningEvaluationStatusControlCleanup;
+    }
+
+    function onTriggerClick() { open(); }
+    function onFormTeardown() { close(false); }
+    function onFormReset() {
+      input.value = '';
+      syncSelection();
+      close(false);
+    }
+
+    syncSelection();
+    trigger.addEventListener('click', onTriggerClick);
+    trigger.addEventListener('keydown', onTriggerKeydown);
+    listbox.addEventListener('keydown', onListboxKeydown);
+    listbox.addEventListener('click', onListboxClick);
+    form.addEventListener('submit', onFormTeardown);
+    form.addEventListener('reset', onFormReset);
+    window.addEventListener('pagehide', teardown, { once: true });
+    document.addEventListener('astro:before-swap', teardown, { once: true });
+    pageWindow.__planningEvaluationStatusControlCleanup = teardown;
+  }
+</script>
 
 <script is:inline define:vars={{ obsData: JSON.stringify(categorias), returnUrl: `/admin/planeaciones${backSearch}` }}>
   var catData = JSON.parse(obsData);

@@ -17,6 +17,7 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 .env.production
+.env.example   
 
 # macOS-specific files
 .DS_Store
@@ -56,6 +57,7 @@ supabase/migrations/055_fix_cycle_teacher_candidate_eligibility.sql
 !supabase/migrations/058_versioned_instrument_submission.sql
 !supabase/migrations/059_seed_instrument_versions.sql
 !supabase/migrations/060_versioned_instrument_results.sql
+!supabase/migrations/061_fix_planning_window_modality.sql
 
 openspec/
 src/supabase/

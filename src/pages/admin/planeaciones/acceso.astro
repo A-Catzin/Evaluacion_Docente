@@ -19,7 +19,7 @@ const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
 <LayoutAdmin titulo="Acceso a planeaciones — Admin">
   <section class="animate-flotar-entrada mx-auto max-w-3xl">
     <a href={`/admin/planeaciones${qs}`} class="text-sm text-tup hover:underline">← Volver a evaluación de planeaciones</a>
-    <div class="mt-4 mb-6"><h1 class="text-3xl font-bold text-tup">Acceso de docentes a planeaciones</h1><p class="mt-1 text-sm text-slate-500">La configuración aplica únicamente al cuatrimestre seleccionado. Sin configuración, las entregas permanecen cerradas.</p></div>
+    <div class="mt-4 mb-6"><h1 class="text-3xl font-bold text-tup">Acceso de docentes a planeaciones</h1><p class="mt-1 text-sm text-slate-500">La configuración aplica únicamente al cuatrimestre seleccionado. Sin configuración, las entregas permanecen cerradas.</p><a href="/admin/planeaciones/diagnostico" class="mt-2 inline-block text-sm text-tup hover:underline">Diagnosticar carga y almacenamiento</a></div>
     <form method="GET" class="mb-6 flex items-center gap-3"><label class="text-sm font-medium text-slate-700" for="cycle">Cuatrimestre</label><select id="cycle" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cycles.map((cycle) => <option value={cycle.id} selected={cycle.id === cuatrimestreId}>{cycle.clave}</option>)}</select></form>
     {cuatrimestreId ? <form id="planning-window-form" class="space-y-5 rounded-2xl bg-white p-6 shadow-tarjeta">
       <input type="hidden" name="cuatrimestre_id" value={cuatrimestreId} />

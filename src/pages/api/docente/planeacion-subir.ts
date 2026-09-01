@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
 import { validarComentarioOpcional } from "../../../lib/moderation";
-import { estaHabilitadoR2, subirArchivo } from "../../../lib/storage";
+import { estaHabilitadoR2, r2UploadErrorCode, subirArchivo } from "../../../lib/storage";
 import {
   buildPlanningPdfPath,
   parsePositiveInteger,
@@ -13,8 +13,6 @@ import {
   logRecalcError,
   recalcularCalificacionDocente,
 } from "../../../services/calificaciones";
-
-const BUCKET_PLANEACIONES = "planeaciones";
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   let cl;
@@ -117,13 +115,20 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     let pdfUrl: string;
     if (estaHabilitadoR2()) {
-      const { url } = await subirArchivo(
-        BUCKET_PLANEACIONES,
-        path,
-        buffer,
-        "application/pdf",
-      );
-      pdfUrl = url;
+      try {
+        const { url } = await subirArchivo(
+          path,
+          buffer,
+          "application/pdf",
+        );
+        pdfUrl = url;
+      } catch (error) {
+        console.error("[Planeacion Subir] R2 upload failed", { code: r2UploadErrorCode(error) });
+        return new Response(
+          JSON.stringify({ error: "No fue posible almacenar el PDF.", code: "storage_upload_failed" }),
+          { status: 503 },
+        );
+      }
     } else {
       const { error: uploadError } = await cl.storage
         .from("planeaciones")
@@ -132,12 +137,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           upsert: true,
         });
       if (uploadError) {
-        console.error("[Planeacion Subir] Error storage:", uploadError);
+        console.error("[Planeacion Subir] Supabase storage upload failed");
         return new Response(
-          JSON.stringify({
-            error: "Error al subir archivo: " + uploadError.message,
-          }),
-          { status: 400 },
+          JSON.stringify({ error: "No fue posible almacenar el PDF.", code: "storage_upload_failed" }),
+          { status: 503 },
         );
       }
       const { data: urlData } = cl.storage
@@ -173,9 +176,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           }),
           { status: 409 },
         );
+      if (dbError.code === "42501")
+        return new Response(
+          JSON.stringify({ error: "La planeación fue rechazada por la validación de acceso.", code: "planning_persistence_rejected" }),
+          { status: 403 },
+        );
+      console.error("[Planeacion Subir] Planning persistence failed", { code: dbError.code || "unknown" });
       return new Response(
-        JSON.stringify({ error: "Error al guardar: " + dbError.message }),
-        { status: 400 },
+        JSON.stringify({ error: "No fue posible guardar la planeación.", code: "planning_persistence_failed" }),
+        { status: 503 },
       );
     }
 

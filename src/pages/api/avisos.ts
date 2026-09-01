@@ -16,7 +16,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     if (error) throw error;
     const notices = (data || []).map((notice: any) => ({
       ...notice,
-      image_url: notice.image_path && estaHabilitadoR2() ? obtenerUrlPublica('avisos', notice.image_path) : null,
+      image_url: notice.image_path && estaHabilitadoR2() ? obtenerUrlPublica(notice.image_path) : null,
     }));
     return new Response(JSON.stringify({ notices }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
   } catch (error) {

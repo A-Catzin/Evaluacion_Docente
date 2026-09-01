@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { AuthError, requireRole } from '../../../lib/auth';
-import { eliminarArchivo, estaHabilitadoR2 } from '../../../lib/storage';
+import { eliminarArchivo, estaHabilitadoR2, obtenerR2PublicUrl } from '../../../lib/storage';
 import { parseTestCycleDeletionRequest, parseTestCycleId } from '../../../lib/testCycleDeletion';
 import { describeTestCycleDeletionFailure } from '../../../lib/testCycleDeletionError';
 import { resolveManagedStorageObject, type StorageCleanupEntry } from '../../../lib/testCycleStorage';
@@ -18,18 +18,25 @@ async function clearManagedStorage(client: any, deletedCycleId: number) {
   });
   if (error || !data) return { completed: 0, pending: 0 };
 
+  let r2PublicUrl: string | undefined;
+  try {
+    r2PublicUrl = obtenerR2PublicUrl();
+  } catch {
+    r2PublicUrl = undefined;
+  }
+
   let completed = 0;
   for (const rawEntry of data as Array<StorageCleanupEntry & { id: number }>) {
     const object = resolveManagedStorageObject(rawEntry, {
       r2Enabled: estaHabilitadoR2(),
-      r2PublicUrl: import.meta.env.R2_PUBLIC_URL,
+      r2PublicUrl,
       supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL,
     });
     let success = false;
     try {
       if (!object) throw new Error('Unmanaged storage reference');
       if (object.provider === 'r2') {
-        await eliminarArchivo(object.bucket, object.key);
+        await eliminarArchivo(object.key);
       } else {
         const { error: storageError } = await client.storage.from(object.bucket).remove([object.key]);
         if (storageError) throw storageError;

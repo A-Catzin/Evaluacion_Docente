@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const PLANNING_TIME_ZONE = "America/Cancun";
-export const MAX_PLANNING_PDF_BYTES = 5 * 1024 * 1024;
+// Vercel Functions reject request bodies over 4.5 MB before this handler runs.
+// Leave room for multipart form fields and boundaries.
+export const MAX_PLANNING_PDF_BYTES = 4 * 1024 * 1024;
 
 export type PlanningSubmissionMode =
   | "manual_open"
@@ -142,7 +144,7 @@ export type PlanningPdfValidation =
 
 export function validatePlanningPdf(file: File): PlanningPdfValidation {
   if (file.size <= 0 || file.size > MAX_PLANNING_PDF_BYTES) {
-    return { ok: false, error: "El archivo PDF debe pesar máximo 5 MB." };
+    return { ok: false, error: "El archivo PDF debe pesar máximo 4 MB." };
   }
   if (
     file.type !== "application/pdf" ||

@@ -21,6 +21,7 @@
     "@astrojs/vercel": "^7.4.0",
     "@aws-sdk/client-s3": "^3.1091.0",
     "@aws-sdk/s3-request-presigner": "^3.1091.0",
+    "@floating-ui/dom": "^1.8.0",
     "@supabase/supabase-js": "^2.105.3",
     "astro": "^4.16.18",
     "chart.js": "^4.5.1",
