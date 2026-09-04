@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   calcFinalScore,
   calcObservationScore,
@@ -13,7 +14,71 @@ import {
   type NativeStudentEvaluationScore,
   aggregateNativeScoresByTeacher,
   aggregateNativeScoresByTeacherAndSubject,
+  calculateSubjectAwareFinal,
+  fetchSubjectAwareCuatrimestreScores,
 } from './scoring';
+
+function resolvedQuery(data: unknown) {
+  const query: any = {
+    select: () => query,
+    eq: () => query,
+    order: () => query,
+    limit: () => query,
+    then: (onFulfilled?: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) =>
+      Promise.resolve({ data, error: null }).then(onFulfilled, onRejected),
+  };
+  return query;
+}
+
+function createSubjectScopedScoresClient(): SupabaseClient {
+  const assignments = [
+    { id: 1, clave: '1A', asignatura_id: 10, modalidad: 'Escolarizado', asignaturas: { nombre: 'Álgebra' } },
+    { id: 2, clave: '1B', asignatura_id: 11, modalidad: 'Escolarizado', asignaturas: { nombre: 'Física' } },
+    { id: 3, clave: '1C', asignatura_id: 12, modalidad: 'Escolarizado', asignaturas: { nombre: 'Química' } },
+  ];
+  const plans = [{ asignatura_id: 10, puntaje_promedio: 80, estado: 'Aprobado', asignaturas: { nombre: 'Álgebra' } }];
+  const coordination = [
+    { id: 2, asignatura_id: 11, score_normalizado: 90 },
+    { id: 1, asignatura_id: 10, score_normalizado: 70 },
+  ];
+  const observations = [
+    { id: 2, asignatura_id: 11, cco1: 3 },
+    { id: 1, asignatura_id: 10, cco1: 5 },
+  ];
+
+  return {
+    from: (table: string) => resolvedQuery(
+      table === 'grupos' ? assignments
+        : table === 'planeaciones' ? plans
+        : table === 'planning_subject_np' ? [{ subject_key: 'fisica', estado: 'NP' }, { subject_key: 'quimica', estado: 'NP' }]
+        : table === 'evaluacion_coordinacion' ? coordination
+        : table === 'observaciones' ? observations
+        : table === 'autodiagnosticos' ? [{ puntaje_total: 120 }]
+        : [],
+    ),
+    rpc: (fn: string) => Promise.resolve(
+      fn === 'obtener_scores_encuesta_estudiantil_nativa'
+        ? {
+          data: [10, 11, 12].map((asignatura_id) => ({
+            docente_id: 1,
+            asignatura_id,
+            grupo_id: asignatura_id,
+            cuatrimestre_id: 1,
+            respuestas_validas: 1,
+            score_normalizado: 90,
+          })),
+          error: null,
+        }
+        : {
+          data: [
+            { docente_id: 1, purpose: 'coordination', validity_status: 'valid', normalized_score: 75, submitted_at: '2025-01-02T00:00:00Z' },
+            { docente_id: 1, purpose: 'observation', validity_status: 'valid', normalized_score: 65, submitted_at: '2025-01-02T00:00:00Z' },
+          ],
+          error: null,
+        },
+    ),
+  } as unknown as SupabaseClient;
+}
 
 describe('scoring', () => {
   describe('calcObservationScore', () => {
@@ -121,6 +186,46 @@ describe('scoring', () => {
       const result = calcFinalScore({});
       expect(result.final).toBe(0);
       expect(result.category).toBe('No iniciado');
+    });
+  });
+
+      describe('subject-aware planning NP scores', () => {
+        const base = { ee: 90, coord: 90, obs: 90, auto: 90, invalidPurposes: [] };
+
+        it('uses subject-specific coordination and observation scores before global versioned fallbacks', async () => {
+          const result = await fetchSubjectAwareCuatrimestreScores(createSubjectScopedScoresClient(), 1, 1, 'Escolarizado');
+          const byKey = new Map(result.subjects.map((subject) => [subject.key, subject]));
+
+          expect(byKey.get('algebra')).toMatchObject({ coord: 70, obs: 100, planningStatus: 'approved' });
+          expect(byKey.get('fisica')).toMatchObject({ coord: 90, obs: 60, planningStatus: 'np' });
+          expect(byKey.get('quimica')).toMatchObject({ coord: 75, obs: 65, planningStatus: 'np' });
+        });
+
+        it('keeps a planned-only subject on all five normal weights', () => {
+      const result = calculateSubjectAwareFinal([{ ...base, key: 'algebra', nombre: 'Álgebra', grupos: ['1A'], planningStatus: 'approved', plan: 90 }]);
+      expect(result.final).toMatchObject({ final: 90, category: 'Sobresaliente', expectedInstrumentCount: 5 });
+      expect(result.aggregate.plan).toBe(90);
+    });
+
+    it('uses four NP weights and stores no planning score', () => {
+      const result = calculateSubjectAwareFinal([{ ...base, key: 'fisica', nombre: 'Física', grupos: ['1A'], planningStatus: 'np', plan: undefined }]);
+      expect(result.final).toMatchObject({ final: 90, category: 'Sobresaliente', expectedInstrumentCount: 4 });
+      expect(result.aggregate.plan).toBeUndefined();
+    });
+
+    it('simple-averages planned and NP subject finals without treating NP as zero', () => {
+      const result = calculateSubjectAwareFinal([
+        { ...base, key: 'algebra', nombre: 'Álgebra', grupos: ['1A'], planningStatus: 'approved', plan: 90 },
+        { ee: 100, coord: 100, obs: 100, auto: 100, key: 'fisica', nombre: 'Física', grupos: ['1B'], planningStatus: 'np', plan: undefined },
+      ]);
+      expect(result.final).toMatchObject({ final: 95, category: 'Sobresaliente', expectedInstrumentCount: 5 });
+      expect(result.aggregate.plan).toBe(90);
+    });
+
+    it('does not silently convert a pending subject to NP', () => {
+      const result = calculateSubjectAwareFinal([{ ...base, key: 'quimica', nombre: 'Química', grupos: ['1A'], planningStatus: 'pending', plan: undefined }]);
+      expect(result.final.category).toBe('Parcial');
+      expect(result.final.expectedInstrumentCount).toBe(5);
     });
   });
 

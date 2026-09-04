@@ -1,0 +1,62 @@
+---
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import { db } from '../../../lib/db';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
+import { groupPlanningAssignmentsBySubjectName, normalizePlanningSubjectName } from '../../../lib/planningSubjectScope';
+import { getPlanningSubjectStatus } from '../../../lib/planningSubjectStatus';
+
+const client = db();
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+if (!token || !refresh) return Astro.redirect('/auth');
+const { data: session } = await client.auth.setSession({ access_token: token, refresh_token: refresh });
+const { data: actor } = session.user ? await client.from('usuarios').select('rol').eq('id', session.user.id).maybeSingle() : { data: null };
+if (actor?.rol !== 'superadmin') return Astro.redirect('/admin/dashboard');
+
+const active = await obtenerCuatrimestreActivo();
+const cycles = await obtenerCuatrimestres();
+const requested = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '');
+const cycleId = requested || active?.id || 0;
+const qs = cycleId ? `?cuatrimestre=${cycleId}` : '';
+if (Astro.url.searchParams.has('cuatrimestre')) Astro.cookies.set('cuatrimestre_sel', String(cycleId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+
+const [{ data: groups }, { data: plans }, { data: npRecords }] = await Promise.all([
+  client.from('grupos').select('id,clave,asignatura_id,docente_id,docentes!inner(nombre,apellidos,email),asignaturas!inner(nombre)').eq('cuatrimestre_id', cycleId).eq('activo', true).eq('modalidad', 'Escolarizado').not('docente_id', 'is', null),
+  client.from('planeaciones').select('docente_id,estado,asignaturas!inner(nombre)').eq('cuatrimestre_id', cycleId),
+  client.from('planning_subject_np').select('docente_id,subject_key,estado,motivo,marked_at').eq('cuatrimestre_id', cycleId),
+]);
+
+const rows = [...new Map((groups || []).map((group: any) => [group.docente_id, group.docentes])).entries()].flatMap(([docenteId, docente]: any) => {
+  const assignments = (groups || []).filter((group: any) => group.docente_id === docenteId).flatMap((group: any) => group.asignaturas?.nombre ? [{ asignaturaId: group.asignatura_id, asignaturaNombre: group.asignaturas.nombre, grupo: group.clave }] : []);
+  const teacherPlans = (plans || []).filter((plan: any) => plan.docente_id === docenteId).map((plan: any) => ({ asignaturaNombre: plan.asignaturas?.nombre || '', estado: plan.estado }));
+  const teacherNp = (npRecords || []).filter((record: any) => record.docente_id === docenteId);
+  return groupPlanningAssignmentsBySubjectName(assignments).map((scope) => {
+    const status = getPlanningSubjectStatus(scope, teacherPlans, teacherNp);
+    const np = teacherNp.find((record: any) => normalizePlanningSubjectName(record.subject_key) === scope.key);
+    return { docenteId, docente, scope, status, np };
+  });
+}).sort((left: any, right: any) => `${left.docente?.apellidos} ${left.docente?.nombre} ${left.scope.nombre}`.localeCompare(`${right.docente?.apellidos} ${right.docente?.nombre} ${right.scope.nombre}`, 'es-MX'));
+---
+<LayoutAdmin titulo="Planeaciones no presentadas">
+  <div class="animate-flotar-entrada max-w-6xl mx-auto">
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div><h1 class="text-3xl font-bold text-tup">Planeaciones no presentadas (NP)</h1><p class="mt-1 text-sm text-slate-500">NP aplica a todos los grupos de una misma asignatura normalizada y bloquea la carga docente.</p></div>
+      <div class="flex items-center gap-3"><a href={`/admin/planeaciones${qs}`} class="rounded-xl border border-tup px-3 py-2 text-sm font-medium text-tup">Planeaciones</a><form method="GET"><select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cycles.map((cycle) => <option value={cycle.id} selected={cycle.id === cycleId}>{cycle.clave}</option>)}</select></form></div>
+    </div>
+    <div class="overflow-hidden rounded-2xl bg-white shadow-tarjeta">
+      {rows.length === 0 ? <p class="p-10 text-center text-slate-400">No hay asignaturas activas para este ciclo.</p> : <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b bg-slate-50"><th class="px-3 py-3 text-left text-xs uppercase">Docente</th><th class="px-3 py-3 text-left text-xs uppercase">Asignatura / grupos</th><th class="px-3 py-3 text-center text-xs uppercase">Estado</th><th class="px-3 py-3 text-left text-xs uppercase">Motivo NP</th><th class="px-3 py-3 text-right text-xs uppercase">Acción</th></tr></thead><tbody class="divide-y">{rows.map((row: any) => <tr><td class="px-3 py-3"><p class="font-medium">{row.docente?.nombre} {row.docente?.apellidos}</p><p class="text-xs text-slate-400">{row.docente?.email}</p></td><td class="px-3 py-3"><p>{row.scope.nombre}</p><p class="text-xs text-slate-500">Grupos: {row.scope.grupos.join(', ')}</p></td><td class="px-3 py-3 text-center"><span class={`rounded px-2 py-1 text-xs font-medium ${row.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : row.status === 'np' ? 'bg-slate-200 text-slate-700' : 'bg-amber-50 text-amber-700'}`}>{row.status === 'approved' ? 'Aprobada' : row.status === 'np' ? 'NP' : 'Sin aprobar'}</span></td><td class="px-3 py-3 text-xs text-slate-600">{row.np?.motivo || '—'}</td><td class="px-3 py-3 text-right">{row.status === 'approved' ? <span class="text-xs text-slate-400">No disponible</span> : <button class={`np-action rounded-lg px-3 py-1.5 text-xs font-medium ${row.status === 'np' ? 'border border-slate-300 text-slate-700' : 'bg-tup text-white'}`} data-docente={row.docenteId} data-subject={row.scope.key} data-action={row.status === 'np' ? 'reactivate' : 'mark_np'}>{row.status === 'np' ? 'Reactivar' : 'Marcar NP'}</button>}</td></tr>)}</tbody></table></div>}
+    </div>
+  </div>
+</LayoutAdmin>
+<script is:inline define:vars={{ cycleId }}>
+  document.querySelectorAll('.np-action').forEach((button) => button.addEventListener('click', async function () {
+    var action = this.dataset.action;
+    var motivo = '';
+    if (action === 'mark_np') { motivo = window.prompt('Motivo administrativo (opcional, máximo 500 caracteres):', '') || ''; if (motivo.length > 500) return window.alert('El motivo no puede superar 500 caracteres.'); }
+    this.disabled = true;
+    var response = await fetch('/api/admin/planeacion-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, docente_id: Number(this.dataset.docente), cuatrimestre_id: cycleId, subject_key: this.dataset.subject, motivo: motivo }) });
+    var result = await response.json().catch(function () { return {}; });
+    if (!response.ok) { this.disabled = false; return window.alert(result.error || 'No fue posible actualizar el estado.'); }
+    window.location.reload();
+  }));
+</script>

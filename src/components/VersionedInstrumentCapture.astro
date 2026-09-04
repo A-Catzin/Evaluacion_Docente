@@ -90,7 +90,8 @@ const isCoordination = definition.purpose === "coordination";
       <label class="block text-sm font-medium text-slate-700">Área prioritaria de mejora<textarea id="metadata-priority" required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
       <label class="block text-sm font-medium text-slate-700">Recomendación pedagógica<textarea id="metadata-recommendation" required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
     </>}
-    <label class="block text-sm font-medium text-slate-700">Observaciones generales<textarea id="metadata-general" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+    <label class="block text-sm font-medium text-slate-700">{isPlanning ? 'Motivo de corrección / observaciones generales' : 'Observaciones generales'}<textarea id="metadata-general" rows="3" maxlength="500" aria-describedby="correction-reason-hint" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+    {isPlanning && <p id="correction-reason-hint" class="text-xs text-slate-500">Obligatorio si el exceso de respuestas N/A envía la planeación a corrección.</p>}
     <button type="submit" class="w-full rounded-xl bg-tup py-4 font-semibold text-white hover:bg-tup/90">Enviar instrumento</button>
     <p id="instrument-message" class="text-sm" aria-live="polite"></p>
   </section>
@@ -135,7 +136,7 @@ const isCoordination = definition.purpose === "coordination";
     const percentage = total ? (naCount * 100 / total) : 0;
     const invalid = naCount * 100 > total * 20;
     const summary = document.getElementById("na-summary");
-    summary.textContent = "N/A: " + naCount + " de " + total + " criterios (" + percentage.toFixed(1) + "%). " + (invalid ? "La captura será inválida por exceso de N/A y no aportará puntaje oficial." : "Límite máximo válido: 20%.");
+    summary.textContent = "N/A: " + naCount + " de " + total + " criterios (" + percentage.toFixed(1) + "%). " + (invalid ? (definition.purpose === "planning" ? "La planeación será enviada a corrección; captura el motivo de corrección." : "La captura será inválida por exceso de N/A y no aportará puntaje oficial.") : "Límite máximo válido: 20%.");
     summary.className = "rounded-xl px-4 py-3 text-sm " + (invalid ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-900");
   }
   form.addEventListener("change", function(event) {
@@ -168,13 +169,16 @@ const isCoordination = definition.purpose === "coordination";
       return { check_id: checkId, value: selected?.value, na_reason: reason };
     });
     if (missingReason) { message.textContent = "Cada N/A requiere un motivo."; message.className = "text-sm text-red-700"; return; }
+    const generalObservations = document.getElementById("metadata-general")?.value.trim() || null;
+    const excessiveNa = answers.filter(function(answer) { return answer.value === "na"; }).length * 100 > answerInputs.length * 20;
+    if (definition.purpose === "planning" && excessiveNa && !generalObservations) { message.textContent = "El motivo de corrección es obligatorio cuando el exceso de N/A envía la planeación a corrección."; message.className = "text-sm text-red-700"; return; }
     const payload = {
       version_id: definition.version_id, docente_id: Number(teacher.value), cuatrimestre_id: cuatrimestreId,
       asignatura_id: subject ? Number(subject.value) : null, grupo: group ? group.value : null,
       source_record_id: sourceRecordId, answers: answers,
       evidence: definition.sections.map(function(section) { return { section_id: section.id, evidence: form.querySelector("[data-evidence='" + section.id + "']").value.trim() }; }),
       checks: checks,
-      metadata: { strengths: document.getElementById("metadata-strengths")?.value.trim() || null, priority_area: document.getElementById("metadata-priority")?.value.trim() || null, recommendation: document.getElementById("metadata-recommendation")?.value.trim() || null, general_observations: document.getElementById("metadata-general")?.value.trim() || null }
+      metadata: { strengths: document.getElementById("metadata-strengths")?.value.trim() || null, priority_area: document.getElementById("metadata-priority")?.value.trim() || null, recommendation: document.getElementById("metadata-recommendation")?.value.trim() || null, general_observations: generalObservations }
     };
     const submit = form.querySelector("button[type=submit]"); submit.disabled = true;
     const response = await fetch("/api/instrumentos/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });

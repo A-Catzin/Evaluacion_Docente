@@ -58,6 +58,10 @@ supabase/migrations/055_fix_cycle_teacher_candidate_eligibility.sql
 !supabase/migrations/059_seed_instrument_versions.sql
 !supabase/migrations/060_versioned_instrument_results.sql
 !supabase/migrations/061_fix_planning_window_modality.sql
+!supabase/migrations/062_fix_teacher_assignment_trigger_record_shape.sql
+!supabase/migrations/063_planning_subject_scope.sql
+!supabase/migrations/064_planning_correction_reason.sql
+!supabase/migrations/065_planning_subject_np.sql
 
 openspec/
 src/supabase/

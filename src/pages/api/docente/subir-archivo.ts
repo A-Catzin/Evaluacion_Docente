@@ -1,7 +1,13 @@
 import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
 import { validarComentarioOpcional } from "../../../lib/moderation";
-import { estaHabilitadoR2, r2UploadErrorCode, subirArchivo } from "../../../lib/storage";
+import { normalizePlanningSubjectName } from "../../../lib/planningSubjectScope";
+import { isPlanningSubjectMarkedNp } from "../../../lib/planningSubjectStatus";
+import {
+  estaHabilitadoR2,
+  r2UploadErrorCode,
+  subirArchivo,
+} from "../../../lib/storage";
 import {
   buildPlanningPdfPath,
   parsePositiveInteger,
@@ -47,15 +53,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const formData = await request.formData();
     const file = formData.get("file");
-
     if (!file || !(file instanceof File))
       return new Response(
         JSON.stringify({ error: "Archivo requerido o inválido" }),
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
-
     const modalidad = formData.get("modalidad") as string;
     if (modalidad && modalidad !== "Escolarizado")
       return new Response(
@@ -86,40 +88,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         status: 400,
       });
 
-    const planId = parsePositiveInteger(formData.get("plan_id"));
-    if (planId) {
-      const { data } = await cl
-        .from("planeaciones")
-        .select(
-          "docente_id,cuatrimestre_id,asignatura_id,grupo,modalidad,estado",
-        )
-        .eq("id", planId)
-        .maybeSingle();
-      const plan = data as {
-        docente_id: number;
-        cuatrimestre_id: number;
-        asignatura_id: number;
-        grupo: string;
-        modalidad: string;
-        estado: string;
-      } | null;
-      if (
-        !plan ||
-        plan.estado !== "Corrección" ||
-        plan.docente_id !== u.entidad_id ||
-        plan.cuatrimestre_id !== cuatrimestreId ||
-        plan.asignatura_id !== asignaturaId ||
-        plan.grupo !== grupo
-      ) {
-        return new Response(
-          JSON.stringify({
-            error:
-              "La planeación a reenviar no corresponde a tu carga del cuatrimestre.",
-          }),
-          { status: 403 },
-        );
-      }
-    }
     const group = await resolveTeacherPlanningGroup(
       cl,
       u.entidad_id,
@@ -135,6 +103,161 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         }),
         { status: 403 },
       );
+
+    // Resolve coverage on the server; browser-provided coverage is checked only
+    // for staleness and never becomes the source of truth.
+    const { data: assignedGroups, error: assignedGroupsError } = await cl
+      .from("grupos")
+      .select("id,clave,asignatura_id,modalidad,asignaturas!inner(nombre)")
+      .eq("docente_id", u.entidad_id)
+      .eq("cuatrimestre_id", cuatrimestreId)
+      .eq("activo", true)
+      .eq("modalidad", "Escolarizado");
+    if (assignedGroupsError)
+      return new Response(
+        JSON.stringify({
+          error: "No fue posible validar los grupos cubiertos.",
+        }),
+        { status: 503 },
+      );
+    const selectedAssignment = (assignedGroups || []).find(
+      (item: any) =>
+        item.asignatura_id === asignaturaId && item.clave === group.clave,
+    ) as any;
+    const subjectKey = normalizePlanningSubjectName(
+      selectedAssignment?.asignaturas?.nombre,
+    );
+    if (!subjectKey)
+      return new Response(
+        JSON.stringify({
+          error: "No fue posible identificar la asignatura seleccionada.",
+        }),
+        { status: 403 },
+      );
+    const { data: npRecords, error: npError } = await cl
+      .from("planning_subject_np")
+      .select("subject_key,estado")
+      .eq("docente_id", u.entidad_id)
+      .eq("cuatrimestre_id", cuatrimestreId);
+    if (npError)
+      return new Response(
+        JSON.stringify({
+          error:
+            "No fue posible verificar el estado administrativo de la asignatura.",
+          code: "planning_subject_status_unavailable",
+        }),
+        { status: 503 },
+      );
+    if (
+      isPlanningSubjectMarkedNp(
+        selectedAssignment?.asignaturas?.nombre,
+        (npRecords || []) as any[],
+      )
+    )
+      return new Response(
+        JSON.stringify({
+          error:
+            "Esta asignatura fue marcada como no presentada por administración y no admite cargas hasta que sea reactivada.",
+          code: "planning_subject_marked_np",
+        }),
+        { status: 409 },
+      );
+    const coveredAssignments = (assignedGroups || []).filter(
+      (item: any) =>
+        normalizePlanningSubjectName(item.asignaturas?.nombre) === subjectKey,
+    ) as any[];
+    const gruposCubiertos = [
+      ...new Set(coveredAssignments.map((item) => String(item.clave))),
+    ].sort();
+    let requestedGroups: string[];
+    try {
+      const parsed = JSON.parse(String(formData.get("grupos_cubiertos") || ""));
+      requestedGroups = Array.isArray(parsed)
+        ? [
+            ...new Set(
+              parsed
+                .filter((item): item is string => typeof item === "string")
+                .map((item) => item.trim())
+                .filter(Boolean),
+            ),
+          ].sort()
+        : [];
+    } catch {
+      requestedGroups = [];
+    }
+    if (
+      !requestedGroups.length ||
+      requestedGroups.length !== gruposCubiertos.length ||
+      requestedGroups.some((item, index) => item !== gruposCubiertos[index])
+    )
+      return new Response(
+        JSON.stringify({
+          error:
+            "Los grupos cubiertos ya no coinciden con tu carga; actualiza la página.",
+          code: "planning_subject_scope_conflict",
+        }),
+        { status: 409 },
+      );
+
+    // Never merge legacy duplicate rows: an administrator must resolve that
+    // ambiguity before a new upload or correction can change any record.
+    const { data: subjectPlans, error: subjectPlansError } = await cl
+      .from("planeaciones")
+      .select(
+        "id,docente_id,cuatrimestre_id,asignatura_id,grupo,modalidad,estado,asignaturas!inner(nombre)",
+      )
+      .eq("docente_id", u.entidad_id)
+      .eq("cuatrimestre_id", cuatrimestreId);
+    if (subjectPlansError)
+      return new Response(
+        JSON.stringify({
+          error: "No fue posible verificar planeaciones existentes.",
+        }),
+        { status: 503 },
+      );
+    const matchingPlans = (subjectPlans || []).filter(
+      (plan: any) =>
+        normalizePlanningSubjectName(plan.asignaturas?.nombre) === subjectKey,
+    ) as any[];
+    const planId = parsePositiveInteger(formData.get("plan_id"));
+    if (matchingPlans.length > 1)
+      return new Response(
+        JSON.stringify({
+          error:
+            "Existe un conflicto entre planeaciones de la misma asignatura; solicita revisión administrativa.",
+          code: "planning_subject_scope_conflict",
+        }),
+        { status: 409 },
+      );
+    if (planId) {
+      const plan = matchingPlans[0];
+      if (
+        !plan ||
+        plan.id !== planId ||
+        plan.estado !== "Corrección" ||
+        plan.docente_id !== u.entidad_id ||
+        plan.cuatrimestre_id !== cuatrimestreId ||
+        plan.asignatura_id !== asignaturaId ||
+        plan.grupo !== grupo
+      )
+        return new Response(
+          JSON.stringify({
+            error:
+              "La planeación a reenviar no corresponde a tu carga del cuatrimestre.",
+          }),
+          { status: 403 },
+        );
+    } else if (matchingPlans.length) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Ya existe una planeación para esta asignatura y sus grupos cubiertos.",
+          code: "planning_subject_scope_conflict",
+        }),
+        { status: 409 },
+      );
+    }
+
     const comentarioRaw = formData.get("comentario") as string | null;
     const moderacion = validarComentarioOpcional(comentarioRaw, 500);
     if (!moderacion.valido)
@@ -155,9 +278,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         );
         pdfUrl = url;
       } catch (error) {
-        console.error("[Subir] R2 upload failed", { code: r2UploadErrorCode(error) });
+        console.error("[Subir] R2 upload failed", {
+          code: r2UploadErrorCode(error),
+        });
         return new Response(
-          JSON.stringify({ error: "No fue posible almacenar el PDF.", code: "storage_upload_failed" }),
+          JSON.stringify({
+            error: "No fue posible almacenar el PDF.",
+            code: "storage_upload_failed",
+          }),
           { status: 503 },
         );
       }
@@ -171,7 +299,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       if (upErr) {
         console.error("[Subir] Supabase storage upload failed");
         return new Response(
-          JSON.stringify({ error: "No fue posible almacenar el PDF.", code: "storage_upload_failed" }),
+          JSON.stringify({
+            error: "No fue posible almacenar el PDF.",
+            code: "storage_upload_failed",
+          }),
           { status: 503 },
         );
       }
@@ -184,6 +315,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const datos = {
       asignatura_id: asignaturaId,
       grupo: group.clave,
+      grupos_cubiertos: gruposCubiertos,
       modalidad: group.modalidad,
       proyecto: formData.get("proyecto") === "true",
       laboratorio: formData.get("laboratorio") as string,
@@ -198,7 +330,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     let dbErr = null;
     if (planId) {
-      // Reenviar correccion: actualizar existente
       const { error } = await cl
         .from("planeaciones")
         .update(datos)
@@ -223,17 +354,24 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         });
       if (dbErr.code === "42501")
         return new Response(
-          JSON.stringify({ error: "La planeación fue rechazada por la validación de acceso.", code: "planning_persistence_rejected" }),
+          JSON.stringify({
+            error: "La planeación fue rechazada por la validación de acceso.",
+            code: "planning_persistence_rejected",
+          }),
           { status: 403 },
         );
-      console.error("[Subir] Planning persistence failed", { code: dbErr.code || "unknown" });
+      console.error("[Subir] Planning persistence failed", {
+        code: dbErr.code || "unknown",
+      });
       return new Response(
-        JSON.stringify({ error: "No fue posible guardar la planeación.", code: "planning_persistence_failed" }),
+        JSON.stringify({
+          error: "No fue posible guardar la planeación.",
+          code: "planning_persistence_failed",
+        }),
         { status: 503 },
       );
     }
 
-    // Notificar a coordinadores del docente
     try {
       const { notificarCoordinadoresDocente } = await import(
         "../../../services/notificaciones"
@@ -251,8 +389,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     return new Response(JSON.stringify({ success: true }), { status: 201 });
   } catch {
-    return new Response(JSON.stringify({ error: "Error interno", code: "planning_upload_unexpected" }), {
-      status: 500,
-    });
+    return new Response(
+      JSON.stringify({
+        error: "Error interno",
+        code: "planning_upload_unexpected",
+      }),
+      { status: 500 },
+    );
   }
 };

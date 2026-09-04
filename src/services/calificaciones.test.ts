@@ -320,7 +320,7 @@ describe("calificaciones", () => {
       expect(result.cuatrimestre_id).toBe(10);
       expect(result.modalidad_snapshot).toBe("Escolarizado");
       expect(result.num_instrumentos_esperados).toBe(5);
-      expect(result.version_calculo).toBe("v2.2-versioned-instruments");
+      expect(result.version_calculo).toBe("v2.3-subject-aware-np");
       expect(result.calificacion_final).toBe(
         Math.round(80 * 0.35 + 90 * 0.2 + 70 * 0.15 + 80 * 0.25 + 100 * 0.05),
       );
@@ -344,7 +344,7 @@ describe("calificaciones", () => {
         score_autoevaluacion: 100,
         num_instrumentos_completados: 5,
         num_instrumentos_esperados: 5,
-        version_calculo: "v2.2-versioned-instruments",
+        version_calculo: "v2.3-subject-aware-np",
       });
     });
 
@@ -398,7 +398,7 @@ describe("calificaciones", () => {
       expect(result).not.toBeNull();
       expect(result?.docente_id).toBe(1);
       expect(result?.cuatrimestre_id).toBe(10);
-      expect(result?.version_calculo).toBe("v2.2-versioned-instruments-inline");
+      expect(result?.version_calculo).toBe("v2.3-subject-aware-np-inline");
     });
   });
 

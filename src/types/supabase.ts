@@ -6,323 +6,531 @@
 
 // ─── Roles ──────────────────────────────────────────────────────
 
-export type RolUsuario = 'superadmin' | 'coordinador' | 'docente' | 'estudiante' | 'observador' | 'pendiente';
+export type RolUsuario =
+ | "superadmin"
+ | "coordinador"
+ | "docente"
+ | "estudiante"
+ | "observador"
+ | "pendiente";
 
 // ─── Planeaciones ──────────────────────────────────────────────
 
+export interface PlanningSubjectNp {
+ id: number;
+ docente_id: number;
+ cuatrimestre_id: number;
+ subject_key: string;
+ subject_name: string;
+ estado: "NP";
+ motivo: string | null;
+ marked_by: string;
+ marked_at: string;
+ updated_at: string;
+}
+
 export interface Planeacion {
-  id: number; docente_id: number; cuatrimestre_id: number; asignatura_id: number;
-  campus: string; turno: string; modalidad: string; grupo: string;
-  proyecto: boolean; laboratorio: string; visitas: string;
-  url_pdf: string; nombre_archivo: string | null; comentario_docente: string | null;
-  criterio_alineacion: number | null; criterio_secuencia: number | null;
-  criterio_recursos: number | null; criterio_evaluacion: number | null;
-  puntaje_promedio: number | null;
-  estado: string; comentario_retroalimentacion: string | null; comentario_interno: string | null;
-  fecha_subida: string; fecha_evaluacion: string | null;
-  first_teacher_submitted_at: string | null;
-  latest_teacher_submitted_at: string | null;
+ id: number;
+ docente_id: number;
+ cuatrimestre_id: number;
+ asignatura_id: number;
+ campus: string;
+ turno: string;
+ modalidad: string;
+ grupo: string;
+ grupos_cubiertos: string[] | null;
+ proyecto: boolean;
+ laboratorio: string;
+ visitas: string;
+ url_pdf: string;
+ nombre_archivo: string | null;
+ comentario_docente: string | null;
+ criterio_alineacion: number | null;
+ criterio_secuencia: number | null;
+ criterio_recursos: number | null;
+ criterio_evaluacion: number | null;
+ puntaje_promedio: number | null;
+ estado: string;
+ comentario_retroalimentacion: string | null;
+ comentario_interno: string | null;
+ fecha_subida: string;
+ fecha_evaluacion: string | null;
+ first_teacher_submitted_at: string | null;
+ latest_teacher_submitted_at: string | null;
 }
 
 // ─── Catálogo ──────────────────────────────────────────────────
 
 export interface Cuatrimestre {
-  id: number;
-  clave: string;
-  nombre: string;
-  fecha_inicio: string;
-  fecha_fin: string;
-  activo: boolean;
-  cerrado: boolean;
-  es_prueba: boolean;
+ id: number;
+ clave: string;
+ nombre: string;
+ fecha_inicio: string;
+ fecha_fin: string;
+ activo: boolean;
+ cerrado: boolean;
+ es_prueba: boolean;
 }
 
 export interface Licenciatura {
-  id: number;
-  clave: string;
-  nombre: string;
-  facultad: string | null;
-  activa: boolean;
+ id: number;
+ clave: string;
+ nombre: string;
+ facultad: string | null;
+ activa: boolean;
 }
 
 export interface Docente {
-  id: number;
-  nombre: string;
-  apellidos: string;
-  apellido_paterno?: string | null;
-  apellido_materno?: string | null;
-  email: string;
-  num_empleado: string | null;
-  licenciatura_id: number | null;
-  foto_url: string | null;
-  campus?: string | null;
-  turno?: string | null;
-  modalidad?: string | null;
-  oferta_academica?: string | null;
-  visible_dashboard?: boolean | null;
-  activo: boolean;
+ id: number;
+ nombre: string;
+ apellidos: string;
+ apellido_paterno?: string | null;
+ apellido_materno?: string | null;
+ email: string;
+ num_empleado: string | null;
+ licenciatura_id: number | null;
+ foto_url: string | null;
+ campus?: string | null;
+ turno?: string | null;
+ modalidad?: string | null;
+ oferta_academica?: string | null;
+ visible_dashboard?: boolean | null;
+ activo: boolean;
 }
 
 export interface Asignatura {
-  id: number;
-  clave: string;
-  nombre: string;
-  licenciatura_id: number | null;
-  cuatrimestre_num: number | null;
-  creditos: number;
-  activa: boolean;
+ id: number;
+ clave: string;
+ nombre: string;
+ licenciatura_id: number | null;
+ cuatrimestre_num: number | null;
+ creditos: number;
+ activa: boolean;
 }
 
 export interface Grupo {
-  id: number;
-  clave: string;
-  asignatura_id: number | null;
-  docente_id: number | null;
-  cuatrimestre_id: number | null;
-  num_alumnos: number;
-  activo: boolean;
+ id: number;
+ clave: string;
+ asignatura_id: number | null;
+ docente_id: number | null;
+ cuatrimestre_id: number | null;
+ num_alumnos: number;
+ activo: boolean;
 }
 
 export interface Estudiante {
-  id: number;
-  nombre: string;
-  apellidos: string;
-  email: string;
-  matricula: string;
-  licenciatura_id: number | null;
-  cuatrimestre_actual: number | null;
-  activo: boolean;
+ id: number;
+ nombre: string;
+ apellidos: string;
+ email: string;
+ matricula: string;
+ licenciatura_id: number | null;
+ cuatrimestre_actual: number | null;
+ activo: boolean;
 }
 
 export interface Inscripcion {
-  id: number;
-  estudiante_id: number;
-  grupo_id: number;
-  cuatrimestre_id: number;
-  fecha: string;
+ id: number;
+ estudiante_id: number;
+ grupo_id: number;
+ cuatrimestre_id: number;
+ fecha: string;
 }
 
 export interface Usuario {
-  id: string;
-  email: string;
-  rol: RolUsuario;
-  entidad_id: number | null;
-  activo: boolean;
-  ultimo_acceso: string | null;
+ id: string;
+ email: string;
+ rol: RolUsuario;
+ entidad_id: number | null;
+ activo: boolean;
+ ultimo_acceso: string | null;
 }
 
 // ─── Instrumentos ───────────────────────────────────────────────
 
 export interface EncuestaEstudiantilRespuesta {
-  id: number;
-  docente_id: number;
-  grupo_id: number;
-  cuatrimestre_id: number;
-  calidad_general: number; // 1-5
-  item_plan_estudio: number;
-  item_trato_respeto: number;
-  item_asistencia: number;
-  item_puntualidad: number;
-  item_participacion: number;
-  item_dominio_materia: number;
-  item_plataforma_moodle: number;
-  item_pensamiento_critico: number;
-  item_desafio_intelectual: number;
-  item_claridad_objetivos: number;
-  item_lecturas_aprendizaje: number;
-  item_respeto_reglas: number;
-  item_interes_materia: number;
-  item_apoyos_didacticos: number;
-  item_actitudes_valores: number;
-  item_retroalimentacion: number;
-  item_criterios_evaluacion: number;
-  item_receptividad: number;
-  comentario_abierto: string | null;
-  clasificacion_comentario: string;
+ id: number;
+ docente_id: number;
+ grupo_id: number;
+ cuatrimestre_id: number;
+ calidad_general: number; // 1-5
+ item_plan_estudio: number;
+ item_trato_respeto: number;
+ item_asistencia: number;
+ item_puntualidad: number;
+ item_participacion: number;
+ item_dominio_materia: number;
+ item_plataforma_moodle: number;
+ item_pensamiento_critico: number;
+ item_desafio_intelectual: number;
+ item_claridad_objetivos: number;
+ item_lecturas_aprendizaje: number;
+ item_respeto_reglas: number;
+ item_interes_materia: number;
+ item_apoyos_didacticos: number;
+ item_actitudes_valores: number;
+ item_retroalimentacion: number;
+ item_criterios_evaluacion: number;
+ item_receptividad: number;
+ comentario_abierto: string | null;
+ clasificacion_comentario: string;
 }
 
 export interface EvaluacionCoordinacion {
-  id: number;
-  docente_id: number;
-  coordinador_id: string;
-  cuatrimestre_id: number;
-  puntos_obtenidos: number; // 0-75
-  categoria: string;
-  score_normalizado: number;
-  observaciones: string | null;
+ id: number;
+ docente_id: number;
+ coordinador_id: string;
+ cuatrimestre_id: number;
+ puntos_obtenidos: number; // 0-75
+ categoria: string;
+ score_normalizado: number;
+ observaciones: string | null;
 }
 
 export interface EvaluacionPlaneacion {
-  id: number;
-  docente_id: number;
-  evaluador_id: string;
-  cuatrimestre_id: number;
-  asignatura_id: number;
-  puntos_totales: number; // 0-22 (generado)
-  categoria: string | null;
-  score_normalizado: number;
+ id: number;
+ docente_id: number;
+ evaluador_id: string;
+ cuatrimestre_id: number;
+ asignatura_id: number;
+ puntos_totales: number; // 0-22 (generado)
+ categoria: string | null;
+ score_normalizado: number;
 }
 
 export interface ObservacionClase {
-  id: number;
-  docente_id: number;
-  observador_id: string;
-  cuatrimestre_id: number;
-  grupo_id: number;
-  puntuacion_total: number; // 0-10
-  categoria: string;
-  score_normalizado: number;
-  observaciones: string | null;
-  recomendaciones: string | null;
+ id: number;
+ docente_id: number;
+ observador_id: string;
+ cuatrimestre_id: number;
+ grupo_id: number;
+ puntuacion_total: number; // 0-10
+ categoria: string;
+ score_normalizado: number;
+ observaciones: string | null;
+ recomendaciones: string | null;
 }
 
 export interface AutoevaluacionDocente {
-  id: number;
-  docente_id: number;
-  cuatrimestre_id: number;
-  score_normalizado: number;
-  categoria: string | null;
-  reflexion_personal: string | null;
+ id: number;
+ docente_id: number;
+ cuatrimestre_id: number;
+ score_normalizado: number;
+ categoria: string | null;
+ reflexion_personal: string | null;
 }
 
 export interface CalificacionFinal {
-  id: number;
-  docente_id: number;
-  cuatrimestre_id: number;
-  modalidad?: string | null;
-  score_encuesta_estudiantil: number | null;
-  score_coordinacion: number | null;
-  score_planeacion: number | null;
-  score_observacion: number | null;
-  score_autoevaluacion: number | null;
-  calificacion_final: number;
-  categoria_final: string | null;
-  tiene_comentarios_foco_rojo?: boolean;
-  tiene_comentarios_criticos?: boolean;
-  num_instrumentos_completados: number;
-  instrument_validity?: Record<string, string>;
-  has_invalid_instrument?: boolean;
+ id: number;
+ docente_id: number;
+ cuatrimestre_id: number;
+ modalidad?: string | null;
+ score_encuesta_estudiantil: number | null;
+ score_coordinacion: number | null;
+ score_planeacion: number | null;
+ score_observacion: number | null;
+ score_autoevaluacion: number | null;
+ calificacion_final: number;
+ categoria_final: string | null;
+ tiene_comentarios_foco_rojo?: boolean;
+ tiene_comentarios_criticos?: boolean;
+ num_instrumentos_completados: number;
+ instrument_validity?: Record<string, string>;
+ has_invalid_instrument?: boolean;
 }
 
 export interface Docente360Feedback {
-  id: number;
-  docente_id: number;
-  cuatrimestre_id: number;
-  feedback_text: string | null;
-  improvement_areas: string | null;
-  created_at: string;
-  updated_at: string;
+ id: number;
+ docente_id: number;
+ cuatrimestre_id: number;
+ feedback_text: string | null;
+ improvement_areas: string | null;
+ created_at: string;
+ updated_at: string;
 }
 
 // ─── Autodiagnóstico ───────────────────────────────────────────
 
 export interface Autodiagnostico {
-  id: number;
-  docente_id: number;
-  cuatrimestre_id: number;
-  r1: number; r2: number; r3: number; r4: number; r5: number;
-  r6: number; r7: number; r8: number; r9: number; r10: number;
-  r11: number; r12: number; r13: number; r14: number; r15: number;
-  r16: number; r17: number; r18: number; r19: number; r20: number;
-  r21: number; r22: number; r23: number; r24: number;
-  puntaje_total: number;
-  nivel_desempeno: string | null;
-  comentarios: string | null;
-  fecha_respuesta: string;
+ id: number;
+ docente_id: number;
+ cuatrimestre_id: number;
+ r1: number;
+ r2: number;
+ r3: number;
+ r4: number;
+ r5: number;
+ r6: number;
+ r7: number;
+ r8: number;
+ r9: number;
+ r10: number;
+ r11: number;
+ r12: number;
+ r13: number;
+ r14: number;
+ r15: number;
+ r16: number;
+ r17: number;
+ r18: number;
+ r19: number;
+ r20: number;
+ r21: number;
+ r22: number;
+ r23: number;
+ r24: number;
+ puntaje_total: number;
+ nivel_desempeno: string | null;
+ comentarios: string | null;
+ fecha_respuesta: string;
 }
 
 export const NIVELES_DESEMPENO = [
-  { min: 90, max: 100, nivel: 'Excelente', color: '#22c55e' },
-  { min: 75, max: 89, nivel: 'Satisfactorio', color: '#3b82f6' },
-  { min: 60, max: 74, nivel: 'En Desarrollo', color: '#f59e0b' },
-  { min: 0, max: 59, nivel: 'Necesita Mejora', color: '#ef4444' },
+ { min: 90, max: 100, nivel: "Excelente", color: "#22c55e" },
+ { min: 75, max: 89, nivel: "Satisfactorio", color: "#3b82f6" },
+ { min: 60, max: 74, nivel: "En Desarrollo", color: "#f59e0b" },
+ { min: 0, max: 59, nivel: "Necesita Mejora", color: "#ef4444" },
 ] as const;
 
 export interface OfertaAcademica {
-  id: number;
-  nombre: string;
-  activa: boolean;
+ id: number;
+ nombre: string;
+ activa: boolean;
 }
 
 export interface Campus {
-  id: number;
-  nombre: string;
-  activo: boolean;
+ id: number;
+ nombre: string;
+ activo: boolean;
 }
 
 export interface Turno {
-  id: number;
-  nombre: string;
-  activo: boolean;
+ id: number;
+ nombre: string;
+ activo: boolean;
 }
 
 export interface Observacion {
-  id: number; docente_id: number; evaluador_id: string;
-  instrument_version: 'escolarizado-v1' | 'virtual-v1' | 'ejecutivo-v1' | null;
-  oferta_academica: string; cuatrimestre_grupo: string; ciclo: string; campus: string;
-  cco1: number|null; cco2: number|null; cco3: number|null; cco4: number|null; cco5: number|null; cco6: number|null; cco7: number|null;
-  cme1: number|null; cme2: number|null; cme3: number|null; cme4: number|null; cme5: number|null; cme6: number|null; cme7: number|null; cme8: number|null; cme9: number|null;
-  ccom1: number|null; ccom2: number|null; ccom3: number|null; ccom4: number|null; ccom5: number|null;
-  cso1: number|null; cso2: number|null; cso3: number|null; cso4: number|null;
-  cge1: number|null; cge2: number|null; cge3: number|null; cge4: number|null; cge5: number|null; cge6: number|null; cge7: number|null;
-  caf1: number|null; caf2: number|null;
-  ctepe1: number|null; ctepe2: number|null; ctepe3: number|null; ctepe4: number|null; ctepe5: number|null; ctepe6: number|null; ctepe7: number|null;
-  cno1: number|null; cno2: number|null; cno3: number|null; cno4: number|null; cno5: number|null;
-  obs_cognitivas: string|null; obs_metacognitivas: string|null; obs_comunicativas: string|null; obs_sociales: string|null;
-  obs_gestion: string|null; obs_afectivas: string|null; obs_tecno: string|null; obs_normativa: string|null;
-  comentario_docente: string|null; comentario_evaluador: string|null;
-  fecha_observacion: string;
+ id: number;
+ docente_id: number;
+ evaluador_id: string;
+ instrument_version: "escolarizado-v1" | "virtual-v1" | "ejecutivo-v1" | null;
+ oferta_academica: string;
+ cuatrimestre_grupo: string;
+ ciclo: string;
+ campus: string;
+ cco1: number | null;
+ cco2: number | null;
+ cco3: number | null;
+ cco4: number | null;
+ cco5: number | null;
+ cco6: number | null;
+ cco7: number | null;
+ cme1: number | null;
+ cme2: number | null;
+ cme3: number | null;
+ cme4: number | null;
+ cme5: number | null;
+ cme6: number | null;
+ cme7: number | null;
+ cme8: number | null;
+ cme9: number | null;
+ ccom1: number | null;
+ ccom2: number | null;
+ ccom3: number | null;
+ ccom4: number | null;
+ ccom5: number | null;
+ cso1: number | null;
+ cso2: number | null;
+ cso3: number | null;
+ cso4: number | null;
+ cge1: number | null;
+ cge2: number | null;
+ cge3: number | null;
+ cge4: number | null;
+ cge5: number | null;
+ cge6: number | null;
+ cge7: number | null;
+ caf1: number | null;
+ caf2: number | null;
+ ctepe1: number | null;
+ ctepe2: number | null;
+ ctepe3: number | null;
+ ctepe4: number | null;
+ ctepe5: number | null;
+ ctepe6: number | null;
+ ctepe7: number | null;
+ cno1: number | null;
+ cno2: number | null;
+ cno3: number | null;
+ cno4: number | null;
+ cno5: number | null;
+ obs_cognitivas: string | null;
+ obs_metacognitivas: string | null;
+ obs_comunicativas: string | null;
+ obs_sociales: string | null;
+ obs_gestion: string | null;
+ obs_afectivas: string | null;
+ obs_tecno: string | null;
+ obs_normativa: string | null;
+ comentario_docente: string | null;
+ comentario_evaluador: string | null;
+ fecha_observacion: string;
 }
 
-export function obtenerNivelDesempeno(promedio: number): { nivel: string; color: string } {
-  for (const n of NIVELES_DESEMPENO) {
-    if (promedio >= n.min && promedio <= n.max) return n;
-  }
-  return NIVELES_DESEMPENO[3];
+export function obtenerNivelDesempeno(promedio: number): {
+ nivel: string;
+ color: string;
+} {
+ for (const n of NIVELES_DESEMPENO) {
+  if (promedio >= n.min && promedio <= n.max) return n;
+ }
+ return NIVELES_DESEMPENO[3];
 }
 
 export const PONDERACION_V2 = {
-  EE: 0.35, // Encuesta Estudiantil
-  CA: 0.20, // Coordinación Académica
-  PD: 0.15, // Planeación Docente
-  OC: 0.25, // Observación de Clase
-  AE: 0.05, // Auto-evaluación
+ EE: 0.35, // Encuesta Estudiantil
+ CA: 0.2, // Coordinación Académica
+ PD: 0.15, // Planeación Docente
+ OC: 0.25, // Observación de Clase
+ AE: 0.05, // Auto-evaluación
 } as const;
 
 export const CATEGORIAS_FINAL = {
-  SOBRESALIENTE: { min: 90, max: 100, color: '#22c55e', label: 'Sobresaliente' },
-  DISTINGUIDO: { min: 80, max: 89, color: '#3b82f6', label: 'Distinguido' },
-  BUENO: { min: 70, max: 79, color: '#a855f7', label: 'Bueno' },
-  APROBADO: { min: 60, max: 69, color: '#f59e0b', label: 'Aprobado' },
-  A_MEJORAR: { min: 50, max: 59, color: '#f97316', label: 'A mejorar' },
-  INSUFICIENTE: { min: 0, max: 49, color: '#ef4444', label: 'Insuficiente' },
+ SOBRESALIENTE: { min: 90, max: 100, color: "#22c55e", label: "Sobresaliente" },
+ DISTINGUIDO: { min: 80, max: 89, color: "#3b82f6", label: "Distinguido" },
+ BUENO: { min: 70, max: 79, color: "#a855f7", label: "Bueno" },
+ APROBADO: { min: 60, max: 69, color: "#f59e0b", label: "Aprobado" },
+ A_MEJORAR: { min: 50, max: 59, color: "#f97316", label: "A mejorar" },
+ INSUFICIENTE: { min: 0, max: 49, color: "#ef4444", label: "Insuficiente" },
 } as const;
 
-export function obtenerCategoria(puntaje: number): { label: string; color: string } {
-  for (const [, cat] of Object.entries(CATEGORIAS_FINAL)) {
-    if (puntaje >= cat.min && puntaje <= cat.max) return cat;
-  }
-  return CATEGORIAS_FINAL.INSUFICIENTE;
+export function obtenerCategoria(puntaje: number): {
+ label: string;
+ color: string;
+} {
+ for (const [, cat] of Object.entries(CATEGORIAS_FINAL)) {
+  if (puntaje >= cat.min && puntaje <= cat.max) return cat;
+ }
+ return CATEGORIAS_FINAL.INSUFICIENTE;
 }
 
 export interface EncuestaEstudiantil {
-  id: number; docente_id: number; grupo_id: number; asignatura_id: number;
-  cuatrimestre_id: number; ciclo: string;
-  asi1:number|null;asi2:number|null;asi3:number|null;asi4:number|null;asi5:number|null;
-  org1:number|null;org2:number|null;org3:number|null;org4:number|null;org5:number|null;
-  act1:number|null;act2:number|null;act3:number|null;act4:number|null;act5:number|null;
-  ens1:number|null;ens2:number|null;ens3:number|null;ens4:number|null;ens5:number|null;ens6:number|null;
-  dom1:number|null;dom2:number|null;dom3:number|null;dom4:number|null;dom5:number|null;
-  eva1:number|null;eva2:number|null;eva3:number|null;eva4:number|null;eva5:number|null;
-  com1:number|null;com2:number|null;com3:number|null;com4:number|null;com5:number|null;
-  ges1:number|null;ges2:number|null;ges3:number|null;ges4:number|null;ges5:number|null;
-  tec1:number|null;tec2:number|null;tec3:number|null;tec4:number|null;tec5:number|null;
-  sat1:number|null;sat2:number|null;sat3:number|null;sat4:number|null;sat5:number|null;
-  comentarios: string|null; fecha_respuesta: string;
+ id: number;
+ docente_id: number;
+ grupo_id: number;
+ asignatura_id: number;
+ cuatrimestre_id: number;
+ ciclo: string;
+ asi1: number | null;
+ asi2: number | null;
+ asi3: number | null;
+ asi4: number | null;
+ asi5: number | null;
+ org1: number | null;
+ org2: number | null;
+ org3: number | null;
+ org4: number | null;
+ org5: number | null;
+ act1: number | null;
+ act2: number | null;
+ act3: number | null;
+ act4: number | null;
+ act5: number | null;
+ ens1: number | null;
+ ens2: number | null;
+ ens3: number | null;
+ ens4: number | null;
+ ens5: number | null;
+ ens6: number | null;
+ dom1: number | null;
+ dom2: number | null;
+ dom3: number | null;
+ dom4: number | null;
+ dom5: number | null;
+ eva1: number | null;
+ eva2: number | null;
+ eva3: number | null;
+ eva4: number | null;
+ eva5: number | null;
+ com1: number | null;
+ com2: number | null;
+ com3: number | null;
+ com4: number | null;
+ com5: number | null;
+ ges1: number | null;
+ ges2: number | null;
+ ges3: number | null;
+ ges4: number | null;
+ ges5: number | null;
+ tec1: number | null;
+ tec2: number | null;
+ tec3: number | null;
+ tec4: number | null;
+ tec5: number | null;
+ sat1: number | null;
+ sat2: number | null;
+ sat3: number | null;
+ sat4: number | null;
+ sat5: number | null;
+ comentarios: string | null;
+ fecha_respuesta: string;
 }
 
 export function calcularPromedioEncuesta(ee: EncuestaEstudiantil): number {
-  const todos = [ee.asi1,ee.asi2,ee.asi3,ee.asi4,ee.asi5,ee.org1,ee.org2,ee.org3,ee.org4,ee.org5,ee.act1,ee.act2,ee.act3,ee.act4,ee.act5,ee.ens1,ee.ens2,ee.ens3,ee.ens4,ee.ens5,ee.ens6,ee.dom1,ee.dom2,ee.dom3,ee.dom4,ee.dom5,ee.eva1,ee.eva2,ee.eva3,ee.eva4,ee.eva5,ee.com1,ee.com2,ee.com3,ee.com4,ee.com5,ee.ges1,ee.ges2,ee.ges3,ee.ges4,ee.ges5,ee.tec1,ee.tec2,ee.tec3,ee.tec4,ee.tec5,ee.sat1,ee.sat2,ee.sat3,ee.sat4,ee.sat5].filter(v=>v) as number[];
-  if(todos.length===0)return 0;
-  return Math.round((todos.reduce((a,b)=>a+b,0)/todos.length/5)*100);
+ const todos = [
+  ee.asi1,
+  ee.asi2,
+  ee.asi3,
+  ee.asi4,
+  ee.asi5,
+  ee.org1,
+  ee.org2,
+  ee.org3,
+  ee.org4,
+  ee.org5,
+  ee.act1,
+  ee.act2,
+  ee.act3,
+  ee.act4,
+  ee.act5,
+  ee.ens1,
+  ee.ens2,
+  ee.ens3,
+  ee.ens4,
+  ee.ens5,
+  ee.ens6,
+  ee.dom1,
+  ee.dom2,
+  ee.dom3,
+  ee.dom4,
+  ee.dom5,
+  ee.eva1,
+  ee.eva2,
+  ee.eva3,
+  ee.eva4,
+  ee.eva5,
+  ee.com1,
+  ee.com2,
+  ee.com3,
+  ee.com4,
+  ee.com5,
+  ee.ges1,
+  ee.ges2,
+  ee.ges3,
+  ee.ges4,
+  ee.ges5,
+  ee.tec1,
+  ee.tec2,
+  ee.tec3,
+  ee.tec4,
+  ee.tec5,
+  ee.sat1,
+  ee.sat2,
+  ee.sat3,
+  ee.sat4,
+  ee.sat5,
+ ].filter((v) => v) as number[];
+ if (todos.length === 0) return 0;
+ return Math.round((todos.reduce((a, b) => a + b, 0) / todos.length / 5) * 100);
 }

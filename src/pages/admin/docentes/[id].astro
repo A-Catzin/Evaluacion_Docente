@@ -2,7 +2,8 @@
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../../lib/db';
 import { requireRole } from '../../../lib/auth';
-import { fetchNativeStudentEvaluationScores, formatScore, OBSERVATION_SELECT } from '../../../services/scoring';
+import { calcFinalScore, calcObservationScore, fetchNativeStudentEvaluationScores, formatScore, OBSERVATION_SELECT } from '../../../services/scoring';
+import { normalizePlanningSubjectName } from '../../../lib/planningSubjectScope';
 import { obtenerCalificacionDocente } from '../../../services/calificaciones';
 import { OBSERVATION_INSTRUMENT_DEFINITIONS, OBSERVATION_STORAGE_SECTIONS, getObservationQuestion, isObservationInstrumentVersion, type ObservationInstrumentVersion } from '../../../lib/observationDefinitions';
 
@@ -75,7 +76,7 @@ if (Astro.request.method === 'POST') {
   return Astro.redirect(`/admin/docentes/${docenteId}?feedback=error`);
 }
 
-const [feedbackRes, eeRes, coordRes, planRes, obsRes, autoRes, preguntasRes] = await Promise.all([
+const [feedbackRes, eeRes, coordRes, planRes, obsRes, autoRes, preguntasRes, teacherGroupsRes] = await Promise.all([
   cuatrimestreId
     ? cl.from('docente_360_feedback').select('id,docente_id,cuatrimestre_id,feedback_text,improvement_areas,created_at,updated_at').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).maybeSingle()
     : Promise.resolve({ data: null }),
@@ -86,7 +87,7 @@ const [feedbackRes, eeRes, coordRes, planRes, obsRes, autoRes, preguntasRes] = a
     ? cl.from('evaluacion_coordinacion').select('id,docente_id,asignatura_id,campus,ciclo,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3,puntos_obtenidos,score_normalizado,categoria,comentarios,fecha_evaluacion').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
     : Promise.resolve({ data: [] }),
   cuatrimestreId
-    ? cl.from('planeaciones').select('id,docente_id,asignatura_id,grupo,campus,turno,modalidad,proyecto,laboratorio,visitas,estado,criterio_alineacion,criterio_secuencia,criterio_recursos,criterio_evaluacion,evaluacion_detalle,no_aplica_count,observaciones_generales,puntaje_promedio,comentario_retroalimentacion,comentario_interno,fecha_subida,fecha_evaluacion').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('fecha_evaluacion', { ascending: false })
+    ? cl.from('planeaciones').select('id,docente_id,asignatura_id,grupo,grupos_cubiertos,campus,turno,modalidad,proyecto,laboratorio,visitas,estado,criterio_alineacion,criterio_secuencia,criterio_recursos,criterio_evaluacion,evaluacion_detalle,no_aplica_count,observaciones_generales,puntaje_promedio,comentario_retroalimentacion,comentario_interno,fecha_subida,fecha_evaluacion').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('fecha_evaluacion', { ascending: false })
     : Promise.resolve({ data: [] }),
   cuatrimestreId
     ? cl.from('observaciones').select(`id,docente_id,asignatura_id,grupo_id_fk,oferta_academica,cuatrimestre_grupo,ciclo,campus,instrument_version,${OBSERVATION_SELECT},ccom5,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,comentario_docente,comentario_evaluador,fecha_observacion`).eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
@@ -95,6 +96,9 @@ const [feedbackRes, eeRes, coordRes, planRes, obsRes, autoRes, preguntasRes] = a
     ? cl.from('autodiagnosticos').select('id,docente_id,cuatrimestre_id,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12,r13,r14,r15,r16,r17,r18,r19,r20,r21,r22,r23,r24,puntaje_total,nivel_desempeno,comentarios,fecha_respuesta').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false })
     : Promise.resolve({ data: [] }),
   cl.from('instrumento_preguntas').select('instrumento,seccion,orden,texto').in('instrumento', ['coordinacion', 'planeacion', 'observacion', 'autodiagnostico']).order('instrumento', { ascending: true }).order('orden', { ascending: true }),
+  cuatrimestreId
+    ? cl.from('grupos').select('id,clave,asignatura_id,modalidad').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId)
+    : Promise.resolve({ data: [] }),
 ]);
 
 const feedback = feedbackRes.data as any;
@@ -104,10 +108,11 @@ const planRows = (planRes.data || []) as any[];
 const obsRows = (obsRes.data || []) as any[];
 const autoRows = (autoRes.data || []) as any[];
 const preguntaRows = (preguntasRes.data || []) as any[];
+const teacherGroups = (teacherGroupsRes.data || []) as any[];
 
 const asigIds = new Set<number>();
 const grupoIds = new Set<number>();
-for (const row of [...eeRows, ...coordRows, ...planRows, ...obsRows]) {
+for (const row of [...eeRows, ...coordRows, ...planRows, ...obsRows, ...teacherGroups]) {
   if (row.asignatura_id) asigIds.add(row.asignatura_id);
   if (row.grupo_id) grupoIds.add(row.grupo_id);
   if (row.grupo_id_fk) grupoIds.add(row.grupo_id_fk);
@@ -334,6 +339,83 @@ const autoRecords = autoRows.map((row) => ({
   comments: row.comentarios || null,
 }));
 
+type SubjectPerformance = {
+  key: string;
+  asignatura: string;
+  grupos: Set<string>;
+  eeTotal: number;
+  eeResponses: number;
+  coord: number[];
+  plan: number[];
+  obs: number[];
+};
+
+const subjectPerformance = new Map<string, SubjectPerformance>();
+function performanceFor(asignaturaId: number): SubjectPerformance | null {
+  const asignatura = asigMap.get(asignaturaId);
+  if (!asignatura?.nombre) return null;
+  const key = normalizePlanningSubjectName(asignatura.nombre);
+  if (!key) return null;
+  if (!subjectPerformance.has(key)) subjectPerformance.set(key, { key, asignatura: asignatura.nombre, grupos: new Set(), eeTotal: 0, eeResponses: 0, coord: [], plan: [], obs: [] });
+  return subjectPerformance.get(key)!;
+}
+function addFiniteScore(target: number[], value: unknown) {
+  if (value == null) return;
+  const score = Number(value);
+  if (Number.isFinite(score)) target.push(score);
+}
+function averageScore(values: number[]): number | null {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+for (const group of teacherGroups) {
+  const performance = performanceFor(group.asignatura_id);
+  if (performance && group.clave) performance.grupos.add(group.clave);
+}
+for (const row of eeRows) {
+  const performance = performanceFor(row.asignatura_id);
+  if (!performance) continue;
+  if (row.grupo_id) performance.grupos.add(groupLabel(row.grupo_id));
+  if (Number.isFinite(Number(row.score_normalizado)) && Number(row.respuestas_validas) > 0) {
+    performance.eeTotal += Number(row.score_normalizado) * Number(row.respuestas_validas);
+    performance.eeResponses += Number(row.respuestas_validas);
+  }
+}
+for (const row of coordRows) {
+  const performance = performanceFor(row.asignatura_id);
+  if (performance) addFiniteScore(performance.coord, row.score_normalizado);
+}
+for (const row of planRows) {
+  const performance = performanceFor(row.asignatura_id);
+  if (!performance) continue;
+  for (const group of (Array.isArray(row.grupos_cubiertos) && row.grupos_cubiertos.length ? row.grupos_cubiertos : [row.grupo])) if (group) performance.grupos.add(group);
+  if (row.puntaje_promedio != null) addFiniteScore(performance.plan, row.puntaje_promedio);
+}
+for (const row of obsRows) {
+  const performance = performanceFor(row.asignatura_id);
+  if (!performance) continue;
+  if (row.grupo_id_fk) performance.grupos.add(groupLabel(row.grupo_id_fk));
+  addFiniteScore(performance.obs, calcObservationScore(row));
+}
+const subjectPerformanceRows = [...subjectPerformance.values()]
+  .map((performance) => {
+    const ee = performance.eeResponses ? performance.eeTotal / performance.eeResponses : null;
+    const coord = averageScore(performance.coord);
+    const plan = averageScore(performance.plan);
+    const obs = averageScore(performance.obs);
+    const hasScore = [ee, coord, plan, obs].some((score) => score != null);
+    return {
+      ...performance,
+      grupos: [...performance.grupos].sort((left, right) => left.localeCompare(right, 'es-MX')),
+      ee,
+      coord,
+      plan,
+      obs,
+      final: hasScore ? calcFinalScore({ ee: ee ?? undefined, coord: coord ?? undefined, plan: plan ?? undefined, obs: obs ?? undefined }).final : null,
+    };
+  })
+  .sort((left, right) => left.asignatura.localeCompare(right.asignatura, 'es-MX'));
+
 const currentCal = cuatrimestreId ? await obtenerCalificacionDocente(cl, docenteId, cuatrimestreId) : null;
 const currentScores = {
   ee: currentCal?.score_encuesta_estudiantil ?? null,
@@ -466,6 +548,26 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
         <p class={`text-2xl font-bold mt-1 ${scoreClass(currentScores.auto)}`}>{fmt(currentScores.auto)}</p>
       </div>
     </div>
+
+    <section class="bg-white rounded-3xl p-6 shadow-tarjeta mb-8">
+      <div class="flex items-center justify-between gap-4 flex-wrap mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-tup">Desempeño por asignatura</h2>
+          <p class="text-sm text-slate-500">Vista rápida por nombre normalizado de asignatura. No modifica el score global 360.</p>
+        </div>
+        <p class="text-xs text-slate-400">{subjectPerformanceRows.length} asignaturas</p>
+      </div>
+      {subjectPerformanceRows.length === 0 ? (
+        <div class="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-slate-400">No hay grupos o instrumentos registrados para este ciclo.</div>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+        <thead><tr class="bg-slate-50 border-b text-slate-500"><th class="text-left px-3 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-3 py-3 text-xs uppercase">Grupos</th><th class="text-center px-3 py-3 text-xs uppercase">Estudiantil</th><th class="text-center px-3 py-3 text-xs uppercase">Coordinación</th><th class="text-center px-3 py-3 text-xs uppercase">Planeación</th><th class="text-center px-3 py-3 text-xs uppercase">Observación</th><th class="text-center px-3 py-3 text-xs uppercase">Final</th></tr></thead>
+        <tbody class="divide-y">{subjectPerformanceRows.map((row) => (<tr class="hover:bg-slate-50"><td class="px-3 py-3 font-medium text-slate-700">{row.asignatura}</td><td class="px-3 py-3 text-slate-600">{row.grupos.join(', ') || '—'}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.ee)}`}>{fmt(row.ee)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.coord)}`}>{fmt(row.coord)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.plan)}`}>{fmt(row.plan)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.obs)}`}>{fmt(row.obs)}</td><td class={`px-3 py-3 text-center font-bold ${scoreClass(row.final)}`}>{fmt(row.final)}</td></tr>))}</tbody>
+          </table>
+        </div>
+      )}
+    </section>
 
     <div class="bg-white rounded-3xl p-6 shadow-tarjeta mb-8">
       <div class="flex items-center justify-between gap-4 flex-wrap mb-4">

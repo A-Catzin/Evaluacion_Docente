@@ -2,6 +2,8 @@
  * Servicio de Cálculo de Scores — lógica compartida para reportes
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { groupPlanningAssignmentsBySubjectName, normalizePlanningSubjectName, type PlanningSubjectScope } from '../lib/planningSubjectScope';
+import { getPlanningSubjectStatus, type PlanningSubjectStatus } from '../lib/planningSubjectStatus';
 
 export const OBSERVATION_FIELDS = [
   'cco1','cco2','cco3','cco4','cco5','cco6','cco7',
@@ -239,6 +241,191 @@ export async function fetchCuatrimestreScores(
     .filter((row) => row.validity_status === 'invalid_excessive_na')
     .map((row) => row.purpose);
   return { ee, coord, plan, obs, auto, invalidPurposes };
+}
+
+export type SubjectInstrumentScores = InstrumentScores & {
+  key: string;
+  nombre: string;
+  grupos: string[];
+  planningStatus: PlanningSubjectStatus;
+  final: FinalScore;
+};
+
+export type SubjectAwareScores = {
+  subjects: SubjectInstrumentScores[];
+  aggregate: InstrumentScores;
+  final: FinalScore;
+};
+
+function averageAvailable(values: Array<number | undefined>): number | undefined {
+  const available = values.filter((value): value is number => value != null && Number.isFinite(value));
+  return available.length ? available.reduce((sum, value) => sum + value, 0) / available.length : undefined;
+}
+
+type LegacyCoordinationRow = {
+  asignatura_id?: number | null;
+  score_normalizado?: number | null;
+};
+
+type LegacyObservationRow = ObservationRow & {
+  asignatura_id?: number | null;
+};
+
+type VersionedInstrumentScoreRow = {
+  docente_id: number;
+  purpose: 'coordination' | 'planning' | 'observation';
+  validity_status: string;
+  normalized_score: number | null;
+  submitted_at: string;
+};
+
+function scopedCoordinationScore(scope: PlanningSubjectScope, rows: LegacyCoordinationRow[]): number | undefined {
+  const assignmentIds = new Set(scope.assignments.map((assignment) => assignment.asignaturaId));
+  const scopedRows = rows.filter((row) => row.asignatura_id != null && assignmentIds.has(Number(row.asignatura_id)));
+  return scopedRows.length
+    ? averageAvailable(scopedRows.map((row) => row.score_normalizado == null ? undefined : Number(row.score_normalizado)))
+    : undefined;
+}
+
+function scopedObservationScore(scope: PlanningSubjectScope, rows: LegacyObservationRow[]): number | undefined {
+  const assignmentIds = new Set(scope.assignments.map((assignment) => assignment.asignaturaId));
+  const scopedRows = rows.filter((row) => row.asignatura_id != null && assignmentIds.has(Number(row.asignatura_id)));
+  return scopedRows.length ? averageAvailable(scopedRows.map(calcObservationScore)) : undefined;
+}
+
+function latestGlobalCoordinationScore(rows: LegacyCoordinationRow[]): number | undefined {
+  const row = rows.find((item) => item.asignatura_id == null && item.score_normalizado != null);
+  return row ? Number(row.score_normalizado) : undefined;
+}
+
+function latestGlobalObservationScore(rows: LegacyObservationRow[]): number | undefined {
+  const row = rows.find((item) => item.asignatura_id == null);
+  return row ? calcObservationScore(row) : undefined;
+}
+
+function latestVersionedScoresByPurpose(rows: VersionedInstrumentScoreRow[]): Map<VersionedInstrumentScoreRow['purpose'], VersionedInstrumentScoreRow> {
+  const latest = new Map<VersionedInstrumentScoreRow['purpose'], VersionedInstrumentScoreRow>();
+  for (const row of rows.sort((left, right) => String(right.submitted_at).localeCompare(String(left.submitted_at)))) {
+    if (!latest.has(row.purpose)) latest.set(row.purpose, row);
+  }
+  return latest;
+}
+
+/**
+ * Calculates each assigned normalized subject independently. Coordination and
+ * observation are scoped to the normalized subject when their legacy row has
+ * an asignatura_id. Global legacy/versioned captures remain fallbacks, while
+ * autodiagnóstico is intentionally teacher-cycle scoped.
+ */
+export function calculateSubjectAwareFinal(
+  subjects: Array<Omit<SubjectInstrumentScores, 'final'>>,
+  modalidad?: string | null,
+): SubjectAwareScores {
+  if (!subjects.length) {
+    const empty = calcFinalScore({}, modalidad);
+    return { subjects: [], aggregate: {}, final: empty };
+  }
+
+  const calculated = subjects.map((subject) => {
+    // NP has the approved four-instrument profile even for an escolarizado
+    // teacher; normal/effective modality behavior remains unchanged otherwise.
+    const final = calcFinalScore(
+      { ...subject, plan: subject.planningStatus === 'np' ? undefined : subject.plan },
+      subject.planningStatus === 'np' ? 'ejecutivo' : modalidad,
+    );
+    return { ...subject, final };
+  });
+  const allCompleted = calculated.every((subject) => subject.final.instrumentCount === subject.final.expectedInstrumentCount);
+  const hasInvalid = calculated.some((subject) => (subject.invalidPurposes || []).length > 0);
+  const expectedInstrumentCount = calculated.every((subject) => subject.final.expectedInstrumentCount === 4) ? 4 : 5;
+  const finalValue = Math.round(calculated.reduce((sum, subject) => sum + subject.final.final, 0) / calculated.length);
+  const aggregate: InstrumentScores = {
+    ee: averageAvailable(calculated.map((subject) => subject.ee)),
+    coord: averageAvailable(calculated.map((subject) => subject.coord)),
+    // The persisted global planning score intentionally averages planned scopes
+    // only, so an NP never appears as a zero or dilutes an approved planning.
+    plan: averageAvailable(calculated.filter((subject) => subject.planningStatus === 'approved').map((subject) => subject.plan)),
+    obs: averageAvailable(calculated.map((subject) => subject.obs)),
+    auto: averageAvailable(calculated.map((subject) => subject.auto)),
+    invalidPurposes: [...new Set(calculated.flatMap((subject) => subject.invalidPurposes || []))],
+  };
+  const instrumentCount = allCompleted ? expectedInstrumentCount : Math.min(expectedInstrumentCount, Math.max(...calculated.map((subject) => subject.final.instrumentCount)));
+  const category = hasInvalid
+    ? 'Parcial con instrumento inválido'
+    : allCompleted
+      ? getCategory(finalValue, expectedInstrumentCount, expectedInstrumentCount)
+      : instrumentCount > 0 ? 'Parcial' : 'No iniciado';
+  return {
+    subjects: calculated,
+    aggregate,
+    final: { final: finalValue, instrumentCount, expectedInstrumentCount, category },
+  };
+}
+
+export async function fetchSubjectAwareCuatrimestreScores(
+  cl: SupabaseClient,
+  docenteId: number,
+  cuatrimestreId: number,
+  modalidad?: string | null,
+): Promise<SubjectAwareScores> {
+  const [legacy, nativeRowsResult, assignmentsResult, plansResult, npResult, coordinationResult, observationsResult, versionedResult] = await Promise.all([
+    fetchCuatrimestreScores(cl, docenteId, cuatrimestreId),
+    fetchNativeStudentEvaluationScores(cl, cuatrimestreId),
+    cl.from('grupos').select('id,clave,asignatura_id,modalidad,asignaturas!inner(nombre)').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).eq('activo', true),
+    cl.from('planeaciones').select('asignatura_id,puntaje_promedio,estado,asignaturas!inner(nombre)').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).eq('estado', 'Aprobado'),
+    cl.from('planning_subject_np').select('subject_key,estado').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId),
+    cl.from('evaluacion_coordinacion').select('id,asignatura_id,score_normalizado').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
+    cl.from('observaciones').select(`id,asignatura_id,${OBSERVATION_SELECT}`).eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }),
+    cl.rpc('versioned_instrument_score_rows', { p_cuatrimestre_id: cuatrimestreId }),
+  ]);
+  if (assignmentsResult.error) throw assignmentsResult.error;
+  if (plansResult.error) throw plansResult.error;
+  if (npResult.error) throw npResult.error;
+  if (coordinationResult.error) throw coordinationResult.error;
+  if (observationsResult.error) throw observationsResult.error;
+  if (versionedResult.error) throw versionedResult.error;
+
+  const scopes = groupPlanningAssignmentsBySubjectName(((assignmentsResult.data || []) as any[]).flatMap((assignment) => assignment.asignaturas?.nombre
+    ? [{ asignaturaId: assignment.asignatura_id, asignaturaNombre: assignment.asignaturas.nombre, grupo: assignment.clave, modalidad: assignment.modalidad }]
+    : []));
+  if (!scopes.length) return { subjects: [], aggregate: legacy, final: calcFinalScore(legacy, modalidad) };
+
+  const approvedPlans = (plansResult.data || []) as any[];
+  const npRecords = (npResult.data || []) as any[];
+  const coordinationRows = (coordinationResult.data || []) as LegacyCoordinationRow[];
+  const observationRows = (observationsResult.data || []) as unknown as LegacyObservationRow[];
+  const latestVersioned = latestVersionedScoresByPurpose(
+    ((versionedResult.data || []) as VersionedInstrumentScoreRow[]).filter((row) => Number(row.docente_id) === docenteId),
+  );
+  const globalVersionedScore = (purpose: 'coordination' | 'observation', fallback: number | undefined) => {
+    const capture = latestVersioned.get(purpose);
+    return capture ? capture.validity_status === 'valid' ? Number(capture.normalized_score) : undefined : fallback;
+  };
+  const globalCoord = globalVersionedScore('coordination', latestGlobalCoordinationScore(coordinationRows));
+  const globalObs = globalVersionedScore('observation', latestGlobalObservationScore(observationRows));
+  const subjectRows = scopes.map((scope: PlanningSubjectScope) => {
+    const assignmentIds = new Set(scope.assignments.map((assignment) => assignment.asignaturaId));
+    const eeRows = nativeRowsResult.filter((row) => row.docente_id === docenteId && assignmentIds.has(row.asignatura_id) && row.respuestas_validas > 0);
+    const ee = eeRows.length
+      ? eeRows.reduce((sum, row) => sum + row.score_normalizado * row.respuestas_validas, 0) / eeRows.reduce((sum, row) => sum + row.respuestas_validas, 0)
+      : undefined;
+    const matchingPlans = approvedPlans.filter((plan) => scope.key === normalizePlanningSubjectName(plan.asignaturas?.nombre));
+    const plan = averageAvailable(matchingPlans.map((item) => item.puntaje_promedio == null ? undefined : Number(item.puntaje_promedio)));
+    const planningStatus = getPlanningSubjectStatus(scope, approvedPlans.map((item) => ({ asignaturaNombre: item.asignaturas?.nombre || '', estado: item.estado })), npRecords);
+    return {
+      key: scope.key,
+      nombre: scope.nombre,
+      grupos: scope.grupos,
+      planningStatus,
+      ee,
+      coord: scopedCoordinationScore(scope, coordinationRows) ?? globalCoord,
+      plan,
+      obs: scopedObservationScore(scope, observationRows) ?? globalObs,
+      auto: legacy.auto,
+      invalidPurposes: legacy.invalidPurposes,
+    };
+  });
+  return calculateSubjectAwareFinal(subjectRows, modalidad);
 }
 
 export async function fetchBatchScoresPorDocente(

@@ -6,13 +6,7 @@
  * `scoring.ts`. No se duplican aquí ni en SQL.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  calcFinalScore,
-  fetchCuatrimestreScores,
-  normalizarModalidad,
-  obtenerPerfilModalidad,
-  type InstrumentScores,
-} from "./scoring";
+import { fetchSubjectAwareCuatrimestreScores } from "./scoring";
 
 export interface CalificacionFinal {
   id: number;
@@ -39,7 +33,7 @@ export interface CalificacionFinal {
   docente_campus?: string | null;
 }
 
-const VERSION_CALCULO = "v2.2-versioned-instruments";
+const VERSION_CALCULO = "v2.3-subject-aware-np";
 
 function round2(value: number | null | undefined): number | null {
   if (value == null || !Number.isFinite(value)) return null;
@@ -50,6 +44,25 @@ function toNumber(value: unknown): number | null {
   if (value == null) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function subjectScopeValidity(
+  subjects: Array<{ planningStatus: string }>,
+): Array<[string, string]> {
+  if (!subjects.length) return [];
+  const counts = { approved: 0, np: 0, pending: 0 };
+  for (const subject of subjects) {
+    if (subject.planningStatus in counts)
+      counts[subject.planningStatus as keyof typeof counts] += 1;
+  }
+  // calificaciones_finales is intentionally a global row; this preserves a
+  // compact, auditable subject-status summary without a schema expansion.
+  return [
+    [
+      "planning_subject_status",
+      `approved=${counts.approved};np=${counts.np};pending=${counts.pending}`,
+    ],
+  ];
 }
 
 export function rowToCalificacion(
@@ -90,24 +103,8 @@ export async function calcularCalificacionDocenteInline(
     campus?: string | null;
   },
 ): Promise<CalificacionFinal | null> {
-  const scores = await fetchCuatrimestreScores(
-    client,
-    docenteId,
-    cuatrimestreId,
-  );
-
-  // Si no hay ningún instrumento puntuable, no devolvemos fila inline.
-  if (
-    scores.ee == null &&
-    scores.coord == null &&
-    scores.plan == null &&
-    scores.obs == null &&
-    scores.auto == null
-  ) {
-    return null;
-  }
-
   const { data: docente, error: errorDocente } = await client
+
     .from("docentes")
     .select("modalidad")
     .eq("id", docenteId)
@@ -120,8 +117,24 @@ export async function calcularCalificacionDocenteInline(
   }
 
   const modalidad = String(docente?.modalidad ?? "Escolarizado");
-  const final = calcFinalScore(scores, modalidad);
-  const profile = obtenerPerfilModalidad(modalidad);
+  const subjectAware = await fetchSubjectAwareCuatrimestreScores(
+    client,
+    docenteId,
+    cuatrimestreId,
+    modalidad,
+  );
+  const scores = subjectAware.aggregate;
+  const final = subjectAware.final;
+
+  // Si no hay ningún instrumento puntuable, no devolvemos fila inline.
+  if (
+    scores.ee == null &&
+    scores.coord == null &&
+    scores.plan == null &&
+    scores.obs == null &&
+    scores.auto == null
+  )
+    return null;
 
   return {
     id: 0,
@@ -136,15 +149,15 @@ export async function calcularCalificacionDocenteInline(
     calificacion_final: final.final,
     categoria_final: final.category,
     num_instrumentos_completados: final.instrumentCount,
-    num_instrumentos_esperados: profile.expectedInstrumentCount,
+    num_instrumentos_esperados: final.expectedInstrumentCount,
     version_calculo: `${VERSION_CALCULO}-inline`,
     calculada_en: new Date().toISOString(),
-    instrument_validity: Object.fromEntries(
-      (scores.invalidPurposes || []).map((purpose) => [
-        purpose,
-        "invalid_excessive_na",
-      ]),
-    ),
+    instrument_validity: Object.fromEntries([
+      ...(scores.invalidPurposes || []).map(
+        (purpose) => [purpose, "invalid_excessive_na"] as [string, string],
+      ),
+      ...subjectScopeValidity(subjectAware.subjects),
+    ]),
     has_invalid_instrument: (scores.invalidPurposes || []).length > 0,
     docente_nombre: docenteInfo?.nombre ?? null,
     docente_apellidos: docenteInfo?.apellidos ?? null,
@@ -380,14 +393,14 @@ export async function recalcularCalificacionDocente(
     docenteId,
     cuatrimestreId,
   );
-  const scores = await fetchCuatrimestreScores(
+  const subjectAware = await fetchSubjectAwareCuatrimestreScores(
     client,
     docenteId,
     cuatrimestreId,
+    modalidadSnapshot,
   );
-  const final = calcFinalScore(scores, modalidadSnapshot);
-
-  const profile = obtenerPerfilModalidad(modalidadSnapshot);
+  const scores = subjectAware.aggregate;
+  const final = subjectAware.final;
 
   const upsertPayload = {
     docente_id: docenteId,
@@ -401,15 +414,15 @@ export async function recalcularCalificacionDocente(
     calificacion_final: final.final,
     categoria_final: final.category,
     num_instrumentos_completados: final.instrumentCount,
-    num_instrumentos_esperados: profile.expectedInstrumentCount,
+    num_instrumentos_esperados: final.expectedInstrumentCount,
     version_calculo: VERSION_CALCULO,
     calculada_en: new Date().toISOString(),
-    instrument_validity: Object.fromEntries(
-      (scores.invalidPurposes || []).map((purpose) => [
-        purpose,
-        "invalid_excessive_na",
-      ]),
-    ),
+    instrument_validity: Object.fromEntries([
+      ...(scores.invalidPurposes || []).map(
+        (purpose) => [purpose, "invalid_excessive_na"] as [string, string],
+      ),
+      ...subjectScopeValidity(subjectAware.subjects),
+    ]),
     has_invalid_instrument: (scores.invalidPurposes || []).length > 0,
   };
 

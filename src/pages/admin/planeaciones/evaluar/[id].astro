@@ -71,19 +71,20 @@ const categorias = (cats || []).map(c => {
         <div class="min-w-0">
           <label id="estado-label" class="mb-1 block text-sm font-medium text-slate-700">Estado *</label>
           <input id="estado" name="estado" type="hidden" value="" />
-          <button id="estado-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="estado-listbox" aria-labelledby="estado-label estado-trigger-value" class="w-full min-w-0 max-w-full inline-flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-left text-sm text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-tup focus-visible:ring-offset-2">
+          <button id="estado-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="estado-listbox" aria-labelledby="estado-label estado-trigger-value" aria-describedby="estado-error" aria-invalid="false" class="w-full min-w-0 max-w-full inline-flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-left text-sm text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-tup focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500">
             <span id="estado-trigger-value">Seleccionar...</span>
             <svg aria-hidden="true" class="h-4 w-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6" /></svg>
           </button>
-          <div id="estado-listbox" role="listbox" tabindex="-1" aria-labelledby="estado-label" hidden class="fixed z-[60] max-h-[min(20rem,calc(100vh-1rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-modal focus:outline-none focus-visible:ring-2 focus-visible:ring-tup focus-visible:ring-offset-2">
-            <div id="estado-option-empty" role="option" aria-selected="true" data-status-option data-value="" class="cursor-pointer rounded-lg px-3 py-2 text-slate-700">Seleccionar...</div>
-            <div id="estado-option-approved" role="option" aria-selected="false" data-status-option data-value="Aprobado" class="cursor-pointer rounded-lg px-3 py-2 text-slate-700">Aprobado</div>
-            <div id="estado-option-correction" role="option" aria-selected="false" data-status-option data-value="Corrección" class="cursor-pointer rounded-lg px-3 py-2 text-slate-700">Corrección</div>
+          <p id="estado-error" class="mt-1 hidden text-xs font-medium text-red-700">Selecciona un estado.</p>
+          <div id="estado-listbox" role="listbox" tabindex="-1" aria-labelledby="estado-label" aria-activedescendant="estado-option-empty" hidden class="fixed z-[70] max-h-[min(20rem,calc(100vh-1rem))] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-modal focus:outline-none focus-visible:ring-2 focus-visible:ring-tup focus-visible:ring-offset-2">
+            <div id="estado-option-empty" role="option" aria-selected="true" data-status-option data-value="" class="cursor-pointer rounded-lg px-3 py-3 text-slate-700 hover:bg-slate-100">Seleccionar...</div>
+            <div id="estado-option-approved" role="option" aria-selected="false" data-status-option data-value="Aprobado" class="cursor-pointer rounded-lg px-3 py-3 text-slate-700 hover:bg-slate-100">Aprobado</div>
+            <div id="estado-option-correction" role="option" aria-selected="false" data-status-option data-value="Corrección" class="cursor-pointer rounded-lg px-3 py-3 text-slate-700 hover:bg-slate-100">Corrección</div>
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Retroalimentación para el docente (opcional)</label>
-          <textarea id="retro" rows={3} placeholder="Comentarios que el docente podrá ver..." class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Motivo de corrección / retroalimentación para el docente <span class="text-slate-400 font-normal">(obligatorio al enviar a corrección)</span></label>
+          <textarea id="retro" rows={3} maxlength="500" placeholder="Explica los cambios que debe realizar el docente..." class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm resize-none"></textarea>
         </div>
         <button type="submit" class="w-full bg-tup text-white font-semibold py-4 rounded-xl hover:bg-tup/90">Enviar Evaluación</button>
       </div>
@@ -93,15 +94,16 @@ const categorias = (cats || []).map(c => {
 </LayoutAdmin>
 
 <script>
-  import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom';
+  import { autoUpdate, computePosition, flip, offset, shift, size } from '@floating-ui/dom';
 
-  const form = document.getElementById('form-eval') as HTMLFormElement | null;
-  const input = document.getElementById('estado') as HTMLInputElement | null;
-  const trigger = document.getElementById('estado-trigger') as HTMLButtonElement | null;
-  const triggerValue = document.getElementById('estado-trigger-value');
-  const listbox = document.getElementById('estado-listbox');
+  const form = document.getElementById('form-eval') as HTMLFormElement;
+  const input = document.getElementById('estado') as HTMLInputElement;
+  const trigger = document.getElementById('estado-trigger') as HTMLButtonElement;
+  const triggerValue = document.getElementById('estado-trigger-value') as HTMLElement;
+  const errorMessage = document.getElementById('estado-error') as HTMLElement;
+  const listbox = document.getElementById('estado-listbox') as HTMLElement;
 
-  if (form && input && trigger && triggerValue && listbox) {
+  if (form && input && trigger && triggerValue && errorMessage && listbox) {
     const pageWindow = window as Window & { __planningEvaluationStatusControlCleanup?: () => void };
     pageWindow.__planningEvaluationStatusControlCleanup?.();
 
@@ -110,7 +112,7 @@ const categorias = (cats || []).map(c => {
     let isOpen = false;
     let cleanupAutoUpdate: (() => void) | undefined;
 
-    // Portaling prevents transformed or scrolling form containers from clipping the popup.
+    // The form scroll container clips descendants; a body portal avoids that stacking context.
     document.body.appendChild(listbox);
 
     function selectedIndex() {
@@ -118,12 +120,20 @@ const categorias = (cats || []).map(c => {
       return index >= 0 ? index : 0;
     }
 
+    function setError(hasError: boolean) {
+      trigger.setAttribute('aria-invalid', String(hasError));
+      trigger.classList.toggle('border-red-700', hasError);
+      trigger.classList.toggle('text-red-900', hasError);
+      errorMessage.classList.toggle('hidden', !hasError);
+    }
+
     function setActive(index: number) {
       activeIndex = Math.max(0, Math.min(index, options.length - 1));
       options.forEach((option, optionIndex) => {
-        option.classList.toggle('ring-2', optionIndex === activeIndex);
-        option.classList.toggle('ring-inset', optionIndex === activeIndex);
-        option.classList.toggle('ring-tup', optionIndex === activeIndex);
+        const isActive = optionIndex === activeIndex;
+        option.classList.toggle('ring-2', isActive);
+        option.classList.toggle('ring-inset', isActive);
+        option.classList.toggle('ring-tup', isActive);
       });
       listbox.setAttribute('aria-activedescendant', options[activeIndex].id);
       options[activeIndex].scrollIntoView({ block: 'nearest' });
@@ -143,22 +153,30 @@ const categorias = (cats || []).map(c => {
     }
 
     function updatePosition() {
-      const viewportGutter = 16;
-      listbox.style.width = `${Math.min(trigger.getBoundingClientRect().width, window.innerWidth - viewportGutter)}px`;
+      const viewportGutter = 8;
+      const triggerWidth = trigger.getBoundingClientRect().width;
+      listbox.style.width = `${Math.max(0, Math.min(triggerWidth, window.innerWidth - viewportGutter * 2))}px`;
 
       computePosition(trigger, listbox, {
         placement: 'bottom-start',
         strategy: 'fixed',
-        middleware: [offset(6), flip({ padding: 8 }), shift({ padding: 8 })],
+        middleware: [
+          offset(6),
+          flip({ padding: viewportGutter }),
+          shift({ padding: viewportGutter }),
+          size({
+            padding: viewportGutter,
+            apply({ availableWidth, availableHeight, elements }) {
+              Object.assign(elements.floating.style, {
+                maxWidth: `${Math.max(0, availableWidth)}px`,
+                maxHeight: `${Math.max(0, availableHeight)}px`,
+              });
+            },
+          }),
+        ],
       }).then(({ x, y, strategy }) => {
         Object.assign(listbox.style, { left: `${x}px`, position: strategy, top: `${y}px` });
       });
-    }
-
-    function onDocumentClick(event: MouseEvent) {
-      const target = event.target;
-      if (target instanceof Node && (trigger.contains(target) || listbox.contains(target))) return;
-      close(false);
     }
 
     function close(returnFocus: boolean) {
@@ -166,7 +184,7 @@ const categorias = (cats || []).map(c => {
       isOpen = false;
       cleanupAutoUpdate?.();
       cleanupAutoUpdate = undefined;
-      document.removeEventListener('click', onDocumentClick);
+      document.removeEventListener('pointerdown', onDocumentPointerDown);
       trigger.setAttribute('aria-expanded', 'false');
       listbox.hidden = true;
       if (returnFocus) trigger.focus();
@@ -178,7 +196,7 @@ const categorias = (cats || []).map(c => {
         listbox.hidden = false;
         trigger.setAttribute('aria-expanded', 'true');
         cleanupAutoUpdate = autoUpdate(trigger, listbox, updatePosition);
-        document.addEventListener('click', onDocumentClick);
+        document.addEventListener('pointerdown', onDocumentPointerDown);
       }
       setActive(index);
       if (moveFocus) listbox.focus();
@@ -188,20 +206,23 @@ const categorias = (cats || []).map(c => {
       const option = options[activeIndex];
       input.value = option.dataset.value || '';
       syncSelection();
+      setError(false);
       input.dispatchEvent(new Event('change', { bubbles: true }));
       close(true);
     }
 
-    function moveFocus(direction: 1 | -1) {
-      const focusable = Array.from(document.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'));
-      const currentIndex = focusable.indexOf(trigger);
-      focusable[currentIndex + direction]?.focus();
+    function onDocumentPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && (trigger.contains(target) || listbox.contains(target))) return;
+      close(false);
     }
+
+    function onTriggerClick() { open(); }
 
     function onTriggerKeydown(event: KeyboardEvent) {
       if (event.key === 'Escape' && isOpen) {
         event.preventDefault();
-        close(false);
+        close(true);
         return;
       }
       if (event.key === 'Tab' && isOpen) {
@@ -238,9 +259,7 @@ const categorias = (cats || []).map(c => {
         return;
       }
       if (event.key === 'Tab') {
-        event.preventDefault();
         close(false);
-        moveFocus(event.shiftKey ? -1 : 1);
       }
     }
 
@@ -252,9 +271,21 @@ const categorias = (cats || []).map(c => {
       selectActiveOption();
     }
 
+    function onFormValidation() {
+      close(false);
+      setError(!input.value);
+    }
+
+    function onFormReset() {
+      input.value = '';
+      syncSelection();
+      setError(false);
+      close(false);
+    }
+
     function teardown() {
       close(false);
-      form.removeEventListener('submit', onFormTeardown);
+      form.removeEventListener('submit', onFormValidation);
       form.removeEventListener('reset', onFormReset);
       trigger.removeEventListener('click', onTriggerClick);
       trigger.removeEventListener('keydown', onTriggerKeydown);
@@ -266,20 +297,12 @@ const categorias = (cats || []).map(c => {
       if (pageWindow.__planningEvaluationStatusControlCleanup === teardown) delete pageWindow.__planningEvaluationStatusControlCleanup;
     }
 
-    function onTriggerClick() { open(); }
-    function onFormTeardown() { close(false); }
-    function onFormReset() {
-      input.value = '';
-      syncSelection();
-      close(false);
-    }
-
     syncSelection();
     trigger.addEventListener('click', onTriggerClick);
     trigger.addEventListener('keydown', onTriggerKeydown);
     listbox.addEventListener('keydown', onListboxKeydown);
     listbox.addEventListener('click', onListboxClick);
-    form.addEventListener('submit', onFormTeardown);
+    form.addEventListener('submit', onFormValidation);
     form.addEventListener('reset', onFormReset);
     window.addEventListener('pagehide', teardown, { once: true });
     document.addEventListener('astro:before-swap', teardown, { once: true });
@@ -325,7 +348,10 @@ const categorias = (cats || []).map(c => {
       if (!scores[c.id]) { allScored = false; }
     });
     if (!allScored) { toast('Asigna puntuación a todas las categorías', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; return; }
-    if (!document.getElementById('estado').value) { toast('Selecciona el estado', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; return; }
+    var estado = document.getElementById('estado').value;
+    var motivoCorreccion = document.getElementById('retro').value.trim();
+    if (!estado) { toast('Selecciona el estado', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; return; }
+    if (estado === 'Corrección' && !motivoCorreccion) { toast('El motivo de corrección es obligatorio', true); btn.disabled = false; btn.textContent = 'Enviar Evaluación'; return; }
 
     var sum = 0, naCount = 0;
     catData.forEach(function(c) {
@@ -347,8 +373,8 @@ const categorias = (cats || []).map(c => {
     var data = {
       id: parseInt(document.getElementById('plan_id').value),
       puntaje: puntaje,
-      estado: document.getElementById('estado').value,
-      comentario_retroalimentacion: document.getElementById('retro').value.trim() || null,
+      estado: estado,
+      comentario_retroalimentacion: motivoCorreccion || null,
       evaluacion_detalle: detalle,
       observaciones_generales: document.getElementById('obs_generales').value.trim() || null,
       no_aplica_count: naCount
