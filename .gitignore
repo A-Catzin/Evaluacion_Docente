@@ -62,6 +62,7 @@ supabase/migrations/055_fix_cycle_teacher_candidate_eligibility.sql
 !supabase/migrations/063_planning_subject_scope.sql
 !supabase/migrations/064_planning_correction_reason.sql
 !supabase/migrations/065_planning_subject_np.sql
+!supabase/migrations/066_planning_subject_np_bulk.sql
 
 openspec/
 src/supabase/

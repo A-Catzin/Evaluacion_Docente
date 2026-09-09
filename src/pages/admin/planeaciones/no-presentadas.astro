@@ -38,25 +38,128 @@ const rows = [...new Map((groups || []).map((group: any) => [group.docente_id, g
 }).sort((left: any, right: any) => `${left.docente?.apellidos} ${left.docente?.nombre} ${left.scope.nombre}`.localeCompare(`${right.docente?.apellidos} ${right.docente?.nombre} ${right.scope.nombre}`, 'es-MX'));
 ---
 <LayoutAdmin titulo="Planeaciones no presentadas">
-  <div class="animate-flotar-entrada max-w-6xl mx-auto">
+  <div class="animate-flotar-entrada max-w-7xl mx-auto">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <div><h1 class="text-3xl font-bold text-tup">Planeaciones no presentadas (NP)</h1><p class="mt-1 text-sm text-slate-500">NP aplica a todos los grupos de una misma asignatura normalizada y bloquea la carga docente.</p></div>
       <div class="flex items-center gap-3"><a href={`/admin/planeaciones${qs}`} class="rounded-xl border border-tup px-3 py-2 text-sm font-medium text-tup">Planeaciones</a><form method="GET"><select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cycles.map((cycle) => <option value={cycle.id} selected={cycle.id === cycleId}>{cycle.clave}</option>)}</select></form></div>
     </div>
-    <div class="overflow-hidden rounded-2xl bg-white shadow-tarjeta">
-      {rows.length === 0 ? <p class="p-10 text-center text-slate-400">No hay asignaturas activas para este ciclo.</p> : <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b bg-slate-50"><th class="px-3 py-3 text-left text-xs uppercase">Docente</th><th class="px-3 py-3 text-left text-xs uppercase">Asignatura / grupos</th><th class="px-3 py-3 text-center text-xs uppercase">Estado</th><th class="px-3 py-3 text-left text-xs uppercase">Motivo NP</th><th class="px-3 py-3 text-right text-xs uppercase">Acción</th></tr></thead><tbody class="divide-y">{rows.map((row: any) => <tr><td class="px-3 py-3"><p class="font-medium">{row.docente?.nombre} {row.docente?.apellidos}</p><p class="text-xs text-slate-400">{row.docente?.email}</p></td><td class="px-3 py-3"><p>{row.scope.nombre}</p><p class="text-xs text-slate-500">Grupos: {row.scope.grupos.join(', ')}</p></td><td class="px-3 py-3 text-center"><span class={`rounded px-2 py-1 text-xs font-medium ${row.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : row.status === 'np' ? 'bg-slate-200 text-slate-700' : 'bg-amber-50 text-amber-700'}`}>{row.status === 'approved' ? 'Aprobada' : row.status === 'np' ? 'NP' : 'Sin aprobar'}</span></td><td class="px-3 py-3 text-xs text-slate-600">{row.np?.motivo || '—'}</td><td class="px-3 py-3 text-right">{row.status === 'approved' ? <span class="text-xs text-slate-400">No disponible</span> : <button class={`np-action rounded-lg px-3 py-1.5 text-xs font-medium ${row.status === 'np' ? 'border border-slate-300 text-slate-700' : 'bg-tup text-white'}`} data-docente={row.docenteId} data-subject={row.scope.key} data-action={row.status === 'np' ? 'reactivate' : 'mark_np'}>{row.status === 'np' ? 'Reactivar' : 'Marcar NP'}</button>}</td></tr>)}</tbody></table></div>}
-    </div>
+    {rows.length === 0 ? <div class="overflow-hidden rounded-2xl bg-white shadow-tarjeta"><p class="p-10 text-center text-slate-400">No hay asignaturas activas para este ciclo.</p></div> : <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <section class="overflow-hidden rounded-2xl bg-white shadow-tarjeta" aria-label="Asignaturas por docente">
+        <div class="border-b p-4">
+          <label for="np-search" class="text-sm font-medium text-slate-700">Buscar asignatura</label>
+          <input id="np-search" type="search" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="Docente, correo, asignatura o grupo" autocomplete="off" />
+          <p class="mt-1 text-xs text-slate-500">Las asignaturas aprobadas no pueden seleccionarse ni marcarse como NP.</p>
+        </div>
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b bg-slate-50"><th class="w-10 px-3 py-3 text-center text-xs uppercase"><span class="sr-only">Seleccionar</span></th><th class="px-3 py-3 text-left text-xs uppercase">Docente</th><th class="px-3 py-3 text-left text-xs uppercase">Asignatura / grupos</th><th class="px-3 py-3 text-center text-xs uppercase">Estado</th><th class="px-3 py-3 text-left text-xs uppercase">Motivo NP</th><th class="px-3 py-3 text-right text-xs uppercase">Acción</th></tr></thead><tbody class="divide-y">{rows.map((row: any) => <tr data-search={`${row.docente?.nombre || ''} ${row.docente?.apellidos || ''} ${row.docente?.email || ''} ${row.scope.nombre} ${row.scope.grupos.join(' ')}`.toLocaleLowerCase('es-MX')}><td class="px-3 py-3 text-center">{row.status === 'approved' ? <span class="text-xs text-slate-400" aria-label="Asignatura aprobada, no seleccionable">—</span> : <input class="np-select h-4 w-4 rounded border-slate-300 text-tup focus:ring-tup" type="checkbox" data-docente={row.docenteId} data-subject={row.scope.key} data-status={row.status} data-teacher={`${row.docente?.nombre || ''} ${row.docente?.apellidos || ''}`} data-subject-name={row.scope.nombre} data-groups={JSON.stringify(row.scope.grupos)} aria-label={`Seleccionar ${row.scope.nombre} de ${row.docente?.nombre || ''} ${row.docente?.apellidos || ''}`} />}</td><td class="px-3 py-3"><p class="font-medium">{row.docente?.nombre} {row.docente?.apellidos}</p><p class="text-xs text-slate-400">{row.docente?.email}</p></td><td class="px-3 py-3"><p>{row.scope.nombre}</p><p class="text-xs text-slate-500">Grupos: {row.scope.grupos.join(', ')}</p></td><td class="px-3 py-3 text-center"><span class={`rounded px-2 py-1 text-xs font-medium ${row.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : row.status === 'np' ? 'bg-slate-200 text-slate-700' : 'bg-amber-50 text-amber-700'}`}>{row.status === 'approved' ? 'Aprobada' : row.status === 'np' ? 'NP' : 'Sin aprobar'}</span></td><td class="px-3 py-3 text-xs text-slate-600">{row.np?.motivo || '—'}</td><td class="px-3 py-3 text-right">{row.status === 'approved' ? <span class="text-xs text-slate-400">No disponible</span> : <button class={`np-action rounded-lg px-3 py-1.5 text-xs font-medium ${row.status === 'np' ? 'border border-slate-300 text-slate-700' : 'bg-tup text-white'}`} data-docente={row.docenteId} data-subject={row.scope.key} data-action={row.status === 'np' ? 'reactivate' : 'mark_np'}>{row.status === 'np' ? 'Reactivar' : 'Marcar NP'}</button>}</td></tr>)}</tbody></table></div>
+      </section>
+      <aside class="h-fit rounded-2xl bg-white p-4 shadow-tarjeta lg:sticky lg:top-4" aria-labelledby="np-selection-title">
+        <div class="flex items-start justify-between gap-3"><div><h2 id="np-selection-title" class="font-semibold text-tup">Selección para acción masiva</h2><p id="np-selection-count" class="mt-1 text-sm text-slate-500" aria-live="polite">0 asignaturas seleccionadas</p></div><button id="np-clear-selection" type="button" class="text-xs font-medium text-tup disabled:text-slate-400" disabled>Limpiar</button></div>
+        <p id="np-selection-help" class="mt-3 text-xs text-slate-500">Seleccione asignaturas pendientes para marcarlas como NP o asignaturas NP para reactivarlas. No se pueden mezclar ambas acciones.</p>
+        <ul id="np-selected-items" class="mt-3 max-h-64 space-y-2 overflow-y-auto" aria-live="polite"></ul>
+        <div id="np-bulk-reason-wrap" class="mt-4" hidden><label for="np-bulk-reason" class="text-sm font-medium text-slate-700">Motivo administrativo <span class="font-normal text-slate-400">(opcional)</span></label><textarea id="np-bulk-reason" maxlength="500" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="Se aplicará a toda la selección"></textarea></div>
+        <p id="np-selection-error" class="mt-3 text-xs text-rose-700" role="alert" hidden></p>
+        <button id="np-bulk-action" type="button" class="mt-4 w-full rounded-xl bg-tup px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300" disabled>Marcar selección como NP</button>
+      </aside>
+    </div>}
   </div>
 </LayoutAdmin>
 <script is:inline define:vars={{ cycleId }}>
-  document.querySelectorAll('.np-action').forEach((button) => button.addEventListener('click', async function () {
-    var action = this.dataset.action;
-    var motivo = '';
-    if (action === 'mark_np') { motivo = window.prompt('Motivo administrativo (opcional, máximo 500 caracteres):', '') || ''; if (motivo.length > 500) return window.alert('El motivo no puede superar 500 caracteres.'); }
-    this.disabled = true;
-    var response = await fetch('/api/admin/planeacion-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, docente_id: Number(this.dataset.docente), cuatrimestre_id: cycleId, subject_key: this.dataset.subject, motivo: motivo }) });
-    var result = await response.json().catch(function () { return {}; });
-    if (!response.ok) { this.disabled = false; return window.alert(result.error || 'No fue posible actualizar el estado.'); }
-    window.location.reload();
-  }));
+  (function () {
+    var search = document.getElementById('np-search');
+    var checkboxes = Array.prototype.slice.call(document.querySelectorAll('.np-select'));
+    var selected = new Map();
+    var count = document.getElementById('np-selection-count');
+    var list = document.getElementById('np-selected-items');
+    var clear = document.getElementById('np-clear-selection');
+    var actionButton = document.getElementById('np-bulk-action');
+    var reasonWrap = document.getElementById('np-bulk-reason-wrap');
+    var reason = document.getElementById('np-bulk-reason');
+    var error = document.getElementById('np-selection-error');
+
+    function selectionAction() {
+      var first = selected.values().next();
+      return first.done ? null : first.value.status === 'np' ? 'reactivate' : 'mark_np';
+    }
+    function showError(message) {
+      error.textContent = message || '';
+      error.hidden = !message;
+    }
+    function renderSelection() {
+      var action = selectionAction();
+      count.textContent = selected.size + (selected.size === 1 ? ' asignatura seleccionada' : ' asignaturas seleccionadas');
+      clear.disabled = selected.size === 0;
+      actionButton.disabled = selected.size === 0;
+      actionButton.textContent = action === 'reactivate' ? 'Reactivar selección' : 'Marcar selección como NP';
+      reasonWrap.hidden = action !== 'mark_np';
+      list.replaceChildren();
+      selected.forEach(function (item) {
+        var row = document.createElement('li');
+        row.className = 'rounded-lg bg-slate-50 p-2 text-xs text-slate-700';
+        var title = document.createElement('p');
+        title.className = 'font-medium';
+        title.textContent = item.teacher + ' · ' + item.subjectName;
+        var groups = document.createElement('p');
+        groups.className = 'mt-1 text-slate-500';
+        groups.textContent = 'Grupos: ' + item.groups.join(', ');
+        row.append(title, groups);
+        list.appendChild(row);
+      });
+    }
+    checkboxes.forEach(function (checkbox) {
+      checkbox.addEventListener('change', function () {
+        var key = this.dataset.docente + ':' + this.dataset.subject;
+        var action = this.dataset.status === 'np' ? 'reactivate' : 'mark_np';
+        var currentAction = selectionAction();
+        if (this.checked && currentAction && currentAction !== action) {
+          this.checked = false;
+          showError('Seleccione solo asignaturas para una misma acción masiva. Limpie la selección para cambiar de acción.');
+          return;
+        }
+        if (this.checked) {
+          var groups = [];
+          try { groups = JSON.parse(this.dataset.groups || '[]'); } catch (_) { groups = []; }
+          selected.set(key, { docenteId: Number(this.dataset.docente), subjectKey: this.dataset.subject, status: this.dataset.status, teacher: this.dataset.teacher || '', subjectName: this.dataset.subjectName || '', groups: groups });
+        } else selected.delete(key);
+        showError('');
+        renderSelection();
+      });
+    });
+    clear.addEventListener('click', function () {
+      selected.clear();
+      checkboxes.forEach(function (checkbox) { checkbox.checked = false; });
+      showError('');
+      renderSelection();
+    });
+    search.addEventListener('input', function () {
+      var term = this.value.trim().toLocaleLowerCase('es-MX');
+      document.querySelectorAll('tbody tr[data-search]').forEach(function (row) { row.hidden = !!term && !row.dataset.search.includes(term); });
+    });
+    actionButton.addEventListener('click', async function () {
+      var action = selectionAction();
+      if (!action || !selected.size) return;
+      var motivo = reason.value.trim();
+      if (motivo.length > 500) return showError('El motivo no puede superar 500 caracteres.');
+      this.disabled = true;
+      showError('');
+      try {
+        var response = await fetch('/api/admin/planeacion-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, cuatrimestre_id: cycleId, items: Array.from(selected.values()).map(function (item) { return { docente_id: item.docenteId, subject_key: item.subjectKey }; }), motivo: motivo }) });
+        var result = await response.json().catch(function () { return {}; });
+        if (!response.ok) { this.disabled = false; return showError(result.error || 'No fue posible actualizar la selección.'); }
+        window.location.reload();
+      } catch (_) { this.disabled = false; showError('No fue posible conectar con el servidor.'); }
+    });
+    document.querySelectorAll('.np-action').forEach(function (button) { button.addEventListener('click', async function () {
+      var action = this.dataset.action;
+      var motivo = '';
+      if (action === 'mark_np') { motivo = window.prompt('Motivo administrativo (opcional, máximo 500 caracteres):', '') || ''; if (motivo.length > 500) return window.alert('El motivo no puede superar 500 caracteres.'); }
+      this.disabled = true;
+      try {
+        var response = await fetch('/api/admin/planeacion-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, docente_id: Number(this.dataset.docente), cuatrimestre_id: cycleId, subject_key: this.dataset.subject, motivo: motivo }) });
+        var result = await response.json().catch(function () { return {}; });
+        if (!response.ok) { this.disabled = false; return window.alert(result.error || 'No fue posible actualizar el estado.'); }
+        window.location.reload();
+      } catch (_) { this.disabled = false; window.alert('No fue posible conectar con el servidor.'); }
+    }); });
+    renderSelection();
+  }());
 </script>

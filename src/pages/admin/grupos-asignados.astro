@@ -2,6 +2,7 @@
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+import { assignedSubjectGroupForIssue } from '../../lib/importIssueReconciliation';
 
 type GroupRow = {
   id: number;
@@ -31,6 +32,14 @@ type ImportIssueRow = {
   clave: string | null;
   asignatura: string | null;
   docente: string | null;
+};
+
+type TeacherOption = {
+  id: number;
+  nombre: string;
+  apellidos: string | null;
+  email: string | null;
+  numEmpleado: string | null;
 };
 
 function normalizarIdentidad(value: string | null | undefined): string {
@@ -76,12 +85,32 @@ const { data: incidenciasData, error: incidenciasError } = cicloSeleccionado
   ? await cliente
     .from('import_issues')
     .select('id,razon,fila,plan,grupo,clave_asignatura,nombre_asignatura,docente,import_runs!inner(tipo)')
-    .eq('cuatrimestre_id', cuatrimestreId)
+.eq('cuatrimestre_id', cuatrimestreId)
+.eq('resolution_status', 'open')
     .eq('import_runs.tipo', 'asignaciones')
     .order('id')
   : { data: [], error: null };
 
 if (incidenciasError) throw new Error(`No se pudieron obtener las incidencias de conciliación: ${incidenciasError.message}`);
+
+const { data: docentesData, error: docentesError } = categoriaActiva === 'reconciliation' && cicloSeleccionado
+  ? await cliente
+    .from('docentes')
+    .select('id,nombre,apellidos,email,num_empleado')
+    .eq('activo', true)
+    .order('apellidos')
+    .order('nombre')
+  : { data: [], error: null };
+
+if (docentesError) throw new Error(`No se pudieron obtener los docentes activos: ${docentesError.message}`);
+
+const docentesActivos = (docentesData || []).map((teacher: any): TeacherOption => ({
+  id: teacher.id,
+  nombre: teacher.nombre || '',
+  apellidos: teacher.apellidos || null,
+  email: teacher.email || null,
+  numEmpleado: teacher.num_empleado || null,
+}));
 
 const grupos = (gruposData || []).map((group: any): GroupRow => {
   const docente = Array.isArray(group.docentes) ? group.docentes[0] : group.docentes;
@@ -164,16 +193,32 @@ function coincideBusqueda(group: GroupRow, motivo = ''): boolean {
     .includes(termino);
 }
 
-const incidencias = (incidenciasData || []).map((issue: any): ImportIssueRow => ({
-  id: issue.id,
-  razon: issue.razon,
-  fila: issue.fila,
-  plan: issue.plan,
-  grupo: issue.grupo,
-  clave: issue.clave_asignatura,
-  asignatura: issue.nombre_asignatura,
-  docente: issue.docente,
+const gruposParaConciliacion = (gruposData || []).map((group: any) => ({
+  id: group.id,
+  clave: group.clave,
+  docente_id: group.docente_id,
+  asignatura_id: group.asignatura_id,
+  plan_normalizado: group.plan_normalizado,
+  grado: group.grado,
+  grupo_normalizado: group.grupo_normalizado,
+  asignaturas: group.asignaturas,
 }));
+const incidencias = (incidenciasData || [])
+  .map((issue: any): ImportIssueRow => ({
+id: issue.id,
+razon: issue.razon,
+fila: issue.fila,
+plan: issue.plan,
+grupo: issue.grupo,
+clave: issue.clave_asignatura,
+asignatura: issue.nombre_asignatura,
+docente: issue.docente,
+  }))
+  .filter((issue) => !assignedSubjectGroupForIssue({
+plan: issue.plan,
+grupo: issue.grupo,
+clave_asignatura: issue.clave,
+  }, gruposParaConciliacion));
 
 function coincideBusquedaIncidencia(issue: ImportIssueRow): boolean {
   return !termino || [issue.razon, issue.plan, issue.grupo, issue.clave, issue.asignatura, issue.docente, issue.fila]
@@ -318,30 +363,175 @@ function rutaCategoria(categoria: Categoria, incluirBusqueda = true): string {
       </section>
     )}
 
-    {categoriaActiva === 'reconciliation' && incidenciasFiltradas.length > 0 && (
-      <section class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-6 border border-amber-200">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-100 bg-amber-50 px-5 py-4">
-          <div><h2 class="text-lg font-semibold text-amber-900">Incidencias de conciliación</h2><p class="text-xs text-amber-700 mt-1">Registros pendientes del reporte de asignaciones importado.</p></div>
-          <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">{incidenciasFiltradas.length} incidencias</span>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-[1000px] w-full text-sm">
-            <thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Fila</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Grupo</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Plan</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Asignatura</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Docente reportado</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Motivo</th></tr></thead>
-            <tbody class="divide-y">{incidenciasFiltradas.map(issue => (
-              <tr class="hover:bg-amber-50/50">
-                <td class="px-4 py-3 text-slate-600">{issue.fila ?? '—'}</td>
-                <td class="px-4 py-3 font-medium text-slate-700">{issue.grupo || '—'}</td>
-                <td class="px-4 py-3 text-slate-600">{issue.plan || '—'}</td>
-                <td class="px-4 py-3"><span class="font-mono text-xs text-tup">{issue.clave || '—'}</span><span class="block text-slate-600">{issue.asignatura || '—'}</span></td>
-                <td class="px-4 py-3 text-slate-600">{issue.docente || 'No informado en el reporte'}</td>
-                <td class="px-4 py-3 text-slate-600">{issue.razon}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      </section>
-    )}
+        {categoriaActiva === 'reconciliation' && incidencias.length > 0 && (
+          <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] mb-6">
+            <section class="bg-white rounded-2xl shadow-tarjeta overflow-hidden border border-amber-200">
+              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-100 bg-amber-50 px-5 py-4">
+                <div><h2 class="text-lg font-semibold text-amber-900">Incidencias de conciliación</h2><p class="text-xs text-amber-700 mt-1">Seleccione incidencias para asignar un docente; si existe el grupo base, se crea o actualiza su grupo de asignatura. El historial de importación se conserva.</p></div>
+                <div class="flex items-center gap-2"><span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">{incidenciasFiltradas.length} incidencias</span><button id="open-issue-assignment" type="button" class="rounded-lg bg-tup px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300" disabled>Agregar docente</button></div>
+              </div>
+              <div class="border-b border-slate-100 px-5 py-3"><label for="reconciliation-search" class="text-sm font-medium text-slate-700">Filtrar incidencias mostradas</label><input id="reconciliation-search" type="search" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="Grupo, plan, asignatura, docente o motivo" autocomplete="off" /></div>
+              <div class="overflow-x-auto">
+                <table class="min-w-[1050px] w-full text-sm">
+                  <thead><tr class="bg-slate-50 border-b"><th class="w-10 px-4 py-3 text-center text-xs uppercase text-slate-600"><span class="sr-only">Seleccionar</span></th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Fila</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Grupo</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Plan</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Asignatura</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Docente reportado</th><th class="text-left px-4 py-3 text-xs uppercase text-slate-600">Motivo</th></tr></thead>
+                  <tbody class="divide-y">{incidenciasFiltradas.map(issue => (
+                    <tr class="hover:bg-amber-50/50" data-issue-search={`${issue.razon} ${issue.plan || ''} ${issue.grupo || ''} ${issue.clave || ''} ${issue.asignatura || ''} ${issue.docente || ''}`.toLocaleLowerCase('es-MX')}>
+                      <td class="px-4 py-3 text-center"><input class="issue-select h-4 w-4 rounded border-slate-300 text-tup focus:ring-tup" type="checkbox" data-issue-id={issue.id} data-group={issue.grupo || '—'} data-plan={issue.plan || '—'} data-subject={`${issue.clave || '—'}${issue.asignatura ? ` · ${issue.asignatura}` : ''}`} data-reported-teacher={issue.docente || 'No informado en el reporte'} data-reason={issue.razon} aria-label={`Seleccionar incidencia de ${issue.grupo || 'grupo no informado'}`} /></td>
+                      <td class="px-4 py-3 text-slate-600">{issue.fila ?? '—'}</td>
+                      <td class="px-4 py-3 font-medium text-slate-700">{issue.grupo || '—'}</td>
+                      <td class="px-4 py-3 text-slate-600">{issue.plan || '—'}</td>
+                      <td class="px-4 py-3"><span class="font-mono text-xs text-tup">{issue.clave || '—'}</span><span class="block text-slate-600">{issue.asignatura || '—'}</span></td>
+                      <td class="px-4 py-3 text-slate-600">{issue.docente || 'No informado en el reporte'}</td>
+                      <td class="px-4 py-3 text-slate-600">{issue.razon}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </section>
+            <aside class="h-fit rounded-2xl bg-white p-4 shadow-tarjeta lg:sticky lg:top-4" aria-labelledby="issue-assignment-title">
+              <div class="flex items-start justify-between gap-3"><div><h2 id="issue-assignment-title" class="font-semibold text-tup">Agregar docente</h2><p id="issue-selection-count" class="mt-1 text-sm text-slate-500" aria-live="polite">0 incidencias seleccionadas</p></div><button id="issue-clear-selection" type="button" class="text-xs font-medium text-tup disabled:text-slate-400" disabled>Limpiar</button></div>
+              <ul id="issue-selected-items" class="mt-3 max-h-48 space-y-2 overflow-y-auto" aria-live="polite"></ul>
+              <div class="mt-4 border-t border-slate-100 pt-4"><label for="issue-teacher-search" class="text-sm font-medium text-slate-700">Buscar docente activo</label><input id="issue-teacher-search" type="search" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="Nombre, correo o número de empleado" autocomplete="off" /><p id="issue-selected-teacher" class="mt-2 text-xs text-slate-500">Seleccione un docente.</p><div id="issue-teacher-list" class="mt-2 max-h-52 space-y-1 overflow-y-auto rounded-xl border border-slate-100 p-2">{docentesActivos.map(teacher => <button type="button" class="issue-teacher-option w-full rounded-lg px-2 py-2 text-left text-xs hover:bg-slate-50" data-teacher-id={teacher.id} data-teacher-name={`${teacher.nombre} ${teacher.apellidos || ''}`.trim()} data-teacher-search={`${teacher.nombre} ${teacher.apellidos || ''} ${teacher.email || ''} ${teacher.numEmpleado || ''}`.toLocaleLowerCase('es-MX')}><span class="block font-medium text-slate-700">{teacher.nombre} {teacher.apellidos || ''}</span><span class="block text-slate-500">{teacher.email || 'Sin correo'}{teacher.numEmpleado ? ` · ${teacher.numEmpleado}` : ''}</span></button>)}</div></div>
+              {docentesActivos.length === 0 && <p class="mt-2 text-xs text-amber-700">No hay docentes activos disponibles.</p>}
+              <p id="issue-assignment-status" class="mt-3 text-xs text-rose-700" role="alert" hidden></p>
+              <button id="issue-assign-button" type="button" class="mt-4 w-full rounded-xl bg-tup px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300" disabled>Asignar docente a incidencias seleccionadas</button>
+            </aside>
+          </div>
+        )}
 
     {gruposVisibles === 0 && <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">No hay grupos que coincidan con la búsqueda en este ciclo.</div>}
   </div>
-</LayoutAdmin>
+    </LayoutAdmin>
+
+    <script is:inline define:vars={{ cuatrimestreId }}>
+      (function () {
+        var checkboxes = Array.prototype.slice.call(document.querySelectorAll('.issue-select'));
+        if (!document.getElementById('issue-assign-button')) return;
+        var storageKey = 'reconciliation-issue-selection:' + cuatrimestreId;
+        var selected = new Map();
+        var selectedTeacher = null;
+        var search = document.getElementById('reconciliation-search');
+        var teacherSearch = document.getElementById('issue-teacher-search');
+        var count = document.getElementById('issue-selection-count');
+        var list = document.getElementById('issue-selected-items');
+        var clear = document.getElementById('issue-clear-selection');
+        var teacherLabel = document.getElementById('issue-selected-teacher');
+        var status = document.getElementById('issue-assignment-status');
+        var assign = document.getElementById('issue-assign-button');
+        var openAssignment = document.getElementById('open-issue-assignment');
+        var teacherButtons = Array.prototype.slice.call(document.querySelectorAll('.issue-teacher-option'));
+
+        try {
+          var saved = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+          if (Array.isArray(saved)) saved.forEach(function (item) {
+            if (item && Number.isSafeInteger(item.id) && item.id > 0) selected.set(item.id, item);
+          });
+        } catch (_) { sessionStorage.removeItem(storageKey); }
+        checkboxes.forEach(function (checkbox) {
+          var id = Number(checkbox.dataset.issueId);
+          checkbox.checked = selected.has(id);
+        });
+
+        function saveSelection() {
+          sessionStorage.setItem(storageKey, JSON.stringify(Array.from(selected.values()).slice(0, 100)));
+        }
+        function showStatus(message, success) {
+          status.textContent = message || '';
+          status.className = 'mt-3 text-xs ' + (success ? 'text-emerald-700' : 'text-rose-700');
+          status.hidden = !message;
+        }
+        function renderSelection() {
+          count.textContent = selected.size + (selected.size === 1 ? ' incidencia seleccionada' : ' incidencias seleccionadas');
+          clear.disabled = selected.size === 0;
+          assign.disabled = selected.size === 0 || !selectedTeacher;
+          openAssignment.disabled = selected.size === 0;
+          list.replaceChildren();
+          selected.forEach(function (item) {
+            var row = document.createElement('li');
+            row.className = 'rounded-lg bg-amber-50 p-2 text-xs text-slate-700';
+            var title = document.createElement('p');
+            title.className = 'font-medium';
+            title.textContent = item.group + ' · ' + item.subject;
+            var details = document.createElement('p');
+            details.className = 'mt-1 text-slate-500';
+            details.textContent = 'Docente reportado: ' + item.reportedTeacher + ' · ' + item.reason;
+            row.append(title, details);
+            list.appendChild(row);
+          });
+          teacherLabel.textContent = selectedTeacher ? 'Docente seleccionado: ' + selectedTeacher.name : 'Seleccione un docente.';
+          teacherButtons.forEach(function (button) {
+            var active = selectedTeacher && Number(button.dataset.teacherId) === selectedTeacher.id;
+            button.classList.toggle('bg-tup/10', !!active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+          });
+        }
+
+        checkboxes.forEach(function (checkbox) {
+          checkbox.addEventListener('change', function () {
+            var id = Number(this.dataset.issueId);
+            if (this.checked) {
+              if (selected.size >= 100 && !selected.has(id)) {
+                this.checked = false;
+                return showStatus('Solo puede seleccionar hasta 100 incidencias por asignación.', false);
+              }
+              selected.set(id, { id: id, group: this.dataset.group || '—', plan: this.dataset.plan || '—', subject: this.dataset.subject || '—', reportedTeacher: this.dataset.reportedTeacher || 'No informado en el reporte', reason: this.dataset.reason || 'Sin motivo' });
+            } else selected.delete(id);
+            saveSelection();
+            showStatus('', false);
+            renderSelection();
+          });
+        });
+        clear.addEventListener('click', function () {
+          selected.clear();
+          checkboxes.forEach(function (checkbox) { checkbox.checked = false; });
+          saveSelection();
+          showStatus('', false);
+          renderSelection();
+        });
+        search.addEventListener('input', function () {
+          var term = this.value.trim().toLocaleLowerCase('es-MX');
+          document.querySelectorAll('tr[data-issue-search]').forEach(function (row) {
+            row.hidden = !!term && !row.dataset.issueSearch.includes(term);
+          });
+        });
+        teacherSearch.addEventListener('input', function () {
+          var term = this.value.trim().toLocaleLowerCase('es-MX');
+          teacherButtons.forEach(function (button) { button.hidden = !!term && !button.dataset.teacherSearch.includes(term); });
+        });
+        teacherButtons.forEach(function (button) {
+          button.addEventListener('click', function () {
+            selectedTeacher = { id: Number(this.dataset.teacherId), name: this.dataset.teacherName || 'Docente seleccionado' };
+            showStatus('', false);
+            renderSelection();
+          });
+        });
+            openAssignment.addEventListener('click', function () {
+              teacherSearch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              teacherSearch.focus();
+            });
+            assign.addEventListener('click', async function () {
+          if (!selected.size || !selectedTeacher) return;
+          this.disabled = true;
+          showStatus('', false);
+          try {
+            var response = await fetch('/api/admin/asignar-docente-incidencias', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cuatrimestre_id: cuatrimestreId, docente_id: selectedTeacher.id, issue_ids: Array.from(selected.keys()) }),
+            });
+            var result = await response.json().catch(function () { return {}; });
+            if (!response.ok) {
+              this.disabled = false;
+              return showStatus(result.error || 'No fue posible asignar el docente.', false);
+            }
+            sessionStorage.removeItem(storageKey);
+            showStatus('Asignación completada para ' + result.assigned_group_count + ' grupos; actualizando incidencias abiertas…', true);
+            window.setTimeout(function () { window.location.reload(); }, 700);
+          } catch (_) {
+            this.disabled = false;
+            showStatus('No fue posible conectar con el servidor.', false);
+          }
+        });
+        renderSelection();
+      }());
+    </script>

@@ -10,7 +10,7 @@ import {
   findAmbiguousStudentImportRows,
   normalizeStudentImportEmail,
 } from "../../../lib/studentImportIdentity";
-import { selectUniqueGroupCandidate } from "../../../lib/groupImportResolution";
+import { selectCanonicalEquivalentBaseCandidate } from "../../../lib/groupImportResolution";
 
 type RosterRow = {
   rowNumber: number;
@@ -577,11 +577,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       }
     }
 
-    const { data: groups, error: groupsError } = await client
+    const { data: baseGroups, error: groupsError } = await client
       .from("grupos")
       .select(GROUP_FIELDS)
       .eq("cuatrimestre_id", cycleId)
-      .eq("activo", true);
+      .eq("activo", true)
+      .is("asignatura_id", null);
     if (groupsError) {
       await audit.fail("lectura_grupos_fallida");
       return json(
@@ -634,7 +635,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       bucketKeysByGroup.get(bucket.grupo)!.add(bucket.key);
     }
     const legacyUnsafeIds = new Set<number>();
-    for (const group of groups || []) {
+    for (const group of baseGroups || []) {
       const groupNorm = normalizeGroup(group.grupo_normalizado || group.clave);
       if (
         (!group.plan_normalizado || !group.grado) &&
@@ -662,25 +663,25 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     };
 
     for (const bucket of groupBuckets.values()) {
-      const exactCandidates = (groups || []).filter((group) =>
+      const exactCandidates = (baseGroups || []).filter((group) =>
         exactGroupMatch(group, bucket),
       );
-      if (exactCandidates.length > 1) {
+      let group = selectCanonicalEquivalentBaseCandidate(exactCandidates);
+      if (!group && exactCandidates.length > 0) {
         markAmbiguousGroupBucket(bucket);
         continue;
       }
-      let group = selectUniqueGroupCandidate(exactCandidates);
       if (!group) {
-        const legacyCandidates = (groups || []).filter(
+        const legacyCandidates = (baseGroups || []).filter(
           (candidate) =>
             legacyGroupMatch(candidate, bucket) &&
             !legacyUnsafeIds.has(candidate.id),
         );
-        if (legacyCandidates.length > 1) {
+        group = selectCanonicalEquivalentBaseCandidate(legacyCandidates);
+        if (!group && legacyCandidates.length > 0) {
           markAmbiguousGroupBucket(bucket);
           continue;
         }
-        group = selectUniqueGroupCandidate(legacyCandidates);
       }
 
       if (group) {
@@ -705,7 +706,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         if (!inserted.error && inserted.data) {
           group = inserted.data;
           groupsCreated++;
-          (groups || []).push(group);
+          (baseGroups || []).push(group);
         } else {
           // Re-read the exact identity so a repeated/concurrent import can reuse a row created meanwhile.
           const retry = await client
@@ -715,14 +716,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             .eq("plan_normalizado", bucket.plan)
             .eq("grado", bucket.grado)
             .eq("grupo_normalizado", bucket.grupo)
-            .eq("activo", true);
+            .eq("activo", true)
+            .is("asignatura_id", null);
           const retryCandidates = retry.data || [];
-          if (!retry.error && retryCandidates.length > 1) {
+          const retryBase =
+            selectCanonicalEquivalentBaseCandidate(retryCandidates);
+          if (!retry.error && retryCandidates.length > 0 && !retryBase) {
             markAmbiguousGroupBucket(bucket);
             continue;
           }
-          if (!retry.error && retryCandidates.length === 1) {
-            group = selectUniqueGroupCandidate(retryCandidates);
+          if (!retry.error && retryBase) {
+            group = retryBase;
             groupsMatched++;
           } else {
             errors += bucket.rows.length;
@@ -762,9 +766,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const { error } = await client
         .from("grupos")
         .upsert(batch, { onConflict: "id" });
-      if (!error) {
-        groupsUpdated += batch.length;
-      } else {
+      if (error) {
         for (const item of batch) {
           const result = await client
             .from("grupos")
@@ -782,6 +784,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             });
           } else groupsUpdated++;
         }
+      } else {
+        groupsUpdated += batch.length;
       }
     }
 
@@ -801,20 +805,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     let inscriptionsUpserted = 0;
     for (const batch of chunks([...inscriptions.values()])) {
-      const { error } = await client
-        .from("inscripciones")
-        .upsert(batch, {
-          onConflict: "estudiante_id,grupo_id,cuatrimestre_id",
-        });
-      if (!error) {
-        inscriptionsUpserted += batch.length;
-      } else {
+      const { error } = await client.from("inscripciones").upsert(batch, {
+        onConflict: "estudiante_id,grupo_id,cuatrimestre_id",
+      });
+      if (error) {
         for (const item of batch) {
-          const result = await client
-            .from("inscripciones")
-            .upsert(item, {
-              onConflict: "estudiante_id,grupo_id,cuatrimestre_id",
-            });
+          const result = await client.from("inscripciones").upsert(item, {
+            onConflict: "estudiante_id,grupo_id,cuatrimestre_id",
+          });
           if (result.error) {
             errors++;
             addDiagnostic(diagnostics, {
@@ -825,6 +823,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             });
           } else inscriptionsUpserted++;
         }
+      } else {
+        inscriptionsUpserted += batch.length;
       }
     }
 

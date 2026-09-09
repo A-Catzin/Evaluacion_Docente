@@ -25,10 +25,34 @@ export async function finishImportRun(
   summary: Record<string, unknown>,
   status = "completed",
 ) {
-  await client
-    .from("import_runs")
-    .update({ status, resumen: summary, finished_at: new Date().toISOString() })
-    .eq("id", runId);
+  const completion: Record<string, unknown> = {
+    resumen: summary,
+    finished_at: new Date().toISOString(),
+  };
+  if (typeof summary.rowsRead === "number")
+    completion.filas_leidas = summary.rowsRead;
+
+  try {
+    const { error } = await client
+      .from("import_runs")
+      .update(completion)
+      .eq("id", runId);
+    if (error) {
+      console.error("[finishImportRun] update failed", {
+        runId,
+        status,
+        error: error.message,
+      });
+      return { ok: false, error: error.message };
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown import run update failure";
+    console.error("[finishImportRun] update threw", { runId, status, error: message });
+    return { ok: false, error: message };
+  }
+
+  return { ok: true, error: null };
 }
 
 export async function saveImportIssues(

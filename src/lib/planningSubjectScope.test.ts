@@ -15,7 +15,9 @@ describe("planning subject scope", () => {
       { asignaturaId: 5, asignaturaNombre: "Física", grupo: "3A" },
     ]);
 
-    expect(normalizePlanningSubjectName(" Álgebra  Básica ")).toBe("algebra basica");
+    expect(normalizePlanningSubjectName(" Álgebra  Básica ")).toBe(
+      "algebra basica",
+    );
     expect(scopes).toHaveLength(2);
     expect(scopes[0]).toMatchObject({
       key: "algebra basica",
@@ -25,9 +27,23 @@ describe("planning subject scope", () => {
   });
 
   it("resolves NP by normalized subject scope while retaining approved planning", () => {
-    const [scope] = groupPlanningAssignmentsBySubjectName([{ asignaturaId: 4, asignaturaNombre: "Ética Profesional", grupo: "1A" }]);
-    expect(getPlanningSubjectStatus(scope, [], [{ subject_key: "etica profesional", estado: "NP" }])).toBe("np");
-    expect(getPlanningSubjectStatus(scope, [{ asignaturaNombre: "ÉTICA PROFESIONAL", estado: "Aprobado" }], [{ subject_key: "etica profesional", estado: "NP" }])).toBe("approved");
+    const [scope] = groupPlanningAssignmentsBySubjectName([
+      { asignaturaId: 4, asignaturaNombre: "Ética Profesional", grupo: "1A" },
+    ]);
+    expect(
+      getPlanningSubjectStatus(
+        scope,
+        [],
+        [{ subject_key: "etica profesional", estado: "NP" }],
+      ),
+    ).toBe("np");
+    expect(
+      getPlanningSubjectStatus(
+        scope,
+        [{ asignaturaNombre: "ÉTICA PROFESIONAL", estado: "Aprobado" }],
+        [{ subject_key: "etica profesional", estado: "NP" }],
+      ),
+    ).toBe("approved");
   });
 
   it("blocks a second upload across different catalog IDs with the same normalized name", () => {
@@ -51,7 +67,10 @@ describe("planning subject scope", () => {
 
 describe("planning subject scope source contracts", () => {
   const migration = readFileSync(
-    new URL("../../supabase/migrations/063_planning_subject_scope.sql", import.meta.url),
+    new URL(
+      "../../supabase/migrations/063_planning_subject_scope.sql",
+      import.meta.url,
+    ),
     "utf8",
   );
   const uploadApi = readFileSync(
@@ -67,11 +86,24 @@ describe("planning subject scope source contracts", () => {
     "utf8",
   );
   const npMigration = readFileSync(
-    new URL("../../supabase/migrations/065_planning_subject_np.sql", import.meta.url),
+    new URL(
+      "../../supabase/migrations/065_planning_subject_np.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const npBulkMigration = readFileSync(
+    new URL(
+      "../../supabase/migrations/066_planning_subject_np_bulk.sql",
+      import.meta.url,
+    ),
     "utf8",
   );
   const npAdminPage = readFileSync(
-    new URL("../pages/admin/planeaciones/no-presentadas.astro", import.meta.url),
+    new URL(
+      "../pages/admin/planeaciones/no-presentadas.astro",
+      import.meta.url,
+    ),
     "utf8",
   );
   const adminPage = readFileSync(
@@ -80,7 +112,9 @@ describe("planning subject scope source contracts", () => {
   );
 
   it("adds and backfills the covered groups column", () => {
-    expect(migration).toContain("ADD COLUMN IF NOT EXISTS grupos_cubiertos TEXT[]");
+    expect(migration).toContain(
+      "ADD COLUMN IF NOT EXISTS grupos_cubiertos TEXT[]",
+    );
     expect(migration).toContain("SET grupos_cubiertos = ARRAY[grupo]");
   });
 
@@ -90,14 +124,25 @@ describe("planning subject scope source contracts", () => {
     expect(uploadApi).toContain("conflict");
   });
 
-  it("uses an authenticated admin RPC and blocks NP uploads server-side", () => {
+  it("uses authenticated, canonical batch persistence and blocks NP uploads server-side", () => {
     expect(statusApi).toContain('requireRole(cookies, ["superadmin"])');
-    expect(statusApi).toContain("set_planning_subject_np");
+    expect(statusApi).toContain("set_planning_subject_np_bulk");
+    expect(statusApi).toContain("MAX_BATCH_SIZE");
+    expect(statusApi).toContain("planning_status_duplicate_items");
+    expect(statusApi).toContain(
+      "Subject display names from the browser are deliberately ignored",
+    );
     expect(statusApi).toContain("recalcularCalificacionDocente");
     expect(statusApi).toContain("planning_status_recalculation_failed");
     expect(uploadApi).toContain("planning_subject_marked_np");
     expect(npMigration).toContain("ENABLE ROW LEVEL SECURITY");
     expect(npMigration).toContain("approved planning cannot be marked NP");
+    expect(npBulkMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.set_planning_subject_np_bulk",
+    );
+    expect(npBulkMigration).toContain("jsonb_array_length(p_items) > 50");
+    expect(npBulkMigration).toContain("duplicate or invalid NP batch scope");
+    expect(npBulkMigration).toContain("public.set_planning_subject_np(");
   });
 
   it("limits NP scopes and persistence validation to Escolarizado assignments", () => {
@@ -111,5 +156,16 @@ describe("planning subject scope source contracts", () => {
     expect(teacherPage).toContain("grupos_cubiertos");
     expect(adminPage).toContain("Desempeño por asignatura");
     expect(adminPage).toContain("subjectPerformanceRows");
+  });
+
+  it("provides accessible search, homogeneous multi-select, and an adjacent selection panel", () => {
+    expect(npAdminPage).toContain('id="np-search"');
+    expect(npAdminPage).toContain("data-search=");
+    expect(npAdminPage).toContain(".np-select");
+    expect(npAdminPage).toContain('id="np-selected-items"');
+    expect(npAdminPage).toContain('id="np-clear-selection"');
+    expect(npAdminPage).toContain("No se pueden mezclar ambas acciones");
+    expect(npAdminPage).toContain("row.status === 'approved' ? <span");
+    expect(npAdminPage).toContain("items: Array.from(selected.values())");
   });
 });
