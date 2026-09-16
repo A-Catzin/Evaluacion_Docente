@@ -1,16 +1,19 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { requireRole } from '../../lib/auth';
+import { dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { describeEvaluatorLoadFailure } from '../../lib/observationAllocationEvaluatorError';
 
 const auth = await requireRole(Astro.cookies, ['superadmin']);
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo(dbAdmin());
+const cuatrimestres = await obtenerCuatrimestres(dbAdmin());
 const requestedCycleId = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10);
-const cuatrimestreId = cuatrimestres.some((cycle) => cycle.id === requestedCycleId)
-  ? requestedCycleId
-  : cuatrimestreActivo?.id || cuatrimestres[0]?.id || 0;
+const cookieCycleId = Number.parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '', 10);
+const cicloPorQuery = cuatrimestres.find((cycle) => cycle.id === requestedCycleId);
+const cicloPorCookie = cuatrimestres.find((cycle) => cycle.id === cookieCycleId);
+const cicloActivo = cuatrimestres.find((cycle) => cycle.id === cuatrimestreActivo?.id);
+const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0])?.id || 0;
 const coordinadorSel = Astro.url.searchParams.get('coordinador') || '';
 const observadorSel = Astro.url.searchParams.get('observador') || '';
 const coordinatedSearch = (Astro.url.searchParams.get('coordinated_search') || '').slice(0, 120);

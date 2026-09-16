@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
-import { formatScoreCsv } from "../../../services/scoring";
+import { formatPersonName } from "../../../lib/personName";
+import { formatScoreCsv, roundTo2 } from "../../../services/scoring";
 import {
   obtenerCalificacionesPorCuatrimestre,
   type CalificacionFinal,
@@ -66,9 +67,14 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       allDocIds = (allDocs || []).map((d) => d.id);
     } else {
       for (const cycleId of cicloIdsValid) {
-        assignedByCycle.set(cycleId, await getMyAssignedTeacherIds(cl, "coordinated", cycleId));
+        assignedByCycle.set(
+          cycleId,
+          await getMyAssignedTeacherIds(cl, "coordinated", cycleId),
+        );
       }
-      allDocIds = [...new Set([...assignedByCycle.values()].flatMap((ids) => [...ids]))];
+      allDocIds = [
+        ...new Set([...assignedByCycle.values()].flatMap((ids) => [...ids])),
+      ];
     }
 
     if (!allDocIds.length) {
@@ -93,7 +99,11 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     for (const cid of cicloIdsValid) {
       const cals = await obtenerCalificacionesPorCuatrimestre(cl, cid);
       for (const cal of cals) {
-        if (u.rol !== "superadmin" && !assignedByCycle.get(cid)?.has(cal.docente_id)) continue;
+        if (
+          u.rol !== "superadmin" &&
+          !assignedByCycle.get(cid)?.has(cal.docente_id)
+        )
+          continue;
         if (!califPorDocenteCiclo.has(cal.docente_id)) {
           califPorDocenteCiclo.set(cal.docente_id, new Map());
         }
@@ -107,9 +117,10 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       let countFinal = 0;
 
       for (const cid of cicloIdsValid) {
-        const cal = u.rol === "superadmin" || assignedByCycle.get(cid)?.has(d.id)
-          ? califPorDocenteCiclo.get(d.id)?.get(cid)
-          : undefined;
+        const cal =
+          u.rol === "superadmin" || assignedByCycle.get(cid)?.has(d.id)
+            ? califPorDocenteCiclo.get(d.id)?.get(cid)
+            : undefined;
         puntajesPorCiclo[cid] =
           cal && cal.num_instrumentos_completados > 0
             ? cal.calificacion_final
@@ -121,7 +132,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       }
 
       const promedioAnual =
-        countFinal > 0 ? Math.round(sumFinal / countFinal) : null;
+        countFinal > 0 ? roundTo2(sumFinal / countFinal) : null;
 
       return {
         id: d.id,
@@ -147,7 +158,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       ].join(",");
       const rows = resultDocentes.map((d) => {
         const cols = [
-          `"${[d.nombre, d.apellidos].filter(Boolean).join(" ")}"`,
+          `"${formatPersonName([d.nombre, d.apellidos].filter(Boolean).join(" "))}"`,
           `"${d.email}"`,
           `"${d.campus}"`,
           ...cicloIdsValid.map((cid) => formatScoreCsv(d.puntajes[cid])),

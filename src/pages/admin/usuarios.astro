@@ -4,6 +4,7 @@ import { db } from '../../lib/db';
 import type { RolUsuario } from '../../types/supabase';
 import { obtenerCuatrimestreActivo } from '../../services/catalogos';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
+import { formatPersonName } from '../../lib/personName';
 
 
 type FiltroRol = RolUsuario | 'estudiante';
@@ -327,7 +328,7 @@ function buildPageUrl(p:number) {
               </tr></thead>
               <tbody class="divide-y">{filasPag.map(f => {
                 const [paterno, materno] = f.apellidos ? [f.apellidos.split(' ')[0] || '', f.apellidos.split(' ').slice(1).join(' ')] : ['',''];
-                return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{f.nombre}</td><td class="px-3 py-2 text-center">{paterno}</td><td class="px-3 py-2 text-center">{materno || '—'}</td><td class="px-3 py-2 text-center text-xs">{f.email}</td><td class="px-3 py-2 text-center">{f.campus}</td><td class="px-3 py-2 text-center">{f.turno}</td><td class="px-3 py-2 text-center">{f.modalidad || '—'}</td><td class="px-3 py-2 text-center text-xs">{f.materias}</td></tr>);
+                return (<tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{formatPersonName(f.nombre)}</td><td class="px-3 py-2 text-center">{formatPersonName(paterno)}</td><td class="px-3 py-2 text-center">{formatPersonName(materno) || '—'}</td><td class="px-3 py-2 text-center text-xs">{f.email}</td><td class="px-3 py-2 text-center">{f.campus}</td><td class="px-3 py-2 text-center">{f.turno}</td><td class="px-3 py-2 text-center">{f.modalidad || '—'}</td><td class="px-3 py-2 text-center text-xs">{f.materias}</td></tr>);
               })}</tbody>
              </table>
            )}
@@ -341,7 +342,7 @@ function buildPageUrl(p:number) {
                </tr></thead>
                <tbody class="divide-y">{filasPag.map(f => (
                  <tr class="hover:bg-slate-50">
-                   <td class="px-4 py-3 text-center font-medium">{f.nombre} {f.apellidos}</td>
+                   <td class="px-4 py-3 text-center font-medium">{formatPersonName(`${f.nombre} ${f.apellidos}`.trim())}</td>
                    <td class="px-4 py-3 text-center text-slate-600">{f.email}</td>
                    <td class="px-4 py-3 text-center text-slate-600">{f.plan || '—'}</td>
                  </tr>
@@ -357,28 +358,28 @@ function buildPageUrl(p:number) {
                 <th class="px-3 py-2 text-center text-xs uppercase text-slate-600">Rol</th>
               </tr></thead>
               <tbody class="divide-y">{filasPag.map(f => (
-                <tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{f.nombre}</td><td class="px-3 py-2 text-center text-xs">{f.email}</td><td class="px-3 py-2 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>
+                <tr class="hover:bg-slate-50"><td class="px-3 py-2 text-center font-medium">{formatPersonName(f.nombre)}</td><td class="px-3 py-2 text-center text-xs">{f.email}</td><td class="px-3 py-2 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>
               ))}</tbody>
             </table>
           )}
 
-          {rolFiltro === 'superadmin' && (
+{rolFiltro === 'superadmin' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th></tr></thead>
-              <tbody class="divide-y">{filasPag.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td></tr>))}</tbody>
+              <tbody class="divide-y">{filasPag.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{formatPersonName(f.nombre)}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td></tr>))}</tbody>
             </table>
           )}
 
           {rolFiltro === 'observador' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Rol</th></tr></thead>
-              <tbody class="divide-y">{filasPag.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
+              <tbody class="divide-y">{filasPag.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{formatPersonName(f.nombre)}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${COLOR_ROL[f.rol]}`}>{ETIQUETAS_ROL[f.rol]}</span></td></tr>))}</tbody>
             </table>
           )}
           {rolFiltro === 'pendiente' && (
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b"><th class="px-4 py-3 text-xs uppercase text-slate-600">Nombre</th><th class="px-4 py-3 text-xs uppercase text-slate-600">Email</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Rol Solicitado</th><th class="px-4 py-3 text-xs uppercase text-slate-600 text-center">Acción</th></tr></thead>
-              <tbody class="divide-y">{filasPag.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{f.nombre}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-slate-100">{f.rol_solicitado || '—'}</span></td><td class="px-4 py-3 text-center"><a href={`/admin/roles?q=${f.email}`} class="text-xs text-tup hover:underline">Asignar Rol</a></td></tr>))}</tbody>
+              <tbody class="divide-y">{filasPag.map(f => (<tr class="hover:bg-slate-50"><td class="px-4 py-3 text-center font-medium">{formatPersonName(f.nombre)}</td><td class="px-4 py-3 text-center text-slate-600">{f.email}</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-slate-100">{f.rol_solicitado || '—'}</span></td><td class="px-4 py-3 text-center"><a href={`/admin/roles?q=${f.email}`} class="text-xs text-tup hover:underline">Asignar Rol</a></td></tr>))}</tbody>
             </table>
           )}
           {totalPages > 1 && (
@@ -425,7 +426,7 @@ function buildPageUrl(p:number) {
     var filtered = docentesList.filter(function(d){
       return !filtro || (d.nombre+' '+d.apellidos).toLowerCase().includes(filtro);
     });
-    document.getElementById('lista-docs').innerHTML=filtered.map(function(d){return'<label class="selection-card flex items-center gap-2 rounded-lg border border-transparent p-2 cursor-pointer"><input type="checkbox" name="docente_id" value="'+d.id+'" class="accent-tup" /><span>'+d.nombre+' '+d.apellidos+'</span></label>'}).join('')||'<span class="text-slate-400 text-xs">Sin resultados</span>';
+    document.getElementById('lista-docs').innerHTML=filtered.map(function(d){return'<label class="selection-card flex items-center gap-2 rounded-lg border border-transparent p-2 cursor-pointer"><input type="checkbox" name="docente_id" value="'+d.id+'" class="accent-tup" /><span>'+(d.nombre+' '+d.apellidos).toLocaleUpperCase('es-MX')+'</span></label>'}).join('')||'<span class="text-slate-400 text-xs">Sin resultados</span>';
   }
   function filtrarDocs(){ renderDocs(document.getElementById('filtro-docs').value); }
   document.getElementById('btn-agregar').addEventListener('click',function(){document.getElementById('modal-agregar').classList.remove('hidden');document.getElementById('modal-agregar').classList.add('flex')});

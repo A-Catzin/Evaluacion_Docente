@@ -1,11 +1,15 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
-const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreSel = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreSel || '') || 0;
+const cuatrimestreActivo = await obtenerCuatrimestreActivo(dbAdmin());
+const cuatrimestres = await obtenerCuatrimestres(dbAdmin());
+const cuatrimestreIdParam = Number(Astro.url.searchParams.get('cuatrimestre'));
+const cuatrimestreSel = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+const cicloPorQuery = cuatrimestres.find(c => c.id === cuatrimestreIdParam);
+const cicloPorCookie = cuatrimestres.find(c => c.id === cuatrimestreSel);
+const cicloActivo = cuatrimestres.find(c => c.id === cuatrimestreActivo?.id);
+const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0])?.id || 0;
 if (Astro.url.searchParams.has('cuatrimestre') || cuatrimestreActivo?.id) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }

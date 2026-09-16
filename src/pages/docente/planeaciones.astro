@@ -1,9 +1,8 @@
 ---
 import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { db } from '../../lib/db';
-import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import PlanningSubmissionWindowNotice from '../../components/PlanningSubmissionWindowNotice.astro';
-import { formatPlanningDate, getPlanningSubmissionWindow, planningSubmissionMessage } from '../../lib/planningSubmissionWindow';
+import { formatPlanningDate, planningSubmissionMessage, planningWindowFromRpc } from '../../lib/planningSubmissionWindow';
 import { groupPlanningAssignmentsBySubjectName, isPlanningSubjectBlocked, normalizePlanningSubjectName } from '../../lib/planningSubjectScope';
 import { getPlanningSubjectStatus } from '../../lib/planningSubjectStatus';
 
@@ -12,55 +11,148 @@ const refresh = Astro.cookies.get('sb-refresh-token')?.value;
 const currentSearch = Astro.url.search || '';
 if (!token || !refresh) return Astro.redirect('/auth');
 const cl = db();
-const { data: sesion } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
-if (!sesion.user) return Astro.redirect('/auth');
-const { data: usuario } = await cl.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
+let sesion: any = null;
+try {
+  const { data } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
+  sesion = data;
+} catch (error) {
+  console.error('[docente/planeaciones] session query failed', error);
+  return Astro.redirect('/auth');
+}
+if (!sesion?.user) return Astro.redirect('/auth');
+let usuario: any = null;
+try {
+  const { data } = await cl.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
+  usuario = data;
+} catch (error) {
+  console.error('[docente/planeaciones] user profile query failed', error);
+  return Astro.redirect(`/docente/dashboard${currentSearch}`);
+}
 if (!usuario || usuario.rol !== 'docente') return Astro.redirect(`/docente/dashboard${currentSearch}`);
 
 // Si no tiene entidad_id, buscar por email
 let entidadId = usuario.entidad_id;
 if (!entidadId && usuario.email) {
-  const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
-  if (doc) entidadId = doc.id;
+  try {
+    const { data: doc } = await cl.from('docentes').select('id').eq('email', usuario.email).maybeSingle();
+    if (doc) entidadId = doc.id;
+  } catch (error) {
+    console.error('[docente/planeaciones] teacher identity query failed', error);
+    return Astro.redirect(`/docente/dashboard${currentSearch}`);
+  }
 }
 if (!entidadId) return Astro.redirect(`/docente/dashboard${currentSearch}`);
 
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
+const dataLoadWarnings: string[] = [];
+async function safeQuery(query: PromiseLike<any>, operation: string): Promise<any> {
+  try {
+    return await query;
+  } catch (error) {
+    console.error(`[docente/planeaciones] ${operation} failed`, error);
+    return { data: null, error };
+  }
+}
+const [activeCycleResult, cycleListResult] = await Promise.all([
+  safeQuery(cl.from('cuatrimestres').select('*').eq('activo', true).maybeSingle(), 'active cycle query'),
+  safeQuery(cl.from('cuatrimestres').select('*').order('id', { ascending: false }), 'cycle list query'),
+]);
+const cuatrimestreActivo = activeCycleResult.data;
+const cuatrimestres = cycleListResult.data || [];
+const cycleDataAvailable = !activeCycleResult.error && !cycleListResult.error;
+if (activeCycleResult.error || cycleListResult.error) {
+  dataLoadWarnings.push('No pudimos cargar la información del cuatrimestre. La carga y el historial de planeaciones no están disponibles por el momento.');
+}
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
 const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
 const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
-const planningWindow = await getPlanningSubmissionWindow(cl, cuatrimestreId);
-const planningSubmissionOpen = planningWindow.state === 'open';
+const planningDataContextAvailable = cycleDataAvailable && cuatrimestreId > 0;
+if (cycleDataAvailable && !cuatrimestreId) {
+  dataLoadWarnings.push('No hay un cuatrimestre disponible para consultar planeaciones.');
+}
 if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
 }
-// La identidad de planeación es el nombre normalizado de la asignatura dentro del ciclo.
-const { data: gruposDocente } = await cl.from('grupos').select('id,clave,asignatura_id,modalidad').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).eq('activo', true);
-const materiasIds = [...new Set((gruposDocente||[]).map(g => g.asignatura_id).filter((id): id is number => id != null))];
-const { data: misAsignaturas } = materiasIds.length > 0 ? await cl.from('asignaturas').select('id,clave,nombre').in('id', materiasIds).order('nombre') : { data: [] };
-const asignaturasPorId = new Map((misAsignaturas || []).map(a => [a.id, a]));
-const subjectScopes = groupPlanningAssignmentsBySubjectName((gruposDocente || []).flatMap((grupo) => {
+
+const planningQueries = planningDataContextAvailable
+  ? await Promise.all([
+      safeQuery(cl.rpc('planning_submission_window_state', { p_cuatrimestre_id: cuatrimestreId }), 'submission window query'),
+      safeQuery(cl.from('grupos').select('id,clave,asignatura_id,modalidad').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).eq('activo', true), 'assigned groups query'),
+      safeQuery(cl.from('docentes').select('campus,turno').eq('id', entidadId).maybeSingle(), 'teacher profile query'),
+      safeQuery(cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).order('fecha_subida', { ascending: false }), 'planning history query'),
+      safeQuery(cl.from('planning_subject_np').select('subject_key,estado,motivo').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId), 'subject NP query'),
+    ])
+  : null;
+const planningWindowResult = planningQueries?.[0];
+const groupsResult = planningQueries?.[1];
+const teacherResult = planningQueries?.[2];
+const planeacionesResult = planningQueries?.[3];
+const subjectNpResult = planningQueries?.[4];
+const planningWindow = planningWindowResult?.error ? null : planningWindowFromRpc(planningWindowResult?.data);
+const gruposDocente = groupsResult?.data || [];
+const docente = teacherResult?.data || null;
+const planeacionesRaw = planeacionesResult?.data || [];
+const npSubjectRecords = subjectNpResult?.data || [];
+if (planningWindowResult?.error) dataLoadWarnings.push('No pudimos confirmar si el periodo de entrega está habilitado.');
+if (groupsResult?.error) dataLoadWarnings.push('No pudimos cargar tus grupos asignados. La carga de planeaciones no está disponible por el momento.');
+if (teacherResult?.error) dataLoadWarnings.push('No pudimos cargar tus datos complementarios. La carga de planeaciones no está disponible por el momento.');
+if (planeacionesResult?.error) dataLoadWarnings.push('No pudimos cargar tus planeaciones enviadas. El historial y la carga no están disponibles por el momento.');
+if (subjectNpResult?.error) dataLoadWarnings.push('No pudimos verificar las asignaturas marcadas como no presentadas. La carga no está disponible por el momento.');
+
+// La autoridad de carga es la modalidad del grupo activo, no el perfil del docente.
+const groupIds = groupsResult?.error ? [] : gruposDocente.map((group) => group.id);
+const groupNpResult = groupIds.length > 0
+  ? await safeQuery(cl.from('planning_group_np').select('grupo_id,estado,motivo').eq('cuatrimestre_id', cuatrimestreId).in('grupo_id', groupIds), 'group NP query')
+  : null;
+const groupNpRecords = groupNpResult?.data || [];
+if (groupNpResult?.error) dataLoadWarnings.push('No pudimos verificar los grupos marcados como no presentados. La carga no está disponible por el momento.');
+const npGroupIds = new Set(groupNpRecords.filter((record: any) => record.estado === 'NP').map((record: any) => record.grupo_id));
+const gruposEscolarizados = gruposDocente.filter((group) => group.modalidad === 'Escolarizado');
+const gruposNoEscolarizados = gruposDocente.filter((group) => group.modalidad !== 'Escolarizado');
+const gruposDocenteElegibles = gruposEscolarizados.filter((group) => !npGroupIds.has(group.id));
+const gruposNP = gruposEscolarizados.filter((group) => npGroupIds.has(group.id));
+const materiasIds = !groupsResult?.error && !groupNpResult?.error
+  ? [...new Set(gruposDocenteElegibles.map(g => g.asignatura_id).filter((id): id is number => id != null))]
+  : [];
+const subjectsResult = materiasIds.length > 0
+  ? await safeQuery(cl.from('asignaturas').select('id,clave,nombre').in('id', materiasIds).order('nombre'), 'assigned subjects query')
+  : null;
+const misAsignaturas = subjectsResult?.data || [];
+if (subjectsResult?.error) dataLoadWarnings.push('No pudimos cargar las asignaturas de tus grupos. La carga no está disponible por el momento.');
+const asignaturasPorId = new Map(misAsignaturas.map(a => [a.id, a]));
+const subjectScopes = groupPlanningAssignmentsBySubjectName(gruposDocenteElegibles.flatMap((grupo) => {
   const asignatura = grupo.asignatura_id ? asignaturasPorId.get(grupo.asignatura_id) : null;
   return asignatura ? [{ asignaturaId: asignatura.id, asignaturaNombre: asignatura.nombre, grupo: grupo.clave, modalidad: grupo.modalidad }] : [];
 }));
-const { data: docente } = await cl.from('docentes').select('campus,turno').eq('id', entidadId).maybeSingle();
-const { data: planeacionesRaw } = await cl.from('planeaciones').select('*, asignaturas!inner(nombre)').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).order('fecha_subida', { ascending: false });
-const planningSubjectRecords = (planeacionesRaw || []).map((p: any) => ({ asignaturaNombre: p.asignaturas?.nombre || String(p.asignatura_id), estado: p.estado }));
-const { data: npSubjectRecords } = await cl.from('planning_subject_np').select('subject_key,estado,motivo').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId);
-const materiasNP = subjectScopes.filter((scope) => getPlanningSubjectStatus(scope, planningSubjectRecords, npSubjectRecords || []) === 'np');
-const materiasDisponibles = subjectScopes.filter((scope) =>
-  getPlanningSubjectStatus(scope, planningSubjectRecords, npSubjectRecords || []) !== 'np'
-  && !isPlanningSubjectBlocked(planningSubjectRecords, scope.nombre),
-);
+const planningSubjectRecords = planeacionesRaw.map((p: any) => ({ asignaturaNombre: p.asignaturas?.nombre || String(p.asignatura_id), estado: p.estado }));
+const canDetermineUploadScope = planningDataContextAvailable
+  && !groupsResult?.error
+  && !groupNpResult?.error
+  && !subjectsResult?.error
+  && !planeacionesResult?.error
+  && !subjectNpResult?.error;
+const canShowUpload = canDetermineUploadScope && !teacherResult?.error && !planningWindowResult?.error;
+const canShowPlanningList = planningDataContextAvailable && !planeacionesResult?.error;
+const planningSubmissionOpen = canShowUpload && planningWindow?.state === 'open';
+const materiasNP = canDetermineUploadScope
+  ? subjectScopes.filter((scope) => getPlanningSubjectStatus(scope, planningSubjectRecords, npSubjectRecords) === 'np')
+  : [];
+const materiasDisponibles = canDetermineUploadScope
+  ? subjectScopes.filter((scope) =>
+      getPlanningSubjectStatus(scope, planningSubjectRecords, npSubjectRecords) !== 'np'
+      && !isPlanningSubjectBlocked(planningSubjectRecords, scope.nombre),
+    )
+  : [];
 
 // Las correcciones conservan el mismo registro y su grupo canónico original.
 const materiasCorreccion = new Map<string, { id: number; asignaturaId: number; grupo: string; nombre: string; motivo: string | null }>();
-for (const p of (planeacionesRaw || []) as any[]) {
-  if (p.estado !== 'Corrección') continue;
-  const key = normalizePlanningSubjectName(p.asignaturas?.nombre || String(p.asignatura_id));
-  if (!materiasCorreccion.has(key)) materiasCorreccion.set(key, { id: p.id, asignaturaId: p.asignatura_id, grupo: p.grupo, nombre: p.asignaturas?.nombre || String(p.asignatura_id), motivo: p.comentario_retroalimentacion || null });
+if (canDetermineUploadScope) {
+  for (const p of planeacionesRaw as any[]) {
+    const isEligibleGroup = gruposDocenteElegibles.some((group) => group.clave === p.grupo && group.asignatura_id === p.asignatura_id);
+    if (p.estado !== 'Corrección' || !isEligibleGroup) continue;
+    const key = normalizePlanningSubjectName(p.asignaturas?.nombre || String(p.asignatura_id));
+    if (!materiasCorreccion.has(key)) materiasCorreccion.set(key, { id: p.id, asignaturaId: p.asignatura_id, grupo: p.grupo, nombre: p.asignaturas?.nombre || String(p.asignatura_id), motivo: p.comentario_retroalimentacion || null });
+  }
 }
 
 interface PlaneacionItem { id: number; asignatura: string; grupo: string; grupos: string[]; estado: string; puntaje: number | null; url: string; evaluacionDetalle: Record<string,{score:string}> | null; retroalimentacion: string | null; observaciones: string | null; }
@@ -98,7 +190,14 @@ for (const p of (planeacionesRaw || [])) {
     <p class="text-slate-500 mb-6">{cuatrimestre?.nombre || 'Sin cuatrimestre activo'}</p>
     <form method="GET" class="mb-6 flex items-center gap-3"><label for="cuatrimestre" class="text-sm font-medium text-slate-700">Consultar cuatrimestre</label><select id="cuatrimestre" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => <option value={c.id} selected={c.id === cuatrimestreId}>{c.clave}</option>)}</select></form>
 
-    {!planningSubmissionOpen && <PlanningSubmissionWindowNotice message={planningSubmissionMessage(planningWindow)} opensAt={formatPlanningDate(planningWindow.opens_at)} closesAt={formatPlanningDate(planningWindow.closes_at)} />}
+    {dataLoadWarnings.length > 0 && (
+      <div class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900" role="alert">
+        <h2 class="font-bold">Información de planeaciones no disponible</h2>
+        <ul class="mt-2 list-disc space-y-1 pl-5">{dataLoadWarnings.map((warning) => <li>{warning}</li>)}</ul>
+      </div>
+    )}
+
+    {planningWindowResult && !planningWindowResult.error && planningWindow && planningWindow.state !== 'open' && <PlanningSubmissionWindowNotice message={planningSubmissionMessage(planningWindow)} opensAt={formatPlanningDate(planningWindow.opens_at)} closesAt={formatPlanningDate(planningWindow.closes_at)} />}
 
     {materiasNP.length > 0 && (
       <div class="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
@@ -107,8 +206,22 @@ for (const p of (planeacionesRaw || [])) {
         <ul class="mt-3 list-disc space-y-1 pl-5">{materiasNP.map((scope) => <li>{scope.nombre} · {scope.grupos.join(', ')}</li>)}</ul>
       </div>
     )}
+    {gruposNP.length > 0 && (
+      <div class="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+        <h2 class="font-bold text-slate-800">Grupos marcados como no presentados (NP)</h2>
+        <p class="mt-1">Estos grupos se excluyeron administrativamente y no están disponibles para cargar una planeación.</p>
+        <ul class="mt-3 list-disc space-y-1 pl-5">{gruposNP.map((group) => <li>{group.clave}</li>)}</ul>
+      </div>
+        )}
+        {gruposNoEscolarizados.length > 0 && (
+          <div class="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+            <h2 class="font-bold text-slate-800">Grupos sin carga de planeación en este buzón</h2>
+            <p class="mt-1">Los grupos que no son de modalidad Escolarizado se muestran solo como referencia y no están disponibles para cargar una planeación aquí.</p>
+            <ul class="mt-3 list-disc space-y-1 pl-5">{gruposNoEscolarizados.map((group) => <li>{group.clave}</li>)}</ul>
+          </div>
+        )}
 
-    <!-- Leyenda -->
+        <!-- Leyenda -->
     <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-8 text-sm text-slate-600 leading-relaxed space-y-3">
       <p class="font-medium text-tup">Estimado(a) docente:</p>
       <p>Una vez que haya cursado y acreditado el curso en Moodle <strong>"Formación Docente I"</strong>, en el cual se encuentra integrado el proceso para el uso del nuevo formato de Planeación Didáctica correspondiente al ciclo <strong>{cuatrimestre?.clave || 'actual'}</strong>, deberá haber elaborado las planeaciones didácticas de cada una de las asignaturas y grupos a su cargo.</p>
@@ -164,7 +277,7 @@ for (const p of (planeacionesRaw || [])) {
     </div>}
 
     <!-- Lista -->
-    <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
+    {canShowPlanningList && <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       <div class="px-6 py-4 border-b"><h2 class="font-semibold text-slate-700">Planeaciones Enviadas ({planeaciones.length})</h2></div>
       {planeaciones.length === 0 ? (
         <div class="p-12 text-center ">No has subido planeaciones todavía.</div>
@@ -172,7 +285,7 @@ for (const p of (planeacionesRaw || [])) {
         <table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-left px-4 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-4 py-3 text-xs uppercase">Grupos cubiertos</th><th class="text-center px-4 py-3 text-xs uppercase">Estado</th><th class="text-center px-4 py-3 text-xs uppercase">Puntaje</th><th class="text-right px-4 py-3 text-xs uppercase">PDF</th></tr></thead>
         <tbody class="divide-y">{planeaciones.map(p => (<tr class="hover:bg-slate-50"><td class="px-4 py-3"><p>{p.asignatura}</p>{(p.retroalimentacion || p.observaciones || p.estado === 'Corrección') && <div class="mt-2 space-y-1 text-xs text-slate-600">{p.estado === 'Corrección' && <p class="rounded-md bg-red-50 p-2 text-red-800"><span class="font-semibold">Motivo de corrección:</span> {p.retroalimentacion || 'No se registró un motivo de corrección.'}</p>}{p.estado !== 'Corrección' && p.retroalimentacion && <p><span class="font-medium text-slate-700">Retroalimentación:</span> {p.retroalimentacion}</p>}{p.observaciones && <p><span class="font-medium text-slate-700">Observaciones:</span> {p.observaciones}</p>}</div>}</td><td class="px-4 py-3">{p.grupos.filter(Boolean).join(', ') || p.grupo}</td><td class="px-4 py-3 text-center"><span class={`px-2 py-0.5 rounded-lg text-xs font-medium ${p.estado==='Aprobado'?'bg-emerald-50 text-emerald-700':p.estado==='Corrección'?'bg-red-50 text-red-700':'bg-amber-50 text-amber-700'}`}>{p.estado}</span></td><td class="px-4 py-3 text-center font-bold">{(()=>{if(!p.puntaje)return'—';const d=p.evaluacionDetalle||{};let sum=0,count=0;for(const k in d){const s=d[k]?.score;if(s==='na'||s==null)continue;sum+=parseInt(s);count++}const max=count*2;return count>0?Math.round(p.puntaje)+'% ('+sum+'/'+max+')':Math.round(p.puntaje)+'%';})()}</td><td class="px-4 py-3 text-right"><a href={p.url} target="_blank" class="text-tup text-xs hover:underline">Ver PDF</a></td></tr>))}</tbody></table>
       )}
-    </div>
+    </div>}
     <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
   </div>
 </LayoutDocente>
@@ -222,29 +335,47 @@ for (const p of (planeacionesRaw || [])) {
   }
   
   document.getElementById('form-subir').addEventListener('submit',async function(e){
-    e.preventDefault();var btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Subiendo...';
+    e.preventDefault();var btn=this.querySelector('button[type="submit"]');var previousButtonText=btn.textContent;btn.disabled=true;btn.textContent='Preparando carga...';
     var file=document.getElementById('archivo').files[0];
-    if(!file){toast('Selecciona un archivo PDF',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
+    var maxPlanningPdfBytes=30*1024*1024;
+    var maxLegacyMultipartBytes=4*1024*1024;
+    function restoreButton(){btn.disabled=false;btn.textContent=previousButtonText}
+    if(!file){toast('Selecciona un archivo PDF',true);restoreButton();return}
+    if(file.size<=0||file.size>maxPlanningPdfBytes){toast('El archivo PDF debe pesar máximo 30 MiB.',true);restoreButton();return}
+    if(file.type!=='application/pdf'||!file.name.toLowerCase().endsWith('.pdf')){toast('Selecciona un archivo PDF válido.',true);restoreButton();return}
     var asig=document.getElementById('asignatura_id');var grupo=document.getElementById('grupo').value;
-    if(!asig.value||!grupo){toast('Selecciona asignatura y grupo',true);btn.disabled=false;btn.textContent='Subir Planeación';return}
+    if(!asig.value||!grupo){toast('Selecciona asignatura y grupo',true);restoreButton();return}
     var scope=scopeForAssignment(parseInt(asig.value));
-    var asigNombre=asig.options[asig.selectedIndex].text.replace(/\s+/g,'_');var nombreArchivo=asigNombre+'_'+grupo+'_doc_'+cuatrimestreClave+'.pdf';
+    var planId=document.getElementById('plan_id').value;
+    var submission={cuatrimestre_id:cuatrimestreId,asignatura_id:asig.value,plan_id:planId||undefined,grupo:grupo,grupos_cubiertos:scope?scope.grupos:[grupo],modalidad:document.getElementById('modalidad').value,proyecto:document.getElementById('proyecto').value==='true',laboratorio:document.getElementById('laboratorio').value,visitas:document.getElementById('visitas').value,comentario:document.getElementById('comentario').value.trim()||'',file_name:file.name,content_type:file.type,file_size:file.size};
     try{
-       var formData=new FormData();
-       formData.append('file',file);
-      formData.append('cuatrimestre_id',cuatrimestreId); formData.append('asignatura_id',asig.value);
-      var planId = document.getElementById('plan_id').value;
-      if (planId) formData.append('plan_id', planId);
-      formData.append('grupo',grupo); formData.append('grupos_cubiertos',JSON.stringify(scope ? scope.grupos : [grupo])); formData.append('modalidad',document.getElementById('modalidad').value);
-      formData.append('proyecto',document.getElementById('proyecto').value==='true'?'true':'false');
-      formData.append('laboratorio',document.getElementById('laboratorio').value);
-      formData.append('visitas',document.getElementById('visitas').value);
-      formData.append('comentario',document.getElementById('comentario').value.trim()||'');
-      formData.append('campus',campus); formData.append('turno',turno); formData.append('nombre',nombreArchivo);
-      var uploadRes=await fetch('/api/docente/subir-archivo',{method:'POST',body:formData});
-      if(!uploadRes.ok){var errData=await uploadRes.json().catch(function(){return{}});toast('Error: '+(errData.error||errData.message||uploadRes.status),true);btn.disabled=false;btn.textContent='Subir Planeación';return}
+      var initialization=await fetch('/api/docente/planeacion-upload-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cuatrimestre_id:cuatrimestreId,file_name:file.name,content_type:file.type,file_size:file.size})});
+      var initialized=await initialization.json().catch(function(){return{}});
+      if(initialization.ok){
+    btn.textContent='Subiendo PDF...';
+    var uploadHeaders=initialized.upload_headers;
+    if(!uploadHeaders||uploadHeaders['Content-Type']!==file.type||uploadHeaders['If-None-Match']!=='*')throw new Error('No se pudo preparar la carga directa del PDF. Inténtalo de nuevo.');
+    var putResponse=await fetch(initialized.upload_url,{method:'PUT',headers:uploadHeaders,body:file});
+    if(!putResponse.ok) throw new Error('No se pudo cargar el PDF directamente. Verifica tu conexión e inténtalo de nuevo.');
+    btn.textContent='Guardando planeación...';
+    var completeResponse=await fetch('/api/docente/planeacion-upload-complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({},submission,{path:initialized.path}))});
+    if(!completeResponse.ok){var completionError=await completeResponse.json().catch(function(){return{}});throw new Error(completionError.error||'No se pudo guardar la planeación.');}
+      }else if(initialized.code==='r2_direct_upload_unavailable'){
+    // Never send a large PDF through Vercel's multipart request-body limit.
+    if(file.size>maxLegacyMultipartBytes){toast('La carga directa no está disponible. Intenta más tarde o usa un PDF de hasta 4 MiB.',true);restoreButton();return}
+    btn.textContent='Subiendo...';
+    var formData=new FormData();formData.append('file',file);
+    formData.append('cuatrimestre_id',cuatrimestreId);formData.append('asignatura_id',asig.value);
+    if(planId)formData.append('plan_id',planId);
+    formData.append('grupo',grupo);formData.append('grupos_cubiertos',JSON.stringify(scope?scope.grupos:[grupo]));formData.append('modalidad',submission.modalidad);
+    formData.append('proyecto',submission.proyecto?'true':'false');formData.append('laboratorio',submission.laboratorio);formData.append('visitas',submission.visitas);formData.append('comentario',submission.comentario);
+    var uploadRes=await fetch('/api/docente/subir-archivo',{method:'POST',body:formData});
+    if(!uploadRes.ok){var legacyError=await uploadRes.json().catch(function(){return{}});throw new Error(legacyError.error||legacyError.message||uploadRes.status);}
+      }else{
+    toast('Error: '+(initialized.error||initialized.message||initialization.status),true);restoreButton();return;
+      }
       toast('¡Planeación subida exitosamente!',false);setTimeout(function(){location.reload()},1000);
-    }catch(err){toast('Error: '+err.message,true);btn.disabled=false;btn.textContent='Subir Planeación'}
+    }catch(err){toast('Error: '+(err&&err.message?err.message:'No se pudo completar la carga.'),true);restoreButton()}
    });
   }
 </script>

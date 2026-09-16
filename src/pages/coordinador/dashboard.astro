@@ -4,6 +4,7 @@ import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/
 import { db } from '../../lib/db';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 import { getMyAssignedTeacherIds } from '../../lib/teacherAssignments';
+import { formatPersonName } from '../../lib/personName';
 import {
   buildCoordinatedPortfolio,
   buildObservationPortfolio,
@@ -143,14 +144,14 @@ const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
               {coordinatedRows.map((row) => {
                 const links = coordinatedPortfolioLinks(cuatrimestreId, row.teacher.id);
                 return <tr class="align-top hover:bg-slate-50/70">
-                  <td class="px-5 py-4"><p class="font-semibold text-slate-800">{row.teacher.nombre} {row.teacher.apellidos}</p><p class="mt-1 text-xs text-slate-500">{row.teacher.modalidad || 'Modalidad no registrada'}</p></td>
+<td class="px-5 py-4"><p class="font-semibold text-slate-800">{formatPersonName(`${row.teacher.nombre} ${row.teacher.apellidos}`)}</p><p class="mt-1 text-xs text-slate-500">{row.teacher.modalidad || 'Modalidad no registrada'}</p></td>
                   <td class="px-4 py-4"><span class={`rounded-full px-2.5 py-1 text-xs font-medium ${row.coordinationCompleted ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{row.coordinationCompleted ? 'Registrada' : 'Pendiente'}</span></td>
                   <td class="px-4 py-4"><p class="font-medium text-slate-700">{row.planningSubmitted} entregada{row.planningSubmitted === 1 ? '' : 's'}</p><p class="mt-1 text-xs text-slate-500">{row.planningPending} pendiente{row.planningPending === 1 ? '' : 's'} · {row.planningReviewed} evaluada{row.planningReviewed === 1 ? '' : 's'}</p></td>
                   <td class="px-4 py-4"><span class={`rounded-full px-2.5 py-1 text-xs font-medium ${row.resultsAvailable ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{row.resultsAvailable ? 'Disponibles' : 'Sin consolidar'}</span></td>
                   <td class="px-5 py-4"><div class="flex flex-wrap justify-end gap-2">
-                    {!row.coordinationCompleted && <a href={links.coordination} aria-label={`Evaluar coordinación de ${row.teacher.nombre} ${row.teacher.apellidos}`} class="rounded-lg bg-tup px-3 py-1.5 text-xs font-medium text-white">Evaluar coordinación</a>}
-                    <a href={links.planning} aria-label={`Revisar planeaciones de ${row.teacher.nombre} ${row.teacher.apellidos}`} class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700">Planeaciones</a>
-                    <a href={links.results} aria-label={`Ver resultados de ${row.teacher.nombre} ${row.teacher.apellidos}`} class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700">Resultados</a>
+                    {!row.coordinationCompleted && <a href={links.coordination} aria-label={`Evaluar coordinación de ${formatPersonName(`${row.teacher.nombre} ${row.teacher.apellidos}`)}`} class="rounded-lg bg-tup px-3 py-1.5 text-xs font-medium text-white">Evaluar coordinación</a>}
+                    <a href={links.planning} aria-label={`Revisar planeaciones de ${formatPersonName(`${row.teacher.nombre} ${row.teacher.apellidos}`)}`} class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700">Planeaciones</a>
+                    <a href={links.results} aria-label={`Ver resultados de ${formatPersonName(`${row.teacher.nombre} ${row.teacher.apellidos}`)}`} class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700">Resultados</a>
                   </div></td>
                 </tr>;
               })}
@@ -179,9 +180,9 @@ const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
               {observationRows.map((row) => {
                 const links = observationPortfolioLinks(cuatrimestreId, row.teacher.id);
                 return <tr class="hover:bg-slate-50/70">
-                  <td class="px-5 py-4"><p class="font-semibold text-slate-800">{row.teacher.nombre} {row.teacher.apellidos}</p><p class="mt-1 text-xs text-slate-500">{row.teacher.modalidad || 'Modalidad no registrada'}</p></td>
+<td class="px-5 py-4"><p class="font-semibold text-slate-800">{formatPersonName(`${row.teacher.nombre} ${row.teacher.apellidos}`)}</p><p class="mt-1 text-xs text-slate-500">{row.teacher.modalidad || 'Modalidad no registrada'}</p></td>
                   <td class="px-4 py-4"><span class={`rounded-full px-2.5 py-1 text-xs font-medium ${row.observationCompleted ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{row.observationCompleted ? 'Registrada' : 'Pendiente'}</span></td>
-                  <td class="px-5 py-4 text-right">{row.observationCompleted ? <span class="text-xs font-medium text-emerald-700">Observación registrada</span> : <a href={links.observation} aria-label={`Iniciar observación de ${row.teacher.nombre} ${row.teacher.apellidos}`} class="inline-flex rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-medium text-white">Iniciar observación</a>}</td>
+                  <td class="px-5 py-4 text-right">{row.observationCompleted ? <span class="text-xs font-medium text-emerald-700">Observación registrada</span> : <a href={links.observation} aria-label={`Iniciar observación de ${formatPersonName(`${row.teacher.nombre} ${row.teacher.apellidos}`)}`} class="inline-flex rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-medium text-white">Iniciar observación</a>}</td>
                 </tr>;
               })}
             </tbody>

@@ -1,13 +1,11 @@
-import { obtenerClienteSuperbase, obtenerClienteAdmin } from './supabaseClient';
-import type { RolUsuario } from '../types/supabase';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { crearClienteSuperbase, obtenerClienteAdmin } from "./supabaseClient";
+import type { RolUsuario } from "../types/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-let _cachedDb: SupabaseClient | null = null;
 let _cachedDbAdmin: SupabaseClient | null = null;
 
 export function db(): SupabaseClient {
-  if (!_cachedDb) _cachedDb = obtenerClienteSuperbase();
-  return _cachedDb;
+  return crearClienteSuperbase();
 }
 
 export function dbAdmin(): SupabaseClient {
@@ -15,13 +13,18 @@ export function dbAdmin(): SupabaseClient {
   return _cachedDbAdmin;
 }
 
-export async function obtenerRolUsuario(userId: string): Promise<RolUsuario | null> {
-  const cliente = db();
-  const { data: usuario } = await cliente
-    .from('usuarios')
-    .select('rol')
-    .eq('id', userId)
+export async function obtenerRolUsuario(
+  userId: string,
+  cliente: SupabaseClient = db(),
+): Promise<RolUsuario | null> {
+  const { data: usuario, error } = await cliente
+    .from("usuarios")
+    .select("rol")
+    .eq("id", userId)
     .maybeSingle();
 
+  // Propagate returned Supabase failures so callers can distinguish an
+  // unavailable upstream from an authenticated user without an allowed role.
+  if (error) throw error;
   return (usuario?.rol as RolUsuario) ?? null;
 }

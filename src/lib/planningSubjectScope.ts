@@ -1,4 +1,5 @@
 export type PlanningSubjectAssignment = {
+  grupoId?: number;
   asignaturaId: number;
   asignaturaNombre: string;
   grupo: string;
@@ -19,6 +20,20 @@ export type PlanningSubjectRecord = {
   asignaturaNombre: string;
   estado?: string | null;
 };
+
+export const GROUP_NP_FILTER_TOKENS = ["23", "24", "53", "11", "12"] as const;
+
+/** Returns true only when the token is delimited from adjacent digits. */
+export function hasStandaloneGroupNumericToken(
+  groupName: unknown,
+  token: string | number,
+): boolean {
+  const normalizedToken = String(token).trim();
+  if (!/^\d+$/.test(normalizedToken)) return false;
+  return new RegExp(`(^|\\D)${normalizedToken}(?=$|\\D)`).test(
+    String(groupName || ""),
+  );
+}
 
 /**
  * Subject identity for planning is the human subject name, not its catalog ID.

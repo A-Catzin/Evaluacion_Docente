@@ -2,7 +2,7 @@
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
-import { formatScore } from '../../services/scoring';
+import { formatScore, roundTo2 } from '../../services/scoring';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 import { getMyAssignedTeacherIds } from '../../lib/teacherAssignments';
 
@@ -124,7 +124,7 @@ if (modo === 'general') {
           const vals = cicloIds.map(cid => d.puntajes[cid]).filter((v: any) => v != null) as number[];
           return {
             ...d,
-            promedioAnual: vals.length ? Math.round(vals.reduce((a: number, b: number) => a + b, 0) / vals.length) : null,
+            promedioAnual: vals.length ? roundTo2(vals.reduce((a: number, b: number) => a + b, 0) / vals.length) : null,
           };
         })
         .sort((a: any, b: any) => a.apellidos.localeCompare(b.apellidos)),
@@ -199,7 +199,7 @@ if (modo === 'general') {
               <tbody class="divide-y">
 {individualData?.docentes?.map((d: any) => {
                   const anual = individualData.anualMap.get(d.id);
-                  const anualAvg = anual && anual.count > 0 ? Math.round(anual.sum / anual.count) : null;
+                  const anualAvg = anual && anual.count > 0 ? roundTo2(anual.sum / anual.count) : null;
                   return (
                     <tr class="hover:bg-slate-50">
                       <td class="px-3 py-2"><p class="font-medium text-xs">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</p><p class="text-[10px] text-slate-400">{d.email}</p></td>

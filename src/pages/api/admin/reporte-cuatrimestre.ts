@@ -3,6 +3,7 @@ import { db } from "../../../lib/db";
 import { formatScoreCsv } from "../../../services/scoring";
 import { obtenerCalificacionesPorCuatrimestre } from "../../../services/calificaciones";
 import { getMyAssignedTeacherIds } from "../../../lib/teacherAssignments";
+import { formatPersonName } from "../../../lib/personName";
 
 export const GET: APIRoute = async ({ url, cookies }) => {
   const t = cookies.get("sb-access-token")?.value;
@@ -46,7 +47,9 @@ export const GET: APIRoute = async ({ url, cookies }) => {
         .eq("activo", true);
       docIds = (allDocs || []).map((d) => d.id);
     } else {
-      docIds = [...await getMyAssignedTeacherIds(cl, "coordinated", cuatrimestreId)];
+      docIds = [
+        ...(await getMyAssignedTeacherIds(cl, "coordinated", cuatrimestreId)),
+      ];
     }
 
     const { data: docentes } = docIds.length
@@ -71,7 +74,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     for (const d of docentes || []) {
       const cal = califPorDocente.get(d.id);
       rows.push(
-        `"${d.nombre}","${d.apellidos}","${d.email}",${formatScoreCsv(cal?.score_encuesta_estudiantil)},${formatScoreCsv(cal?.score_coordinacion)},${formatScoreCsv(cal?.score_planeacion)},${formatScoreCsv(cal?.score_observacion)},${formatScoreCsv(cal?.score_autoevaluacion)},${cal && cal.num_instrumentos_completados > 0 ? formatScoreCsv(cal.calificacion_final) : "—"},"${cal?.categoria_final ?? "No iniciado"}",${cal ? `${cal.num_instrumentos_completados}/${cal.num_instrumentos_esperados}` : "0/5"}`,
+        `"${formatPersonName(d.nombre)}","${formatPersonName(d.apellidos)}","${d.email}",${formatScoreCsv(cal?.score_encuesta_estudiantil)},${formatScoreCsv(cal?.score_coordinacion)},${formatScoreCsv(cal?.score_planeacion)},${formatScoreCsv(cal?.score_observacion)},${formatScoreCsv(cal?.score_autoevaluacion)},${cal && cal.num_instrumentos_completados > 0 ? formatScoreCsv(cal.calificacion_final) : "—"},"${cal?.categoria_final ?? "No iniciado"}",${cal ? `${cal.num_instrumentos_completados}/${cal.num_instrumentos_esperados}` : "0/5"}`,
       );
     }
 

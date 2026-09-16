@@ -1,8 +1,9 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { db } from '../../lib/db';
+import { dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { assignedSubjectGroupForIssue } from '../../lib/importIssueReconciliation';
+import { formatPersonName } from '../../lib/personName';
 
 type GroupRow = {
   id: number;
@@ -55,22 +56,24 @@ function identidadGrupo(cicloId: number, plan: string | null | undefined, grado:
   return [cicloId, plan, grado, grupo].map(value => normalizarIdentidad(String(value))).join('|');
 }
 
-const cuatrimestres = await obtenerCuatrimestres();
-const activo = await obtenerCuatrimestreActivo();
+const cliente = dbAdmin();
+const cuatrimestres = await obtenerCuatrimestres(cliente);
+const activo = await obtenerCuatrimestreActivo(cliente);
 const queryId = Number(Astro.url.searchParams.get('cuatrimestre'));
 const cookieId = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
 const cicloPorQuery = cuatrimestres.find(c => c.id === queryId);
 const cicloActivo = activo && cuatrimestres.find(c => c.id === activo.id);
 const cicloPorCookie = cuatrimestres.find(c => c.id === cookieId);
-const cicloSeleccionado = cicloPorQuery || cicloActivo || cicloPorCookie || cuatrimestres[0];
+const cicloSeleccionado = cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0];
 const cuatrimestreId = cicloSeleccionado?.id || 0;
+if (Astro.url.searchParams.has('cuatrimestre') && cicloPorQuery) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+}
 const busqueda = Astro.url.searchParams.get('q')?.trim() || '';
 const tab = Astro.url.searchParams.get('tab');
 const categoriaActiva: Categoria = tab === 'reconciliation' || tab === 'missing-load' || tab === 'assigned'
   ? tab
   : 'assigned';
-const cliente = db();
-
 const { data: gruposData, error: gruposError } = cicloSeleccionado
   ? await cliente
     .from('grupos')
@@ -106,8 +109,8 @@ if (docentesError) throw new Error(`No se pudieron obtener los docentes activos:
 
 const docentesActivos = (docentesData || []).map((teacher: any): TeacherOption => ({
   id: teacher.id,
-  nombre: teacher.nombre || '',
-  apellidos: teacher.apellidos || null,
+nombre: formatPersonName(teacher.nombre || ''),
+  apellidos: formatPersonName(teacher.apellidos || '') || null,
   email: teacher.email || null,
   numEmpleado: teacher.num_empleado || null,
 }));
@@ -115,7 +118,7 @@ const docentesActivos = (docentesData || []).map((teacher: any): TeacherOption =
 const grupos = (gruposData || []).map((group: any): GroupRow => {
   const docente = Array.isArray(group.docentes) ? group.docentes[0] : group.docentes;
   const asignatura = Array.isArray(group.asignaturas) ? group.asignaturas[0] : group.asignaturas;
-  const docenteNombre = [docente?.nombre, docente?.apellidos].filter(Boolean).join(' ').trim();
+  const docenteNombre = formatPersonName([docente?.nombre, docente?.apellidos].filter(Boolean).join(' ').trim());
   const grupo = group.grupo_normalizado || group.clave || '';
   const plan = group.plan_normalizado || '';
 
@@ -212,7 +215,7 @@ plan: issue.plan,
 grupo: issue.grupo,
 clave: issue.clave_asignatura,
 asignatura: issue.nombre_asignatura,
-docente: issue.docente,
+docente: formatPersonName(issue.docente),
   }))
   .filter((issue) => !assignedSubjectGroupForIssue({
 plan: issue.plan,

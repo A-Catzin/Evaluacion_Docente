@@ -1,17 +1,14 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerDocentes } from '../../services/docentes';
-import { db } from '../../lib/db';
+import { dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestres } from '../../services/catalogos';
-import { formatScore } from '../../services/scoring';
+import { formatScore, roundTo2 } from '../../services/scoring';
 import { obtenerCalificacionDocente, obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 
-const cliente = db();
-const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-if (token && refresh) await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+const cliente = dbAdmin();
 const todos = await obtenerDocentes();
-const cuatrimestres = (await obtenerCuatrimestres()).sort((a,b)=>a.id-b.id);
+const cuatrimestres = (await obtenerCuatrimestres(cliente)).sort((a,b)=>a.id-b.id);
 
 const docentes = todos.filter(d => d.activo !== false);
 
@@ -45,7 +42,7 @@ if (modo === 'individual' && docenteSel) {
     sumFinals += Number(row.calificacion_final);
   }
 }
-const annualAvg = totalCycles > 0 ? Math.round(sumFinals / totalCycles) : null;
+const annualAvg = totalCycles > 0 ? roundTo2(sumFinals / totalCycles) : null;
 
 // ─── General ───
 const cicloInicioParam = parseInt(Astro.url.searchParams.get('ciclo_inicio') || '') || cuatrimestres[0]?.id || 0;
@@ -101,7 +98,7 @@ calMap.get(row.docente_id)!.set(row.cuatrimestre_id, row);
         return [{
           ...d,
           puntajes,
-          promedioAnual: countFinal > 0 ? Math.round(sumFinal / countFinal) : null,
+          promedioAnual: countFinal > 0 ? roundTo2(sumFinal / countFinal) : null,
         }];
       });
 

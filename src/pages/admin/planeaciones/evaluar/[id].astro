@@ -1,13 +1,20 @@
 ---
 import LayoutAdmin from '../../../../layouts/LayoutAdmin.astro';
-import { db } from '../../../../lib/db';
+import { dbAdmin } from '../../../../lib/db';
 import { obtenerUrlFirmadaDesdeUrlAlmacenada } from '../../../../lib/storage';
-import { obtenerPlaneacion } from '../../../../services/planeaciones';
+import { formatPersonName } from '../../../../lib/personName';
 
 const id = parseInt(Astro.params.id || '0');
 const backSearch = Astro.url.search || '';
-const cliente = db();
-const plan = await obtenerPlaneacion(id);
+// /admin is restricted to superadmin by middleware. Use the same privileged
+// read path as the admin planning list so RLS cannot turn a valid ID into a 302.
+const cliente = dbAdmin();
+const { data: plan, error: planError } = await cliente
+  .from('planeaciones')
+  .select('*')
+  .eq('id', id)
+  .maybeSingle();
+if (planError) throw planError;
 if (!plan) return Astro.redirect(`/admin/planeaciones${backSearch}`);
 
 let urlFirmada = plan.url_pdf;
@@ -31,7 +38,7 @@ const categorias = (cats || []).map(c => {
   <div class="animate-flotar-entrada max-w-3xl mx-auto">
     <a href={`/admin/planeaciones${backSearch}`} class="text-sm text-tup hover:underline mb-4 inline-block">← Volver</a>
     <h1 class="text-3xl font-bold text-tup mb-2">Evaluar Planeación Docente (Admin)</h1>
-    <p class="text-slate-500 mb-1">{docente?.nombre} {docente?.apellidos} · {asignatura?.nombre || ''} · Grupo {plan.grupo}</p>
+    <p class="text-slate-500 mb-1">{formatPersonName(`${docente?.nombre || ''} ${docente?.apellidos || ''}`.trim())} · {asignatura?.nombre || ''} · Grupo {plan.grupo}</p>
     <a href={urlFirmada} target="_blank" class="text-sm text-tup hover:underline mb-6 inline-block">📄 Ver PDF de la planeación</a>
 
     <form id="form-eval" class="space-y-4">

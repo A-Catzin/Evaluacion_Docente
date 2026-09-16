@@ -1,0 +1,57 @@
+---
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../../lib/auth';
+import { formatCancunDateTimeLocal } from '../../../lib/autodiagnosticoSubmissionWindow';
+
+const auth = await requireRole(Astro.cookies, ['superadmin']);
+const { data: cycleData, error: cyclesError } = await auth.client
+  .from('cuatrimestres')
+  .select('id,clave,activo')
+  .order('id', { ascending: false });
+const cycles = cyclesError ? [] : cycleData || [];
+const requestedCycleId = Number(Astro.url.searchParams.get('cuatrimestre'));
+const requestedCycle = cycles.find((cycle) => cycle.id === requestedCycleId);
+const activeCycle = cycles.find((cycle) => cycle.activo);
+const cuatrimestreId = requestedCycle?.id || activeCycle?.id || cycles[0]?.id || 0;
+const { data: windowsData, error: windowsError } = await auth.client.rpc('autodiagnostico_submission_window_admin_list');
+const windows = windowsError ? [] : windowsData || [];
+const window = windows.find((item: any) => Number(item.cuatrimestre_id) === cuatrimestreId) as any;
+const mode = window?.mode || 'manual_closed';
+const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
+---
+
+<LayoutAdmin titulo="Acceso a autoevaluación docente — Admin">
+  <section class="animate-flotar-entrada mx-auto max-w-3xl">
+    <a href={`/admin/instrumentos${qs}`} class="text-sm text-tup hover:underline">← Volver a instrumentos</a>
+    <div class="mt-4 mb-6"><h1 class="text-3xl font-bold text-tup">Acceso a autoevaluación docente</h1><p class="mt-1 text-sm text-slate-500">La configuración aplica únicamente al cuatrimestre seleccionado. Sin configuración, las nuevas autoevaluaciones permanecen cerradas; los históricos se conservan en consulta.</p></div>
+        {cyclesError ? <p class="mb-6 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">No fue posible cargar los cuatrimestres disponibles.</p> : <form method="GET" class="mb-6 flex items-center gap-3"><label class="text-sm font-medium text-slate-700" for="cycle">Cuatrimestre</label><select id="cycle" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cycles.map((cycle) => <option value={cycle.id} selected={cycle.id === cuatrimestreId}>{cycle.clave}</option>)}</select></form>}
+        {windowsError && cuatrimestreId ? <p class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="alert">No fue posible cargar la configuración actual. El acceso se muestra cerrado por seguridad.</p> : null}
+        {cuatrimestreId ? <form id="autodiagnostico-window-form" class="space-y-5 rounded-2xl bg-white p-6 shadow-tarjeta">
+
+      <input type="hidden" name="cuatrimestre_id" value={cuatrimestreId} />
+      <fieldset><legend class="text-sm font-semibold text-slate-800">Modalidad de recepción</legend><div class="mt-3 space-y-3 text-sm text-slate-700">
+        <label class="selection-card flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4"><input type="radio" name="mode" value="manual_open" checked={mode === 'manual_open'} /><span><strong>Apertura manual</strong><br /><span class="text-slate-500">Los docentes pueden enviar su autoevaluación.</span></span></label>
+        <label class="selection-card flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4"><input type="radio" name="mode" value="manual_closed" checked={mode === 'manual_closed'} /><span><strong>Desactivar autoevaluación</strong><br /><span class="text-slate-500">Conserva el historial completado y bloquea únicamente nuevos envíos.</span></span></label>
+        <label class="selection-card flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4"><input type="radio" name="mode" value="scheduled" checked={mode === 'scheduled'} /><span><strong>Ventana programada</strong><br /><span class="text-slate-500">Se abre exactamente al inicio y se cierra exactamente al final.</span></span></label>
+      </div></fieldset>
+      <div id="scheduled-fields" class={`grid gap-4 rounded-xl border border-slate-200 p-4 sm:grid-cols-2 ${mode === 'scheduled' ? '' : 'hidden'}`}>
+        <label class="text-sm font-medium text-slate-700">Inicio<input name="opens_at" type="datetime-local" value={formatCancunDateTimeLocal(window?.opens_at)} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+        <label class="text-sm font-medium text-slate-700">Cierre<input name="closes_at" type="datetime-local" value={formatCancunDateTimeLocal(window?.closes_at)} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+        <p class="sm:col-span-2 text-xs text-slate-500">Las fechas se interpretan siempre en America/Cancun, sin usar la zona horaria del navegador.</p>
+      </div>
+      <p id="autodiagnostico-window-error" class="hidden rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert"></p>
+      <p id="autodiagnostico-window-success" class="hidden rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800" role="status"></p>
+      <button class="rounded-xl bg-tup px-5 py-2.5 text-sm font-semibold text-white">Guardar acceso</button>
+    </form> : <p class="rounded-2xl bg-white p-6 text-sm text-slate-500 shadow-tarjeta">No hay cuatrimestres disponibles.</p>}
+  </section>
+</LayoutAdmin>
+
+<script is:inline>
+  var form = document.getElementById('autodiagnostico-window-form');
+  if (form) {
+    var scheduled = document.getElementById('scheduled-fields'); var error = document.getElementById('autodiagnostico-window-error'); var success = document.getElementById('autodiagnostico-window-success');
+    function updateScheduled() { scheduled.classList.toggle('hidden', !form.querySelector('input[name="mode"]:checked[value="scheduled"]')); }
+    form.querySelectorAll('input[name="mode"]').forEach(function(input) { input.addEventListener('change', updateScheduled); });
+    form.addEventListener('submit', async function(event) { event.preventDefault(); error.classList.add('hidden'); success.classList.add('hidden'); var data = new FormData(form); var unavailableMessage = 'El servicio de configuración de acceso no está disponible. Inténtalo de nuevo.'; try { var mode = data.get('mode'); var isScheduled = mode === 'scheduled'; var response = await fetch('/api/admin/autodiagnostico/acceso', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cuatrimestre_id: Number(data.get('cuatrimestre_id')), mode: mode, opens_at: isScheduled ? data.get('opens_at') : null, closes_at: isScheduled ? data.get('closes_at') : null }) }); var result = await response.json().catch(function() { return {}; }); if (!response.ok) { var validationError = result.error === 'La configuración de acceso no es válida.' || result.error === 'La ventana programada requiere fechas y horas válidas en horario de Cancún, con inicio anterior al cierre.'; error.textContent = validationError ? result.error : unavailableMessage; error.classList.remove('hidden'); return; } success.textContent = 'La configuración de acceso fue guardada.'; success.classList.remove('hidden'); } catch (_) { error.textContent = unavailableMessage; error.classList.remove('hidden'); } });
+  }
+</script>

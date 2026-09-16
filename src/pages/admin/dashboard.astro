@@ -1,49 +1,118 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerCuatrimestres, obtenerCuatrimestreActivo } from '../../services/catalogos';
-import { db } from '../../lib/db';
-import { formatScore } from '../../services/scoring';
+import { db, dbAdmin } from '../../lib/db';
+import { formatScore, roundTo2 } from '../../services/scoring';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
+import { formatPersonName } from '../../lib/personName';
 
-const busqueda = Astro.url.searchParams.get('q') || '';
-const pathname = Astro.url.pathname;
-const cuatrimestre = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
-const idSeleccionado = Astro.url.searchParams.get('cuatrimestre') || '';
-const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(idSeleccionado) || cuatrimestre?.id || parseInt(cuatrimestreIdCookie || '') || 0;
-const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
-// Persistir en cookie
-if (Astro.url.searchParams.has('cuatrimestre')) {
-  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
-}
-const cliente = db();
-const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-let adminNombre = 'Administrador';
-if (token && refresh) {
-  const { data: sesion } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
-  if (sesion.user) {
-    const { data: u } = await cliente.from('usuarios').select('nombre_completo,email').eq('id', sesion.user.id).maybeSingle();
-    adminNombre = u?.nombre_completo || u?.email?.split('@')[0] || adminNombre;
-  }
-}
+    const busqueda = Astro.url.searchParams.get('q') || '';
+    const pathname = Astro.url.pathname;
+    const dashboardWarnings: string[] = [];
+    function reportDashboardFailure(operation: string, error: unknown): void {
+      console.error(`[admin/dashboard] ${operation} failed`, error);
+      dashboardWarnings.push(operation);
+    }
 
-interface ProgresoEENativa {
-  docente_id: number;
-  inscripciones_elegibles: number;
-  controles_enviados: number;
-  respuestas_nativas: number;
-}
+    let cuatrimestre: Awaited<ReturnType<typeof obtenerCuatrimestreActivo>> = null;
+    let cuatrimestres: Awaited<ReturnType<typeof obtenerCuatrimestres>> = [];
+    try {
+      cuatrimestre = await obtenerCuatrimestreActivo(dbAdmin());
+    } catch (error) {
+      reportDashboardFailure('active cycle query', error);
+    }
+    try {
+      cuatrimestres = await obtenerCuatrimestres(dbAdmin());
+    } catch (error) {
+      reportDashboardFailure('cycle list query', error);
+    }
 
-const { data: progresoEENativaData, error: progresoEENativaError } = await cliente.rpc('obtener_progreso_encuesta_estudiantil_nativa', { p_cuatrimestre_id: cuatrimestreId });
-if (progresoEENativaError) throw progresoEENativaError;
-const progresoEENativa = (progresoEENativaData || []) as ProgresoEENativa[];
-// Usuarios pendientes de aprobacion
-const { count: pendientes } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
+    const idSeleccionado = Number(Astro.url.searchParams.get('cuatrimestre'));
+    const cuatrimestreIdCookie = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+    const cicloPorQuery = cuatrimestres.find(c => c.id === idSeleccionado);
+    const cicloPorCookie = cuatrimestres.find(c => c.id === cuatrimestreIdCookie);
+    const cicloActivo = cuatrimestres.find(c => c.id === cuatrimestre?.id);
+    const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0])?.id || 0;
+    const navigationParams = new URLSearchParams(Astro.url.searchParams);
+    if (cuatrimestreId) navigationParams.set('cuatrimestre', String(cuatrimestreId));
+    else navigationParams.delete('cuatrimestre');
+    const qs = navigationParams.size ? `?${navigationParams.toString()}` : '';
+    const clearSearchParams = new URLSearchParams(navigationParams);
+    clearSearchParams.delete('q');
+    const qsWithoutSearch = clearSearchParams.size ? `?${clearSearchParams.toString()}` : '';
+    // Persistir en cookie
+    if (Astro.url.searchParams.has('cuatrimestre')) {
+      Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
+    }
+    const cliente = db();
+    const token = Astro.cookies.get('sb-access-token')?.value;
+    const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+    let adminNombre = 'Administrador';
+    if (token && refresh) {
+      try {
+        const { data: sesion, error: sessionError } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+        if (sessionError) {
+          reportDashboardFailure('admin session query', sessionError);
+        }
+        if (sesion?.user) {
+          const { data: u, error: profileError } = await cliente.from('usuarios').select('email').eq('id', sesion.user.id).maybeSingle();
+          if (profileError) {
+            reportDashboardFailure('admin profile query', profileError);
+          }
+          adminNombre = u?.email?.split('@')[0] || adminNombre;
+        }
+      } catch (error) {
+        reportDashboardFailure('admin session query', error);
+      }
+    }
 
-// Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
-const aggData = await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId);
+    interface ProgresoEENativa {
+      docente_id: number;
+      inscripciones_elegibles: number;
+      controles_enviados: number;
+      respuestas_nativas: number;
+    }
+
+    let progresoEENativa: ProgresoEENativa[] = [];
+    if (cuatrimestreId > 0) {
+      try {
+        const { data: progresoEENativaData, error: progresoEENativaError } = await cliente.rpc('obtener_progreso_encuesta_estudiantil_nativa', { p_cuatrimestre_id: cuatrimestreId });
+        if (progresoEENativaError) {
+          reportDashboardFailure('student survey progress query', progresoEENativaError);
+        } else {
+          progresoEENativa = (progresoEENativaData || []) as ProgresoEENativa[];
+        }
+      } catch (error) {
+        reportDashboardFailure('student survey progress query', error);
+      }
+    }
+
+    // Usuarios pendientes de aprobacion
+    let pendientes = 0;
+    try {
+      const { count, error: pendientesError } = await cliente.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'pendiente');
+      if (pendientesError) {
+        reportDashboardFailure('pending users query', pendientesError);
+      } else {
+        pendientes = count ?? 0;
+      }
+    } catch (error) {
+      reportDashboardFailure('pending users query', error);
+    }
+
+    // El dashboard lee sólo filas precalculadas para evitar cálculos masivos bajo demanda.
+    let aggData: Awaited<ReturnType<typeof obtenerCalificacionesPorCuatrimestre>> = [];
+    if (cuatrimestreId > 0) {
+      try {
+        // Score rows depend on tables protected by RLS. The admin results page
+        // uses the service-role read path; keep the dashboard in sync with it.
+        aggData = await obtenerCalificacionesPorCuatrimestre(dbAdmin(), cuatrimestreId, {
+          incluirFallbackInline: false,
+        });
+      } catch (error) {
+        reportDashboardFailure('dashboard scores query', error);
+      }
+    }
 
 interface FilaDashboard {
   id: number; nombre: string; apellidos: string; email: string;
@@ -82,7 +151,7 @@ const filas = busqueda
 const totalEvaluados = filas.length;
 const docentesConEENativaIniciada = filasTodas.filter(f => f.respuestasNativas > 0).length;
 const conFinal = filasTodas.filter(f => (f.final360 || 0) > 0);
-const promInstitucional = conFinal.length > 0 ? Math.round(conFinal.reduce((s,f) => s + (f.final360 || 0), 0) / conFinal.length) : null;
+const promInstitucional = conFinal.length > 0 ? roundTo2(conFinal.reduce((s,f) => s + (f.final360 || 0), 0) / conFinal.length) : null;
 const sobresalientes = conFinal.filter(f => (f.final360 || 0) >= 80).length;
 const pctSobresaliente = conFinal.length > 0 ? Math.round((sobresalientes / conFinal.length) * 100) : 0;
 
@@ -119,10 +188,16 @@ const accesosRapidos = [
 <LayoutAdmin titulo="Dashboard — Admin">
   <div class="animate-flotar-entrada">
     <div class="mb-6">
-      <p class="text-slate-500 text-sm">Hola, {adminNombre}</p>
+      <p class="text-slate-500 text-sm">Hola, {formatPersonName(adminNombre)}</p>
       <h1 class="text-3xl font-bold text-tup">Dashboard Administrativo</h1>
       <p class="text-slate-500 mt-1">Atajos rápidos para navegar el panel SED-360.</p>
     </div>
+
+    {dashboardWarnings.length > 0 && (
+      <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">
+No se pudieron cargar algunos datos del dashboard. La página sigue disponible; intentá recargar en unos minutos.
+      </div>
+    )}
 
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
       {accesosRapidos.map(card => (
@@ -141,7 +216,8 @@ const accesosRapidos = [
     <div class="flex items-center justify-between mb-6">
       <div><p class="text-sm text-slate-400">Ciclo activo</p><p class="text-slate-500">{cuatrimestreSel?.clave || 'Sin cuatrimestre activo'}</p></div>
       <form method="GET" class="flex items-center gap-2">
-        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id.toString()===idSeleccionado}>{c.clave}</option>))}</select>
+        {busqueda && <input type="hidden" name="q" value={busqueda} />}
+        <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.clave}</option>))}</select>
       </form>
     </div>
 
@@ -170,7 +246,7 @@ const accesosRapidos = [
         <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
         <input type="text" name="q" value={busqueda} placeholder="Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href={`/admin/dashboard${qs}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+        {busqueda && (<a href={`/admin/dashboard${qsWithoutSearch}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
@@ -195,7 +271,7 @@ const accesosRapidos = [
         </tr></thead>
         <tbody class="divide-y">{filas.map(d => (
           <tr class="hover:bg-slate-50">
-            <td class="px-3 py-2 text-center font-medium">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</td>
+            <td class="px-3 py-2 text-center font-medium">{formatPersonName(`${d.nombre} ${d.apellidos}`.trim())}</td>
             <td class="px-3 py-2 text-center text-slate-600 text-xs">{d.email}</td>
             <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/5</span></td>
             <td class={`px-2 py-2 text-center ${colorN(d.promEst)}`}>{formatScore(d.promEst)}</td>

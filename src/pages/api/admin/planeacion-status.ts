@@ -9,10 +9,16 @@ import {
   normalizePlanningSubjectName,
 } from "../../../lib/planningSubjectScope";
 
+// Subject NP batches stay deliberately small because each item also recalculates a teacher grade.
 const MAX_BATCH_SIZE = 50;
+// Group NP applies one atomic RPC transaction to a filtered selection. This accommodates
+// cycles with hundreds of visible assignments while bounding locks and audit work.
+const MAX_GROUP_NP_BATCH_SIZE = 1000;
 type PlanningAction = "mark_np" | "reactivate";
+type GroupNpAction = "mark_group_np" | "reactivate_group_np";
 type RequestedItem = { docenteId: number; subjectKey: string };
 type ResolvedItem = RequestedItem & { subjectName: string };
+type GroupNpItem = { grupoId: number };
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -48,6 +54,77 @@ function itemSignature(item: RequestedItem) {
   return `${item.docenteId}:${item.subjectKey}`;
 }
 
+function parseGroupNpItem(value: unknown): GroupNpItem | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const grupoId = positiveInteger((value as Record<string, unknown>).grupo_id);
+  return grupoId ? { grupoId } : null;
+}
+
+async function setGroupNpStatus(
+  client: any,
+  body: Record<string, unknown>,
+  action: GroupNpAction,
+) {
+  const cuatrimestreId = positiveInteger(body.cuatrimestre_id);
+  const motivo = typeof body.motivo === "string" ? body.motivo.trim() : "";
+  const hasBatchItems = Object.hasOwn(body, "items");
+  const requestedItems = hasBatchItems
+    ? Array.isArray(body.items)
+      ? body.items.map(parseGroupNpItem)
+      : []
+    : [parseGroupNpItem(body)];
+
+  if (
+    !cuatrimestreId ||
+    motivo.length > 500 ||
+    requestedItems.length === 0 ||
+    requestedItems.length > MAX_GROUP_NP_BATCH_SIZE ||
+    requestedItems.some((item) => !item)
+  )
+    return json(
+      {
+        error: "Solicitud de estado NP por grupo inválida",
+        code: "planning_group_np_invalid",
+      },
+      400,
+    );
+
+  const items = requestedItems as GroupNpItem[];
+  const groupIds = items.map((item) => item.grupoId);
+  if (new Set(groupIds).size !== groupIds.length)
+    return json(
+      {
+        error: "La selección contiene grupos duplicados",
+        code: "planning_group_np_duplicate_items",
+      },
+      400,
+    );
+
+  // The RPC resolves the current group assignment itself under a row lock. The
+  // browser supplies only an opaque group ID, never teacher or subject scope.
+  const { data, error } = await client.rpc("set_planning_group_np_bulk", {
+    p_cuatrimestre_id: cuatrimestreId,
+    p_items: items.map((item) => ({ grupo_id: item.grupoId })),
+    p_motivo: motivo || null,
+    p_mark_np: action === "mark_group_np",
+  });
+  if (error)
+    return json(
+      {
+        error: "No fue posible actualizar el estado NP del grupo",
+        code: "planning_group_np_persistence_rejected",
+      },
+      error.code === "23514" || error.code === "22023" ? 409 : 400,
+    );
+
+  // This deliberately does not recalculate grades: group NP is an
+  // administrative assignment exception, not a planning-record change.
+  return json({
+    success: true,
+    status: hasBatchItems ? data : Array.isArray(data) ? data[0] : data,
+  });
+}
+
 export const POST: APIRoute = async ({ cookies, request }) => {
   let client;
   try {
@@ -62,8 +139,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
+    const action = body.action as PlanningAction | GroupNpAction;
+    if (action === "mark_group_np" || action === "reactivate_group_np")
+      return setGroupNpStatus(client, body, action);
+
     const cuatrimestreId = positiveInteger(body.cuatrimestre_id);
-    const action = body.action as PlanningAction;
     const motivo = typeof body.motivo === "string" ? body.motivo.trim() : "";
     const hasBatchItems = Object.hasOwn(body, "items");
     const requestedItems = hasBatchItems

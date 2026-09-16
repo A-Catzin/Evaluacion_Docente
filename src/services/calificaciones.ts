@@ -6,7 +6,7 @@
  * `scoring.ts`. No se duplican aquí ni en SQL.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchSubjectAwareCuatrimestreScores } from "./scoring";
+import { fetchSubjectAwareCuatrimestreScores, roundTo2 } from "./scoring";
 
 export interface CalificacionFinal {
   id: number;
@@ -33,11 +33,11 @@ export interface CalificacionFinal {
   docente_campus?: string | null;
 }
 
-const VERSION_CALCULO = "v2.3-subject-aware-np";
+const VERSION_CALCULO = "v2.5-teacher-cycle-aggregate";
 
 function round2(value: number | null | undefined): number | null {
   if (value == null || !Number.isFinite(value)) return null;
-  return Math.round(value * 100) / 100;
+  return roundTo2(value);
 }
 
 function toNumber(value: unknown): number | null {
@@ -260,17 +260,29 @@ async function leerInfoDocentes(
   return map;
 }
 
+export interface ObtenerCalificacionesPorCuatrimestreOptions {
+  /**
+   * Conserva el cálculo bajo demanda para los consumidores históricos. Las
+   * vistas de resumen pueden desactivarlo para leer sólo filas precalculadas.
+   */
+  incluirFallbackInline?: boolean;
+}
+
 export async function obtenerCalificacionesPorCuatrimestre(
   client: SupabaseClient,
   cuatrimestreId: number,
+  options?: ObtenerCalificacionesPorCuatrimestreOptions,
 ): Promise<CalificacionFinal[]> {
+  const incluirFallbackInline = options?.incluirFallbackInline ?? true;
   const [{ data: precalculadas, error }, docenteIdsActividad] =
     await Promise.all([
       client
         .from("calificaciones_finales")
         .select("*")
         .eq("cuatrimestre_id", cuatrimestreId),
-      obtenerDocentesConInstrumentos(client, cuatrimestreId),
+      incluirFallbackInline
+        ? obtenerDocentesConInstrumentos(client, cuatrimestreId)
+        : Promise.resolve([] as number[]),
     ]);
 
   if (error)
@@ -285,29 +297,28 @@ export async function obtenerCalificacionesPorCuatrimestre(
   }
 
   const resultados: CalificacionFinal[] = [...precalculadasMap.values()];
-  const faltantes: number[] = [];
 
-  for (const docenteId of docenteIdsActividad) {
-    if (!precalculadasMap.has(docenteId)) {
-      faltantes.push(docenteId);
-    }
-  }
-
-  if (faltantes.length) {
-    const infoDocentes = await leerInfoDocentes(client, faltantes);
-    const inlineResults = await Promise.all(
-      faltantes.map((docenteId) => {
-        const info = infoDocentes.get(docenteId);
-        return calcularCalificacionDocenteInline(
-          client,
-          docenteId,
-          cuatrimestreId,
-          info,
-        );
-      }),
+  if (incluirFallbackInline) {
+    const faltantes = docenteIdsActividad.filter(
+      (docenteId) => !precalculadasMap.has(docenteId),
     );
-    for (const cal of inlineResults) {
-      if (cal) resultados.push(cal);
+
+    if (faltantes.length) {
+      const infoDocentes = await leerInfoDocentes(client, faltantes);
+      const inlineResults = await Promise.all(
+        faltantes.map((docenteId) => {
+          const info = infoDocentes.get(docenteId);
+          return calcularCalificacionDocenteInline(
+            client,
+            docenteId,
+            cuatrimestreId,
+            info,
+          );
+        }),
+      );
+      for (const cal of inlineResults) {
+        if (cal) resultados.push(cal);
+      }
     }
   }
 

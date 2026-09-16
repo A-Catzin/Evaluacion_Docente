@@ -10,21 +10,25 @@ const refresh = Astro.cookies.get('sb-refresh-token')?.value;
 if (!token || !refresh) return Astro.redirect('/auth');
 
 const cl = db();
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
-const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
-
-// Persistir seleccion en cookie para otras paginas
-if (Astro.url.searchParams.has('cuatrimestre')) {
-  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
-} else if (cuatrimestreActivo?.id) {
-  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
-}
 const { data: sesion } = await cl.auth.setSession({ access_token: token, refresh_token: refresh });
 if (!sesion.user) return Astro.redirect('/auth');
 
+const cuatrimestreActivo = await obtenerCuatrimestreActivo(cl);
+const cuatrimestres = await obtenerCuatrimestres(cl);
+const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
+const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
+const cuatrimestreFallback = cuatrimestres[0];
+const cuatrimestreId = [
+  parseInt(cuatrimestreIdParam || ''),
+  cuatrimestreActivo?.id,
+  parseInt(cuatrimestreIdCookie || ''),
+  cuatrimestreFallback?.id,
+].find((id): id is number => Number.isInteger(id) && cuatrimestres.some(c => c.id === id)) || 0;
+
+// Persistir seleccion en cookie para otras paginas
+if (cuatrimestreId) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
+}
 const { data: usuario } = await cl.from('usuarios').select('entidad_id,email').eq('id', sesion.user.id).maybeSingle();
 let docenteId = usuario?.entidad_id;
 let docenteEmail = usuario?.email || '';
@@ -48,7 +52,7 @@ const docenteIds: number[] = [...docenteIdsSet];
 
 // Calificación final precalculada para el docente principal y el ciclo activo.
 const docenteIdParaScore = docenteId || docenteIds[0] || null;
-const calificacionFinal = docenteIdParaScore
+const calificacionFinal = docenteIdParaScore && cuatrimestreId > 0
   ? await obtenerCalificacionDocente(cl, docenteIdParaScore, cuatrimestreId)
   : null;
 
@@ -100,7 +104,9 @@ obsSecciones.forEach(s=>{
 
 // Cargar categorias de planeacion desde BD
 const { data: planCats } = await cl.from('instrumento_preguntas').select('*').eq('instrumento','planeacion').eq('tipo_respuesta','categoria').eq('activa',true).order('orden');
-const planeacionCats = (planCats||[]).map(c => ({ id: c.seccion, label: `${c.orden}. ${c.texto}` }));
+type PlanningCategory = { id: string; label: string; options: Record<string, unknown> };
+type PlanningDetail = { score?: string | number; obs?: unknown; otros?: string | null };
+const planeacionCats: PlanningCategory[] = (planCats||[]).map(c => ({ id: c.seccion, label: `${c.orden}. ${c.texto}`, options: (c.opciones || {}) as Record<string, unknown> }));
 const coordSecciones: Section[] = [
   {icon:'📋',label:'A. Cumplimiento Académico',keys:['a1','a2','a3'],items:[]},
   {icon:'📊',label:'B. Gestión y Organización',keys:['b1','b2','b3'],items:[]},
@@ -119,7 +125,7 @@ if (docenteIds.length > 0) {
 
   const [{ data: coordData }, { data: planData }, { data: obsData }, { data: diagData }] = await Promise.all([
     cl.from('evaluacion_coordinacion').select('score_normalizado,categoria,comentarios,puntos_obtenidos,a1,a2,a3,b1,b2,b3,c1,c2,c3,d1,d2,d3,e1,e2,e3').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
-    cl.from('planeaciones').select('puntaje_promedio,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle,grupo,asignaturas(nombre)').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).in('estado', ['Aprobado', 'Corrección']).order('fecha_subida', { ascending: false }),
+    cl.from('planeaciones').select('puntaje_promedio,comentario_docente,comentario_retroalimentacion,estado,observaciones_generales,evaluacion_detalle,grupo,grupos_cubiertos,modalidad,proyecto,laboratorio,visitas,url_pdf,nombre_archivo,fecha_subida,fecha_evaluacion,first_teacher_submitted_at,latest_teacher_submitted_at,asignaturas(nombre)').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).in('estado', ['Aprobado', 'Corrección']).order('fecha_subida', { ascending: false }),
     cl.from('observaciones').select('id,docente_id,cco1,cco2,cco3,cco4,cco5,cco6,cco7,cme1,cme2,cme3,cme4,cme5,cme6,cme7,cme8,cme9,ccom1,ccom2,ccom3,ccom4,cso1,cso2,cso3,cso4,cge1,cge2,cge3,cge4,cge5,cge6,cge7,caf1,caf2,ctepe1,ctepe2,ctepe3,ctepe4,ctepe5,ctepe6,ctepe7,cno1,cno2,cno3,cno4,cno5,comentario_evaluador,comentario_docente,obs_cognitivas,obs_metacognitivas,obs_comunicativas,obs_sociales,obs_gestion,obs_afectivas,obs_tecno,obs_normativa,fecha_observacion').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId),
     cl.from('autodiagnosticos').select('*').in('docente_id', docenteIds).eq('cuatrimestre_id', cuatrimestreId).order('id', { ascending: false }).limit(1),
   ]);
@@ -127,6 +133,18 @@ if (docenteIds.length > 0) {
   // Feedback
   coordInfo = coordData?.[0] || null;
   planFeedback = planData || [];
+  // Some historical aggregate rows do not carry the planning score even
+  // though the teacher has an approved planning record. Use that record as
+  // the dashboard chart source without changing the persisted final score.
+  if (scores.promPlan == null) {
+    const approvedPlanningScores = planFeedback
+      .filter((plan) => plan.estado === 'Aprobado' && plan.puntaje_promedio != null)
+      .map((plan) => Number(plan.puntaje_promedio))
+      .filter((score) => Number.isFinite(score));
+    if (approvedPlanningScores.length > 0) {
+      scores.promPlan = approvedPlanningScores.reduce((sum, score) => sum + score, 0) / approvedPlanningScores.length;
+    }
+  }
   obsInfo = obsData?.[0] || null;
   diagInfo = diagData?.[0] || null;
 
@@ -175,6 +193,14 @@ function splitFeedback(text: string | null | undefined): string[] {
 function feedbackCards(text: string | null | undefined) {
   return splitFeedback(text).map((item, index) => ({ id: index + 1, text: item }));
 }
+function planningMiniFeedback(category: PlanningCategory, detail: PlanningDetail | undefined): string[] {
+  if (!detail || detail.score == null || !Array.isArray(detail.obs)) return [];
+  const catalog = category.options[`obs${String(detail.score)}`];
+  if (!Array.isArray(catalog)) return [];
+  return (detail.obs as unknown[])
+    .map((index) => catalog[Number(index)])
+    .filter((text): text is string => typeof text === 'string' && text.trim().length > 0);
+}
 ---
 
 <LayoutDocente titulo="Mi Evaluación — Docente">
@@ -220,7 +246,14 @@ function feedbackCards(text: string | null | undefined) {
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div class="lg:col-span-2 bg-white rounded-2xl p-6 shadow-tarjeta">
             <h3 class="text-sm font-semibold text-slate-700 mb-4">Mis Scores por Instrumento</h3>
-            <div style="max-height:220px"><canvas id="chart-docente" data-chart={JSON.stringify([scores.promEst, scores.promCoord, scores.promPlan, scores.promObs, scores.promAuto])} style="max-height:220px"></canvas></div>
+            <div style="max-height:220px"><canvas id="chart-docente" data-chart={JSON.stringify([scores.promEst ?? null, scores.promCoord ?? null, scores.promPlan ?? null, scores.promObs ?? null, scores.promAuto ?? null])} style="max-height:220px"></canvas></div>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-4 text-center">
+              <div><p class="text-[10px] text-slate-400">Estudiantil</p><p class="text-xs font-semibold text-emerald-600">{fmt(scores.promEst)}</p></div>
+              <div><p class="text-[10px] text-slate-400">Coordinación</p><p class="text-xs font-semibold text-blue-600">{fmt(scores.promCoord)}</p></div>
+              <div><p class="text-[10px] text-slate-400">Planeación</p><p class="text-xs font-semibold text-purple-600">{fmt(scores.promPlan)}</p></div>
+              <div><p class="text-[10px] text-slate-400">Observación</p><p class="text-xs font-semibold text-amber-600">{fmt(scores.promObs)}</p></div>
+              <div><p class="text-[10px] text-slate-400">Autodiagnóstico</p><p class="text-xs font-semibold text-orange-600">{fmt(scores.promAuto)}</p></div>
+            </div>
           </div>
           <div class="bg-white rounded-2xl p-6 shadow-tarjeta flex flex-col items-center justify-center text-center">
             <p class="text-xs text-slate-400 uppercase mb-2">Calificación Final</p>
@@ -382,11 +415,11 @@ function feedbackCards(text: string | null | undefined) {
                 {planFeedback.map((p,i)=>(
                   <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
                     <div class="flex items-center justify-between mb-3"><div><p class="text-sm font-medium text-slate-700">{p.asignaturas?.nombre || 'Planeación'}{p.grupo ? ` · Grupo ${p.grupo}` : ''}</p><p class="text-xs text-slate-400">Evaluación #{i+1}</p></div><span class={"px-2.5 py-1 rounded-lg text-xs font-medium "+(p.estado==='Aprobado'?'bg-emerald-100 text-emerald-700':p.estado==='Corrección'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-700')}>{p.estado||'Pendiente'}</span></div>
-                    <div class="grid grid-cols-1 gap-3 mb-3"><div class="bg-white rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Puntaje</p><p class="text-lg font-bold text-slate-700">{p.puntaje_promedio ? `${Math.round(p.puntaje_promedio)}% (${Math.round((p.puntaje_promedio||0)/100*planeacionCats.length)}/${planeacionCats.length})` : '—'}</p></div></div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3"><div class="bg-white rounded-lg p-3 text-center"><p class="text-xs text-slate-400">Puntaje</p><p class="text-lg font-bold text-slate-700">{p.puntaje_promedio != null ? `${formatScore(p.puntaje_promedio)}% (${Math.round((p.puntaje_promedio||0)/100*planeacionCats.length)}/${planeacionCats.length})` : '—'}</p></div><div class="bg-white rounded-lg p-3"><p class="text-xs text-slate-400">Subida</p><p class="text-xs font-medium text-slate-700">{fmtDate(p.first_teacher_submitted_at || p.fecha_subida)}</p></div><div class="bg-white rounded-lg p-3"><p class="text-xs text-slate-400">Evaluada</p><p class="text-xs font-medium text-slate-700">{fmtDate(p.fecha_evaluacion)}</p></div><div class="bg-white rounded-lg p-3"><p class="text-xs text-slate-400">Archivo</p>{p.url_pdf ? <a href={p.url_pdf} target="_blank" rel="noreferrer" class="text-xs font-medium text-tup hover:underline">{p.nombre_archivo || 'Ver PDF'}</a> : <p class="text-xs text-slate-400">—</p>}</div></div><div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-xs text-slate-600"><div><span class="text-slate-400">Modalidad:</span> {p.modalidad || '—'}</div><div><span class="text-slate-400">Proyecto:</span> {p.proyecto ? 'Sí' : 'No'}</div><div><span class="text-slate-400">Laboratorio:</span> {p.laboratorio || '—'}</div><div><span class="text-slate-400">Visitas:</span> {p.visitas || '—'}</div></div><div class="mb-3 text-xs text-slate-600"><span class="text-slate-400">Grupos cubiertos:</span> {(p.grupos_cubiertos || [p.grupo]).filter(Boolean).join(' · ') || '—'}</div>
                     {p.estado === 'Corrección' && <div class="bg-red-50 rounded-lg p-3 border border-red-200 mt-2"><p class="text-xs font-medium text-red-700 uppercase mb-1">Motivo de corrección</p><p class="text-sm text-red-800 whitespace-pre-line">{p.comentario_retroalimentacion || 'No se registró un motivo de corrección.'}</p></div>}
-                    {p.evaluacion_detalle && <div class="space-y-2 mt-2">{planeacionCats.map(cat => { const det = (p.evaluacion_detalle||{})[cat.id]; if (!det) return <></>; return <div class="flex items-center justify-between gap-3 bg-white rounded-lg px-3 py-2"><p class="text-xs text-slate-600 flex-1">{cat.label}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(det.score==='2'||det.score===2?'bg-emerald-100 text-emerald-700':det.score==='1'||det.score===1?'bg-amber-100 text-amber-700':det.score==='na'?'bg-slate-100 text-slate-500':'bg-red-50 text-red-600')}>{planeacionScoreMap[String(det.score)]||det.score}</span></div>; })}</div>}
+                    {p.evaluacion_detalle && <div class="space-y-3 mt-2">{planeacionCats.map(cat => { const det = ((p.evaluacion_detalle||{})[cat.id] || undefined) as PlanningDetail | undefined; if (!det) return <></>; const mini = planningMiniFeedback(cat, det); return <div class="bg-white rounded-lg px-3 py-3"><div class="flex items-center justify-between gap-3"><p class="text-xs font-semibold text-slate-700 flex-1">{cat.label}</p><span class={"px-2 py-0.5 rounded-md text-xs font-bold flex-shrink-0 "+(det.score==='2'||det.score===2?'bg-emerald-100 text-emerald-700':det.score==='1'||det.score===1?'bg-amber-100 text-amber-700':det.score==='na'?'bg-slate-100 text-slate-500':'bg-red-50 text-red-600')}>{planeacionScoreMap[String(det.score)]||det.score}</span></div>{mini.length > 0 && <ul class="mt-2 space-y-1 pl-4 list-disc">{mini.map(text => <li class="text-xs text-slate-600 leading-relaxed">{text}</li>)}</ul>}{det.otros && <p class="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-600"><span class="font-medium text-slate-400">Comentario adicional:</span> {det.otros}</p>}</div>; })}</div>}
                     {p.comentario_retroalimentacion && <div class="bg-white rounded-lg p-3 border border-slate-200 mt-2"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Retroalimentación</p><p class="text-sm text-slate-600 italic">"{p.comentario_retroalimentacion}"</p></div>}
-                    {p.observaciones_generales && <div class="bg-white rounded-lg p-3 border border-slate-200 mt-2"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Observaciones</p><p class="text-sm text-slate-600">{p.observaciones_generales}</p></div>}
+                    {(p.comentario_docente || p.observaciones_generales) && <div class="space-y-2 mt-2">{p.comentario_docente && <div class="bg-white rounded-lg p-3 border border-slate-200"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Comentario del docente</p><p class="text-sm text-slate-600 whitespace-pre-line">{p.comentario_docente}</p></div>}{p.observaciones_generales && <div class="bg-white rounded-lg p-3 border border-slate-200"><p class="text-xs font-medium text-slate-400 uppercase mb-1">Observaciones generales</p><p class="text-sm text-slate-600 whitespace-pre-line">{p.observaciones_generales}</p></div>}</div>}
                   </div>
                 ))}
               </div>

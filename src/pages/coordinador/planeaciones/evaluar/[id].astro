@@ -5,6 +5,7 @@ import { db } from '../../../../lib/db';
 import { obtenerUrlFirmadaDesdeUrlAlmacenada } from '../../../../lib/storage';
 import { canManageCoordinatedTeacher } from '../../../../lib/teacherAssignments';
 import { getActiveInstrumentDefinition } from '../../../../lib/versionedInstruments';
+import { formatPersonName } from '../../../../lib/personName';
 
 const id = Number.parseInt(Astro.params.id || '0', 10);
 const backSearch = Astro.url.search || '';
@@ -19,13 +20,18 @@ const { data: subject } = await client.from('asignaturas').select('nombre').eq('
 let pdfUrl = plan.url_pdf;
 try { pdfUrl = await obtenerUrlFirmadaDesdeUrlAlmacenada(plan.url_pdf, 3600); } catch {}
 const definition = await getActiveInstrumentDefinition(client, 'planning');
+const displayTeacher = teacher && {
+  ...teacher,
+  nombre: formatPersonName(teacher.nombre),
+  apellidos: formatPersonName(teacher.apellidos),
+};
 ---
 <LayoutCoordinador titulo="Evaluar Planeación">
   <div class="animate-flotar-entrada max-w-4xl mx-auto">
     <a href={`/coordinador/planeaciones${backSearch}`} class="mb-4 inline-block text-sm text-tup hover:underline">← Volver</a>
     <h1 class="text-3xl font-bold text-tup mb-2">Evaluar planeación didáctica</h1>
-    <p class="text-slate-500 mb-2">{teacher?.nombre} {teacher?.apellidos} · {subject?.nombre} · Grupo {plan.grupo}</p>
+    <p class="text-slate-500 mb-2">{formatPersonName(`${teacher?.nombre || ''} ${teacher?.apellidos || ''}`.trim())} · {subject?.nombre} · Grupo {plan.grupo}</p>
     <a href={pdfUrl} target="_blank" class="mb-6 inline-block text-sm text-tup hover:underline">Ver PDF de la planeación</a>
-    {definition && teacher ? <VersionedInstrumentCapture definition={definition} cuatrimestreId={plan.cuatrimestre_id} teachers={[teacher]} selectedTeacherId={teacher.id} sourceRecordId={plan.id} returnUrl={`/coordinador/planeaciones${backSearch}`} /> : <div class="rounded-2xl bg-amber-50 p-6 text-amber-900">No hay una versión vigente del instrumento.</div>}
+    {definition && displayTeacher ? <VersionedInstrumentCapture definition={definition} cuatrimestreId={plan.cuatrimestre_id} teachers={[displayTeacher]} selectedTeacherId={displayTeacher.id} sourceRecordId={plan.id} returnUrl={`/coordinador/planeaciones${backSearch}`} /> : <div class="rounded-2xl bg-amber-50 p-6 text-amber-900">No hay una versión vigente del instrumento.</div>}
   </div>
 </LayoutCoordinador>

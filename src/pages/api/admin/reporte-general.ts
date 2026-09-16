@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
-import { formatScoreCsv } from "../../../services/scoring";
+import { formatPersonName } from "../../../lib/personName";
+import { formatScoreCsv, roundTo2 } from "../../../services/scoring";
 import {
   obtenerCalificacionesPorCuatrimestre,
   type CalificacionFinal,
@@ -117,7 +118,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       if (!tieneEnRango) return [];
 
       const promedioAnual =
-        countFinal > 0 ? Math.round(sumFinal / countFinal) : null;
+        countFinal > 0 ? roundTo2(sumFinal / countFinal) : null;
 
       return {
         id: d.id,
@@ -143,7 +144,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       ].join(",");
       const rows = resultDocentes.map((d) => {
         const cols = [
-          `"${[d.nombre, d.apellidos].filter(Boolean).join(" ")}"`,
+          `"${formatPersonName([d.nombre, d.apellidos].filter(Boolean).join(" "))}"`,
           `"${d.email}"`,
           `"${d.campus}"`,
           ...cuatris.map((c) => formatScoreCsv(d.puntajes[c.id])),

@@ -3,6 +3,7 @@ import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
 import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { getMyAssignedTeacherIds } from '../../lib/teacherAssignments';
+import { formatPersonName } from '../../lib/personName';
 
 const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
@@ -46,7 +47,7 @@ for (const p of (raw || [])) {
   } catch {}
   items.push({
     id: (p as any).id as number,
-    docente: doc ? doc.nombre+' '+doc.apellidos : '',
+    docente: formatPersonName(doc ? `${doc.nombre || ''} ${doc.apellidos || ''}`.trim() : ''),
     email: doc?.email || '',
     asignatura: asig?.nombre || String((p as any).asignatura_id),
     grupo: (p as any).grupo as string,

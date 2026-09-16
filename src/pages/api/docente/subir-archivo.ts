@@ -13,6 +13,7 @@ import {
   parsePositiveInteger,
   requireTeacherPlanningSubmissionOpen,
   resolveTeacherPlanningGroup,
+  MAX_MULTIPART_PLANNING_PDF_BYTES,
   validatePlanningPdf,
 } from "../../../lib/planningSubmissionWindow";
 
@@ -88,14 +89,48 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         status: 400,
       });
 
-    const group = await resolveTeacherPlanningGroup(
+    // This legacy multipart route must never buffer a direct-upload-sized
+    // PDF in Vercel; the browser only reaches it when R2 is unavailable.
+    if (file.size > MAX_MULTIPART_PLANNING_PDF_BYTES)
+      return new Response(
+        JSON.stringify({
+          error: "La carga temporal solo admite archivos PDF de hasta 4 MiB.",
+          code: "planning_multipart_pdf_too_large",
+        }),
+        {
+          status: 413,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+          },
+        },
+      );
+
+    const groupResolution = await resolveTeacherPlanningGroup(
       cl,
       u.entidad_id,
       cuatrimestreId,
       asignaturaId,
       grupo,
     );
-    if (!group)
+    if (groupResolution.status === "query_error")
+      return new Response(
+        JSON.stringify({
+          error: "No fue posible verificar tu asignación docente.",
+          code: "planning_assignment_unavailable",
+        }),
+        { status: 503 },
+      );
+    if (groupResolution.status === "ambiguous")
+      return new Response(
+        JSON.stringify({
+          error:
+            "Se detectó una asignación duplicada para esta materia y grupo. Solicita revisión administrativa.",
+          code: "planning_assignment_ambiguous",
+        }),
+        { status: 409 },
+      );
+    if (groupResolution.status !== "ok")
       return new Response(
         JSON.stringify({
           error:
@@ -103,6 +138,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         }),
         { status: 403 },
       );
+    const group = groupResolution.group;
 
     // Resolve coverage on the server; browser-provided coverage is checked only
     // for staleness and never becomes the source of truth.
@@ -120,7 +156,38 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         }),
         { status: 503 },
       );
-    const selectedAssignment = (assignedGroups || []).find(
+    const assignedGroupIds = (assignedGroups || []).map((item: any) => item.id);
+    const { data: groupNpRecords, error: groupNpError } = await cl
+      .from("planning_group_np")
+      .select("grupo_id,estado")
+      .eq("cuatrimestre_id", cuatrimestreId)
+      .in("grupo_id", assignedGroupIds);
+    if (groupNpError)
+      return new Response(
+        JSON.stringify({
+          error: "No fue posible verificar el estado NP de los grupos.",
+          code: "planning_group_np_unavailable",
+        }),
+        { status: 503 },
+      );
+    const npGroupIds = new Set(
+      (groupNpRecords || [])
+        .filter((record: any) => record.estado === "NP")
+        .map((record: any) => record.grupo_id),
+    );
+    if (npGroupIds.has(group.id))
+      return new Response(
+        JSON.stringify({
+          error:
+            "Este grupo fue marcado como no presentado por administración y no admite cargas hasta que sea reactivado.",
+          code: "planning_group_marked_np",
+        }),
+        { status: 409 },
+      );
+    const eligibleAssignedGroups = (assignedGroups || []).filter(
+      (item: any) => !npGroupIds.has(item.id),
+    );
+    const selectedAssignment = eligibleAssignedGroups.find(
       (item: any) =>
         item.asignatura_id === asignaturaId && item.clave === group.clave,
     ) as any;
@@ -162,7 +229,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         }),
         { status: 409 },
       );
-    const coveredAssignments = (assignedGroups || []).filter(
+    const coveredAssignments = eligibleAssignedGroups.filter(
       (item: any) =>
         normalizePlanningSubjectName(item.asignaturas?.nombre) === subjectKey,
     ) as any[];

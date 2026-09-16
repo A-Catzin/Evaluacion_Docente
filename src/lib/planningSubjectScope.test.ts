@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   groupPlanningAssignmentsBySubjectName,
+  hasStandaloneGroupNumericToken,
   isPlanningSubjectBlocked,
   normalizePlanningSubjectName,
 } from "./planningSubjectScope";
@@ -44,6 +45,60 @@ describe("planning subject scope", () => {
         [{ subject_key: "etica profesional", estado: "NP" }],
       ),
     ).toBe("approved");
+  });
+
+  it("uses group NP only when every active assignment in a normalized subject is NP", () => {
+    const [scope] = groupPlanningAssignmentsBySubjectName([
+      {
+        grupoId: 40,
+        asignaturaId: 4,
+        asignaturaNombre: "Ética Profesional",
+        grupo: "1A",
+      },
+      {
+        grupoId: 41,
+        asignaturaId: 4,
+        asignaturaNombre: "ÉTICA PROFESIONAL",
+        grupo: "1B",
+      },
+    ]);
+
+    const allGroupsNp = [
+      { grupo_id: 40, estado: "NP" },
+      { grupo_id: 41, estado: "NP" },
+    ];
+    expect(getPlanningSubjectStatus(scope, [], [], allGroupsNp)).toBe("np");
+    expect(
+      getPlanningSubjectStatus(
+        scope,
+        [{ asignaturaNombre: "Ética Profesional", estado: "Aprobado" }],
+        [],
+        allGroupsNp,
+      ),
+    ).toBe("np");
+    expect(
+      getPlanningSubjectStatus(scope, [], [], [{ grupo_id: 40, estado: "NP" }]),
+    ).toBe("pending");
+  });
+
+  it("matches configured group filter tokens only as standalone numeric tokens", () => {
+    expect(
+      hasStandaloneGroupNumericToken("27-1 EECI 23 01A - Sabatino", 23),
+    ).toBe(true);
+    expect(
+      hasStandaloneGroupNumericToken("27-1 MADH 24 04A - Sabatino", 24),
+    ).toBe(true);
+    expect(
+      hasStandaloneGroupNumericToken("27-1 CONPUB 53 04A - Sabatino", 53),
+    ).toBe(true);
+    expect(
+      hasStandaloneGroupNumericToken("27-1 PED 11 04B - Matutino", 11),
+    ).toBe(true);
+    expect(
+      hasStandaloneGroupNumericToken("27-1 DE 12 04A - Vespertino", 12),
+    ).toBe(true);
+    expect(hasStandaloneGroupNumericToken("27-1 EECI 123 01A", 23)).toBe(false);
+    expect(hasStandaloneGroupNumericToken("27-1 EECI 231 01A", 23)).toBe(false);
   });
 
   it("blocks a second upload across different catalog IDs with the same normalized name", () => {
@@ -99,6 +154,13 @@ describe("planning subject scope source contracts", () => {
     ),
     "utf8",
   );
+  const groupNpMigration = readFileSync(
+    new URL(
+      "../../supabase/migrations/075_planning_group_np.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
   const npAdminPage = readFileSync(
     new URL(
       "../pages/admin/planeaciones/no-presentadas.astro",
@@ -145,10 +207,77 @@ describe("planning subject scope source contracts", () => {
     expect(npBulkMigration).toContain("public.set_planning_subject_np(");
   });
 
+  it("uses group-scoped NP without changing planning records", () => {
+    expect(groupNpMigration).toContain(
+      "CREATE TABLE IF NOT EXISTS public.planning_group_np",
+    );
+    expect(groupNpMigration).toContain("UNIQUE (grupo_id)");
+    expect(groupNpMigration).toContain("estado IN ('NP', 'Activa')");
+    expect(groupNpMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.set_planning_group_np_bulk",
+    );
+    expect(groupNpMigration).toContain("g.modalidad = 'Escolarizado'");
+    expect(groupNpMigration).toContain("FOR UPDATE");
+    expect(groupNpMigration).not.toContain("UPDATE public.planeaciones");
+    const groupHandler = statusApi.slice(
+      statusApi.indexOf("async function setGroupNpStatus"),
+      statusApi.indexOf("export const POST"),
+    );
+    expect(statusApi).toContain("const MAX_BATCH_SIZE = 50");
+    expect(statusApi).toContain("const MAX_GROUP_NP_BATCH_SIZE = 1000");
+    expect(groupHandler).toContain(
+      "requestedItems.length > MAX_GROUP_NP_BATCH_SIZE",
+    );
+    expect(groupHandler).not.toContain(
+      "requestedItems.length > MAX_BATCH_SIZE",
+    );
+    expect(groupHandler).toContain(
+      "p_items: items.map((item) => ({ grupo_id: item.grupoId }))",
+    );
+    expect(groupNpMigration).toContain("jsonb_array_length(p_items) > 1000");
+    expect(statusApi).toContain("mark_group_np");
+    expect(statusApi).toContain("set_planning_group_np_bulk");
+    expect(uploadApi).toContain("planning_group_marked_np");
+  });
+
   it("limits NP scopes and persistence validation to Escolarizado assignments", () => {
     expect(npAdminPage).toContain(".eq('modalidad', 'Escolarizado')");
     expect(statusApi).toContain('.eq("modalidad", "Escolarizado")');
     expect(npMigration).toContain("g.modalidad = 'Escolarizado'");
+  });
+
+  it("uses group-level eligibility and safely guards teacher planning rendering", () => {
+    expect(teacherPage).toContain(
+      "const gruposEscolarizados = gruposDocente.filter((group) => group.modalidad === 'Escolarizado');",
+    );
+    expect(teacherPage).toContain(
+      "const gruposDocenteElegibles = gruposEscolarizados.filter((group) => !npGroupIds.has(group.id));",
+    );
+    expect(teacherPage).not.toContain("docentes.modalidad");
+    expect(teacherPage).not.toContain("docente.modalidad");
+    expect(teacherPage).toContain("async function safeQuery(");
+    expect(teacherPage).toContain(
+      "const canShowUpload = canDetermineUploadScope",
+    );
+    expect(teacherPage).toContain(
+      "const canShowPlanningList = planningDataContextAvailable && !planeacionesResult?.error;",
+    );
+    expect(teacherPage).toContain("{planningSubmissionOpen && <div");
+    expect(teacherPage).toContain("{canShowPlanningList && <div");
+  });
+
+  it("retains subject and group NP notices for teacher planning scopes", () => {
+    expect(teacherPage).toContain("const materiasNP = canDetermineUploadScope");
+    expect(teacherPage).toContain(
+      "getPlanningSubjectStatus(scope, planningSubjectRecords, npSubjectRecords) === 'np'",
+    );
+    expect(teacherPage).toContain(
+      "Asignaturas marcadas como no presentadas (NP)",
+    );
+    expect(teacherPage).toContain("Grupos marcados como no presentados (NP)");
+    expect(teacherPage).toContain(
+      "Estos grupos se excluyeron administrativamente y no están disponibles para cargar una planeación.",
+    );
   });
 
   it("renders grouped teacher uploads and the admin subject performance table", () => {
@@ -167,5 +296,10 @@ describe("planning subject scope source contracts", () => {
     expect(npAdminPage).toContain("No se pueden mezclar ambas acciones");
     expect(npAdminPage).toContain("row.status === 'approved' ? <span");
     expect(npAdminPage).toContain("items: Array.from(selected.values())");
+    expect(npAdminPage).toContain('id="group-np-filter"');
+    expect(npAdminPage).toContain("data-group-tokens=");
+    expect(npAdminPage).toContain('id="group-np-select-visible"');
+    expect(npAdminPage).toContain("Marcar grupos seleccionados como NP");
+    expect(npAdminPage).toContain("GROUP_NP_FILTER_TOKENS");
   });
 });

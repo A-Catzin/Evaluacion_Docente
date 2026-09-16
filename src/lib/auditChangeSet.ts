@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 type Client = any;
-type SnapshotKind = "docentes" | "alumnos" | "asignaciones";
+type SnapshotKind = "docentes" | "alumnos" | "asignaciones" | "ofertas_academicas";
 
 type ImportAuditOptions = {
   client: Client;
@@ -38,8 +38,10 @@ async function createManifest(client: Client, source: string, cycleId?: number |
   const tables = source === "admin.import.docentes"
     ? [["docentes", "id,activo"]]
     : source === "admin.import.alumnos"
-      ? [["estudiantes", "id,activo"], ["grupos", "id,cuatrimestre_id,asignatura_id,docente_id,num_alumnos,activo"], ["inscripciones", "id,grupo_id,cuatrimestre_id"]]
-      : [["asignaturas", "id,clave,activa"], ["grupos", "id,cuatrimestre_id,asignatura_id,docente_id,num_alumnos,activo"], ["inscripciones", "id,grupo_id,cuatrimestre_id"], ["calificaciones_finales", "id,docente_id,cuatrimestre_id,calificacion_final,categoria_final,num_instrumentos_completados"]];
+          ? [["estudiantes", "id,activo"], ["grupos", "id,cuatrimestre_id,asignatura_id,docente_id,num_alumnos,activo"], ["inscripciones", "id,grupo_id,cuatrimestre_id"]]
+          : source === "admin.import.ofertas_academicas"
+            ? [["ofertas_academicas", "id,activa"], ["asignaturas", "id,oferta_academica_id,activa"], ["grupos", "id,cuatrimestre_id,asignatura_id,docente_id,activo"]]
+            : [["asignaturas", "id,clave,activa"], ["grupos", "id,cuatrimestre_id,asignatura_id,docente_id,num_alumnos,activo"], ["inscripciones", "id,grupo_id,cuatrimestre_id"], ["calificaciones_finales", "id,docente_id,cuatrimestre_id,calificacion_final,categoria_final,num_instrumentos_completados"]];
   const manifests = await Promise.all(tables.map(([table, columns]) => snapshotTable(client, table, columns, cycleId)));
   return {
     version: "phase-1-manifest-v1",

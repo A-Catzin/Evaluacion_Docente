@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const PLANNING_TIME_ZONE = "America/Cancun";
-// Vercel Functions reject request bodies over 4.5 MB before this handler runs.
-// Leave room for multipart form fields and boundaries.
-export const MAX_PLANNING_PDF_BYTES = 4 * 1024 * 1024;
+// Direct R2 uploads support planning PDFs up to 30 MiB without sending bytes through Vercel.
+export const MAX_PLANNING_PDF_BYTES = 30 * 1024 * 1024;
+// Vercel Functions reject request bodies over roughly 4.5 MB before multipart handlers run.
+// This is only for the legacy fallback, leaving room for form fields and boundaries.
+export const MAX_MULTIPART_PLANNING_PDF_BYTES = 4 * 1024 * 1024;
 
 export type PlanningSubmissionMode =
   | "manual_open"
@@ -28,6 +30,15 @@ export function formatPlanningDate(value: string | null): string | null {
   if (!value) return null;
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "long",
+    timeStyle: "short",
+    timeZone: PLANNING_TIME_ZONE,
+  }).format(new Date(value));
+}
+
+export function formatPlanningSubmissionDate(value: string | null): string {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "short",
     timeStyle: "short",
     timeZone: PLANNING_TIME_ZONE,
   }).format(new Date(value));
@@ -142,13 +153,23 @@ export type PlanningPdfValidation =
   | { ok: true; extension: "pdf" }
   | { ok: false; error: string };
 
-export function validatePlanningPdf(file: File): PlanningPdfValidation {
-  if (file.size <= 0 || file.size > MAX_PLANNING_PDF_BYTES) {
-    return { ok: false, error: "El archivo PDF debe pesar máximo 4 MB." };
+export function validatePlanningPdfMetadata(
+  name: unknown,
+  type: unknown,
+  size: unknown,
+): PlanningPdfValidation {
+  if (
+    typeof size !== "number" ||
+    !Number.isSafeInteger(size) ||
+    size <= 0 ||
+    size > MAX_PLANNING_PDF_BYTES
+  ) {
+    return { ok: false, error: "El archivo PDF debe pesar máximo 30 MiB." };
   }
   if (
-    file.type !== "application/pdf" ||
-    !file.name.toLowerCase().endsWith(".pdf")
+    type !== "application/pdf" ||
+    typeof name !== "string" ||
+    !name.toLowerCase().endsWith(".pdf")
   ) {
     return {
       ok: false,
@@ -156,6 +177,10 @@ export function validatePlanningPdf(file: File): PlanningPdfValidation {
     };
   }
   return { ok: true, extension: "pdf" };
+}
+
+export function validatePlanningPdf(file: File): PlanningPdfValidation {
+  return validatePlanningPdfMetadata(file.name, file.type, file.size);
 }
 
 export function parsePositiveInteger(
@@ -167,14 +192,40 @@ export function parsePositiveInteger(
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+export type TeacherPlanningGroup = {
+  id: number;
+  clave: string;
+  modalidad: string | null;
+};
+
+export type TeacherPlanningGroupResolution =
+  | { status: "ok"; group: TeacherPlanningGroup }
+  | { status: "not_found" }
+  | { status: "ambiguous" }
+  | { status: "query_error" }
+  | { status: "non_escolarizado" };
+
+export function classifyTeacherPlanningGroupResolution(
+  rows: TeacherPlanningGroup[] | null | undefined,
+  error: unknown,
+): TeacherPlanningGroupResolution {
+  if (error) return { status: "query_error" };
+  if (!rows?.length) return { status: "not_found" };
+  if (rows.length > 1) return { status: "ambiguous" };
+  if (rows[0].modalidad !== "Escolarizado") {
+    return { status: "non_escolarizado" };
+  }
+  return { status: "ok", group: rows[0] };
+}
+
 export async function resolveTeacherPlanningGroup(
   client: SupabaseClient,
   docenteId: number,
   cuatrimestreId: number,
   asignaturaId: number,
   grupo: string,
-) {
-  if (!grupo.trim()) return null;
+): Promise<TeacherPlanningGroupResolution> {
+  if (!grupo.trim()) return { status: "not_found" };
   const { data, error } = await client
     .from("grupos")
     .select("id,clave,modalidad")
@@ -183,9 +234,8 @@ export async function resolveTeacherPlanningGroup(
     .eq("asignatura_id", asignaturaId)
     .eq("clave", grupo.trim())
     .eq("activo", true)
-    .maybeSingle();
-  if (error || !data || data.modalidad !== "Escolarizado") return null;
-  return data;
+    .limit(2);
+  return classifyTeacherPlanningGroupResolution(data, error);
 }
 
 export function buildPlanningPdfPath(
@@ -193,6 +243,22 @@ export function buildPlanningPdfPath(
   docenteId: number,
 ): string {
   return `planeaciones/${cuatrimestreId}/${docenteId}/${crypto.randomUUID()}.pdf`;
+}
+
+/** Accept only opaque paths minted by buildPlanningPdfPath for this teacher and cycle. */
+export function isTeacherPlanningPdfPath(
+  path: unknown,
+  cuatrimestreId: number,
+  docenteId: number,
+): path is string {
+  if (typeof path !== "string") return false;
+  const prefix = `planeaciones/${cuatrimestreId}/${docenteId}/`;
+  return (
+    path.startsWith(prefix) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.pdf$/.test(
+      path.slice(prefix.length),
+    )
+  );
 }
 
 function offsetFor(timeZone: string, date: Date): number | null {

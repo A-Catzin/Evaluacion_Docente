@@ -1,6 +1,6 @@
 ---
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
-import { db } from '../../../lib/db';
+import { dbAdmin } from '../../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 import { formatScore } from '../../../services/scoring';
 import { obtenerCalificacionesPorCuatrimestre } from '../../../services/calificaciones';
@@ -8,28 +8,34 @@ import { obtenerCalificacionesPorCuatrimestre } from '../../../services/califica
 const busqueda = Astro.url.searchParams.get('q') || '';
 const page = parseInt(Astro.url.searchParams.get('page')||'1');
 const limit = 20;
-const cliente = db();
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
-const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
-const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
+const cliente = dbAdmin();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo(cliente);
+const cuatrimestres = await obtenerCuatrimestres(cliente);
+const cuatrimestreIdParam = Number(Astro.url.searchParams.get('cuatrimestre'));
+const cuatrimestreIdCookie = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+const cicloPorQuery = cuatrimestres.find(c => c.id === cuatrimestreIdParam);
+const cicloPorCookie = cuatrimestres.find(c => c.id === cuatrimestreIdCookie);
+const cicloActivo = cuatrimestres.find(c => c.id === cuatrimestreActivo?.id);
+const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0])?.id || 0;
+const navigationParams = new URLSearchParams(Astro.url.searchParams);
+if (cuatrimestreId) navigationParams.set('cuatrimestre', String(cuatrimestreId));
+else navigationParams.delete('cuatrimestre');
+const qs = navigationParams.size ? `?${navigationParams.toString()}` : '';
+const clearSearchParams = new URLSearchParams(navigationParams);
+clearSearchParams.delete('q');
+const qsWithoutSearch = clearSearchParams.size ? `?${clearSearchParams.toString()}` : '';
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
 const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
 
-const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-if (token && refresh) {
-  await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
-}
 
 function colorScore(n: number|null|undefined): string { if (n == null) return ''; if (n >= 80) return 'text-emerald-600'; if (n >= 60) return 'text-amber-600'; return 'text-red-600'; }
 
-// Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
-const aggData = await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId);
+// Scores: usamos sólo filas precalculadas para evitar cálculos masivos bajo demanda.
+const aggData = await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId, {
+  incluirFallbackInline: false,
+});
 
 const filasBase = aggData
   .filter((row) => row.num_instrumentos_completados > 0)
@@ -68,6 +74,8 @@ function buildPageUrl(p:number) {
     <div class="flex items-center justify-between mb-6">
       <div><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm text-slate-400">{totalFilas} docentes · {cuatrimestreSel?.clave || ''}</span></div>
       <form method="GET" class="flex items-center gap-2">
+        {busqueda && <input type="hidden" name="q" value={busqueda} />}
+        <input type="hidden" name="page" value={page} />
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
           {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
         </select>
@@ -78,7 +86,7 @@ function buildPageUrl(p:number) {
         <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href={`/admin/docentes${qs}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+        {busqueda && (<a href={`/admin/docentes${qsWithoutSearch}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden overflow-x-auto">

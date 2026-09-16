@@ -1,0 +1,122 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../lib/auth';
+import { dbAdmin } from '../../lib/db';
+
+await requireRole(Astro.cookies, ['superadmin']);
+const client = dbAdmin();
+const { data: cyclesData, error: cyclesError } = await client
+  .from('cuatrimestres')
+  .select('id,clave,nombre,activo')
+  .order('id', { ascending: false });
+const cycles = cyclesData || [];
+    const requestedId = Number(Astro.url.searchParams.get('cuatrimestre'));
+    const cookieId = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+    const cycle = cycles.find((item: any) => item.id === requestedId) || cycles.find((item: any) => item.id === cookieId) || cycles.find((item: any) => item.activo) || cycles[0];
+    const cuatrimestreId = cycle?.id || 0;
+    if (cycle && (Astro.url.searchParams.has('cuatrimestre') || !Astro.cookies.get('cuatrimestre_sel'))) {
+      Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+    }
+    const pageSize = 1000;
+    const groupsData: any[] = [];
+    let groupsError: any = null;
+    if (cuatrimestreId) {
+      for (let offset = 0; ; offset += pageSize) {
+        const result = await client
+          .from('grupos')
+          .select('id,clave,grupo_normalizado,activo,docentes(nombre,apellidos),asignaturas(clave,nombre)')
+          .eq('cuatrimestre_id', cuatrimestreId)
+          .eq('activo', true)
+          .order('id')
+          .range(offset, offset + pageSize - 1);
+        if (result.error) {
+          groupsError = result.error;
+          break;
+        }
+        groupsData.push(...(result.data || []));
+        if (!result.data || result.data.length < pageSize) break;
+      }
+    }
+    const groupIds = groupsData.map((group: any) => group.id);
+    const schedulesData: any[] = [];
+    let schedulesError: any = null;
+    const groupBatchSize = 500;
+    for (let batchStart = 0; batchStart < groupIds.length && !schedulesError; batchStart += groupBatchSize) {
+      const groupBatch = groupIds.slice(batchStart, batchStart + groupBatchSize);
+      for (let offset = 0; ; offset += pageSize) {
+        const result = await client
+          .from('horarios_grupo')
+          .select('id,grupo_id,dia_semana,hora_inicio,hora_fin,aula,activo,updated_at')
+          .in('grupo_id', groupBatch)
+          .order('dia_semana')
+          .order('hora_inicio')
+          .order('id')
+          .range(offset, offset + pageSize - 1);
+        if (result.error) {
+          schedulesError = result.error;
+          break;
+        }
+        schedulesData.push(...(result.data || []));
+        if (!result.data || result.data.length < pageSize) break;
+      }
+    }
+const groups = (groupsData || []).map((group: any) => {
+  const subject = Array.isArray(group.asignaturas) ? group.asignaturas[0] : group.asignaturas;
+  const teacher = Array.isArray(group.docentes) ? group.docentes[0] : group.docentes;
+  const subjectLabel = [subject?.clave, subject?.nombre].filter(Boolean).join(' · ');
+  const teacherLabel = [teacher?.nombre, teacher?.apellidos].filter(Boolean).join(' ');
+  return { id: group.id, label: `${subjectLabel || group.clave || 'Grupo'} · ${group.grupo_normalizado || group.clave || group.id}${teacherLabel ? ` · ${teacherLabel}` : ' · Sin docente'}` };
+});
+const groupLabels = new Map(groups.map((group: any) => [group.id, group.label]));
+    const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const scheduleTableMissing = ['42P01', 'PGRST205'].includes(schedulesError?.code);
+    const loadErrorMessage = scheduleTableMissing
+      ? 'La tabla de horarios todavía no está disponible. Aplicá la migración 088 en Supabase y recargá la página.'
+      : 'No fue posible cargar toda la información de horarios. Inténtalo de nuevo.';
+    ---
+
+<LayoutAdmin titulo="Horarios de grupo — Admin">
+  <section class="animate-flotar-entrada mx-auto max-w-6xl">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div><p class="mb-1 text-sm font-medium text-violet-700">Carga académica</p><h1 class="text-3xl font-bold text-tup">Horarios de grupo</h1><p class="mt-1 text-slate-500">Asigna horarios por grupo, sin duplicar la materia ni el docente.</p></div>
+      <a href={`/admin/grupos-asignados${cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : ''}`} class="text-sm font-medium text-tup hover:underline">Ver grupos asignados →</a>
+    </div>
+    {cyclesError || groupsError || schedulesError ? <p class="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{loadErrorMessage}</p> : null}
+    <form method="GET" class="mb-6 rounded-2xl bg-white p-4 shadow-tarjeta"><label for="cycle" class="mr-3 text-sm font-medium text-slate-700">Ciclo</label><select id="cycle" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cycles.map((item: any) => <option value={item.id} selected={item.id === cuatrimestreId}>{item.clave}{item.nombre ? ` · ${item.nombre}` : ''}</option>)}</select>{cycles.length === 0 ? <span class="text-sm text-slate-500">No hay ciclos disponibles.</span> : null}</form>
+
+    {cuatrimestreId ? <div class="grid gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
+      <aside class="h-fit rounded-2xl bg-white p-5 shadow-tarjeta lg:sticky lg:top-4"><h2 id="form-title" class="text-lg font-semibold text-slate-800">Asignar horario manualmente</h2><p class="mt-1 text-xs text-slate-500">Los cambios se guardan sólo para el grupo seleccionado.</p>
+        <form id="schedule-form" class="mt-5 space-y-4"><label class="block text-sm font-medium text-slate-700">Buscar grupo<input id="group-search" type="search" autocomplete="off" placeholder="Materia, grupo o docente…" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-tup focus:ring-2 focus:ring-tup/20" /></label><label class="block text-sm font-medium text-slate-700">Grupo<select id="group-select" name="grupo_id" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="">Seleccionar grupo...</option>{groups.map((group: any) => <option value={group.id}>{group.label}</option>)}</select></label><label class="block text-sm font-medium text-slate-700">Día<select name="dia_semana" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2">{days.map((day, index) => <option value={index + 1}>{day}</option>)}</select></label><div class="grid grid-cols-2 gap-3"><label class="text-sm font-medium text-slate-700">Inicio<input name="hora_inicio" type="time" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label><label class="text-sm font-medium text-slate-700">Fin<input name="hora_fin" type="time" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label></div><label class="block text-sm font-medium text-slate-700">Aula (opcional)<input name="aula" maxlength="120" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" placeholder="Ej. A-101" /></label><p id="manual-status" class="hidden rounded-xl p-3 text-sm" role="alert"></p><div class="flex gap-3"><button id="save-schedule" class="rounded-xl bg-tup px-4 py-2.5 text-sm font-semibold text-white">Guardar horario</button><button id="cancel-edit" type="button" class="hidden rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600">Cancelar</button></div></form>
+      </aside>
+      <div class="space-y-6"><section class="overflow-hidden rounded-2xl bg-white shadow-tarjeta"><div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><div><h2 class="font-semibold text-slate-800">Horarios activos</h2><p class="mt-1 text-xs text-slate-500">{(schedulesData || []).length} horarios en el ciclo seleccionado.</p></div><label class="flex items-center gap-2 text-sm text-slate-500"><span class="sr-only">Buscar horarios</span><input id="schedule-search" type="search" placeholder="Buscar grupo, docente, materia o aula…" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-tup focus:ring-2 focus:ring-tup/20 sm:w-72" /></label></div><div class="overflow-x-auto"><table class="min-w-[720px] w-full text-sm"><thead class="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">Grupo</th><th class="px-4 py-3">Día</th><th class="px-4 py-3">Horario</th><th class="px-4 py-3">Aula</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-slate-100">{(schedulesData || []).filter((schedule: any) => schedule.activo).map((schedule: any) => <tr class="schedule-row" data-search={[groupLabels.get(schedule.grupo_id) || `Grupo #${schedule.grupo_id}`, days[schedule.dia_semana - 1], schedule.hora_inicio, schedule.hora_fin, schedule.aula || 'Sin aula'].join(' ').toLocaleLowerCase('es-MX')}><td class="px-4 py-3 font-medium text-slate-700">{groupLabels.get(schedule.grupo_id) || `Grupo #${schedule.grupo_id}`}</td><td class="px-4 py-3 text-slate-600">{days[schedule.dia_semana - 1]}</td><td class="px-4 py-3 text-slate-600">{schedule.hora_inicio.slice(0, 5)}–{schedule.hora_fin.slice(0, 5)}</td><td class="px-4 py-3 text-slate-600">{schedule.aula || 'Sin aula'}</td><td class="px-4 py-3 text-right"><button type="button" class="edit-schedule text-tup hover:underline" data-id={schedule.id} data-group={schedule.grupo_id} data-day={schedule.dia_semana} data-start={schedule.hora_inicio.slice(0, 5)} data-end={schedule.hora_fin.slice(0, 5)} data-room={schedule.aula || ''}>Editar</button><button type="button" class="deactivate-schedule ml-3 text-rose-600 hover:underline" data-id={schedule.id}>Desactivar</button></td></tr>)}<tr id="schedule-no-results" class="hidden"><td colspan="5" class="p-8 text-center text-sm text-slate-400">No se encontraron horarios con esa búsqueda.</td></tr></tbody></table></div>{!(schedulesData || []).filter((schedule: any) => schedule.activo).length ? <p class="p-8 text-center text-sm text-slate-400">Aún no hay horarios activos en este ciclo.</p> : null}</section>
+        <section class="rounded-2xl bg-white p-5 shadow-tarjeta"><h2 class="text-lg font-semibold text-slate-800">Carga masiva CSV</h2><p class="mt-1 text-sm text-slate-500">Contrato exacto: <code>GRUPO_ID,DIA_SEMANA,HORA_INICIO,HORA_FIN,AULA</code>. Día: 1=Lunes a 7=Domingo. Las horas usan formato HH:MM.</p><div class="mt-3"><a id="csv-template" download="plantilla-horarios-grupo.csv" class="text-sm font-semibold text-tup hover:underline">Descargar plantilla CSV</a></div><form id="csv-form" class="mt-4 flex flex-wrap items-end gap-3"><input id="csv-file" type="file" accept=".csv,text/csv" required class="max-w-full rounded-xl border border-slate-200 px-3 py-2 text-sm file:mr-3 file:border-0 file:bg-tup file:px-3 file:py-1.5 file:text-white" /><button id="preview-button" class="rounded-xl bg-tup px-4 py-2.5 text-sm font-semibold text-white">Vista previa</button><button id="apply-button" type="button" disabled class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Aplicar horarios</button></form><div id="csv-result" class="hidden mt-5 rounded-xl border border-slate-200 p-4 text-sm"><p id="csv-summary" class="font-medium text-slate-700"></p><ul id="csv-blockers" class="mt-2 space-y-1 text-rose-700"></ul><ul id="csv-actions" class="mt-2 space-y-1 text-slate-600"></ul></div></section>
+      </div>
+    </div> : <p class="rounded-2xl bg-white p-8 text-sm text-slate-500 shadow-tarjeta">Crea o selecciona un ciclo para administrar horarios.</p>}
+  </section>
+</LayoutAdmin>
+
+<script is:inline define:vars={{ cuatrimestreId }}>
+  (function () {
+    var form = document.getElementById('schedule-form'); if (!form) return;
+    var editingId = null; var status = document.getElementById('manual-status'); var cancel = document.getElementById('cancel-edit');
+    function message(text, error) { status.textContent = text; status.className = 'rounded-xl p-3 text-sm ' + (error ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-emerald-800'); }
+    function reset() { editingId = null; form.reset(); filterGroups(); document.getElementById('form-title').textContent = 'Asignar horario manualmente'; cancel.classList.add('hidden'); }
+        var groupSearch = document.getElementById('group-search'); var groupSelect = document.getElementById('group-select'); var groupOptions = Array.from(groupSelect.options).slice(1);
+        function filterGroups() { var term = (groupSearch.value || '').trim().toLocaleLowerCase('es-MX'); groupOptions.forEach(function (option) { option.hidden = Boolean(term) && option.textContent.toLocaleLowerCase('es-MX').indexOf(term) < 0; }); if (groupSelect.selectedOptions[0] && groupSelect.selectedOptions[0].hidden) groupSelect.value = ''; }
+        groupSearch.addEventListener('input', filterGroups);
+    form.addEventListener('submit', async function (event) { event.preventDefault(); var data = new FormData(form); var schedule = { grupo_id: Number(data.get('grupo_id')), dia_semana: Number(data.get('dia_semana')), hora_inicio: data.get('hora_inicio'), hora_fin: data.get('hora_fin'), aula: data.get('aula') }; try { var response = await fetch('/api/admin/horarios-grupo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save', id: editingId, cuatrimestre_id: cuatrimestreId, schedule: schedule }) }); var result = await response.json().catch(function () { return {}; }); if (!response.ok) return message(result.error || 'No fue posible guardar el horario.', true); message('Horario guardado. Actualizando la tabla…', false); setTimeout(function () { window.location.reload(); }, 450); } catch (_) { message('No fue posible conectar con el servidor.', true); } });
+    cancel.addEventListener('click', reset);
+        var search = document.getElementById('schedule-search'); var noResults = document.getElementById('schedule-no-results');
+        function filterSchedules() { var term = (search.value || '').trim().toLocaleLowerCase('es-MX'); var visible = 0; document.querySelectorAll('.schedule-row').forEach(function (row) { var matches = !term || row.dataset.search.indexOf(term) >= 0; row.classList.toggle('hidden', !matches); if (matches) visible += 1; }); noResults.classList.toggle('hidden', visible > 0 || !term); }
+        search.addEventListener('input', filterSchedules);
+    document.querySelectorAll('.edit-schedule').forEach(function (button) { button.addEventListener('click', function () { groupSearch.value = ''; filterGroups(); editingId = Number(this.dataset.id); form.elements.grupo_id.value = this.dataset.group; form.elements.dia_semana.value = this.dataset.day; form.elements.hora_inicio.value = this.dataset.start; form.elements.hora_fin.value = this.dataset.end; form.elements.aula.value = this.dataset.room; document.getElementById('form-title').textContent = 'Editar horario'; cancel.classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' }); }); });
+    document.querySelectorAll('.deactivate-schedule').forEach(function (button) { button.addEventListener('click', async function () { if (!confirm('¿Desactivar este horario?')) return; try { var response = await fetch('/api/admin/horarios-grupo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deactivate', id: Number(this.dataset.id), cuatrimestre_id: cuatrimestreId }) }); var result = await response.json().catch(function () { return {}; }); if (!response.ok) return message(result.error || 'No fue posible desactivar el horario.', true); window.location.reload(); } catch (_) { message('No fue posible conectar con el servidor.', true); } }); });
+    var template = document.getElementById('csv-template'); template.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('GRUPO_ID,DIA_SEMANA,HORA_INICIO,HORA_FIN,AULA\n123,1,08:00,09:30,A-101\n');
+    var preview = null; var csvForm = document.getElementById('csv-form'); var csvFile = document.getElementById('csv-file'); var resultBox = document.getElementById('csv-result'); var summary = document.getElementById('csv-summary'); var blockers = document.getElementById('csv-blockers'); var actions = document.getElementById('csv-actions'); var apply = document.getElementById('apply-button');
+    function escapeHtml(value) { var node = document.createElement('span'); node.textContent = String(value || ''); return node.innerHTML; }
+    function csvData() { if (!csvFile.files[0]) { message('Selecciona un archivo CSV.', true); return null; } var data = new FormData(); data.append('file', csvFile.files[0]); data.append('cuatrimestre_id', String(cuatrimestreId)); return data; }
+    function render(data) { resultBox.classList.remove('hidden'); var info = data.summary || {}; summary.textContent = (info.create || 0) + ' horarios por crear · ' + (info.noOp || 0) + ' ya existentes · ' + (info.blockers || 0) + ' bloqueadores'; blockers.innerHTML = (data.blockers || []).map(function (item) { return '<li>Fila ' + escapeHtml(item.row) + ': ' + escapeHtml(item.reason) + '</li>'; }).join(''); actions.innerHTML = (data.actions || []).slice(0, 20).map(function (item) { return '<li>' + escapeHtml(item.kind) + ': grupo #' + escapeHtml(item.grupoId) + ' · día ' + escapeHtml(item.diaSemana) + ' · ' + escapeHtml(item.horaInicio.slice(0, 5)) + '–' + escapeHtml(item.horaFin.slice(0, 5)) + ' · ' + escapeHtml(item.aula) + '</li>'; }).join(''); apply.disabled = Boolean((data.blockers || []).length) || !(data.actions || []).length || data.mode === 'apply'; }
+    csvForm.addEventListener('submit', async function (event) { event.preventDefault(); var data = csvData(); if (!data) return; try { var response = await fetch('/api/admin/horarios-grupo?mode=preview', { method: 'POST', body: data }); var responseData = await response.json().catch(function () { return {}; }); if (!response.ok) throw new Error(responseData.error || 'No fue posible generar la vista previa.'); preview = responseData; render(responseData); } catch (error) { message(error.message || 'No fue posible procesar el CSV.', true); } });
+    apply.addEventListener('click', async function () { if (!preview) return; var data = csvData(); if (!data) return; data.append('file_hash', preview.fileHash); data.append('preview_signature', preview.previewSignature); try { var response = await fetch('/api/admin/horarios-grupo?mode=apply', { method: 'POST', body: data }); var responseData = await response.json().catch(function () { return {}; }); if (!response.ok) throw new Error(responseData.error || 'No fue posible aplicar los horarios.'); render({ mode: 'apply', summary: { create: responseData.result.created, noOp: responseData.result.noOp, blockers: 0 }, actions: [] }); message('Horarios aplicados. Actualizando la tabla…', false); setTimeout(function () { window.location.reload(); }, 600); } catch (error) { message(error.message || 'No fue posible aplicar los horarios.', true); } });
+  }());
+</script>

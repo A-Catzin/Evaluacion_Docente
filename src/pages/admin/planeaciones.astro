@@ -1,21 +1,27 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { db } from '../../lib/db';
+import { dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+import { formatPlanningSubmissionDate } from '../../lib/planningSubmissionWindow';
+import { formatPersonName } from '../../lib/personName';
 
-const cliente = db();
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
-const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+const cliente = dbAdmin();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo(cliente);
+const cuatrimestres = await obtenerCuatrimestres(cliente);
+const cuatrimestreIdCookie = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+const cuatrimestreIdParam = Number(Astro.url.searchParams.get('cuatrimestre'));
+const cicloPorQuery = cuatrimestres.find(c => c.id === cuatrimestreIdParam);
+const cicloPorCookie = cuatrimestres.find(c => c.id === cuatrimestreIdCookie);
+const cicloActivo = cuatrimestres.find(c => c.id === cuatrimestreActivo?.id);
+const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0])?.id || 0;
 const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
 if (Astro.url.searchParams.has('cuatrimestre')) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
 const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
 
-const { data: raw } = await cliente.from('planeaciones').select('*, docentes(nombre,apellidos,email), asignaturas(nombre), cuatrimestres(clave)').eq('cuatrimestre_id', cuatrimestreId).order('fecha_subida', { ascending: false });
+const { data: raw, error: planeacionesError } = await cliente.from('planeaciones').select('*, docentes(nombre,apellidos,email), asignaturas(nombre), cuatrimestres(clave)').eq('cuatrimestre_id', cuatrimestreId).order('fecha_subida', { ascending: false });
+if (planeacionesError) throw planeacionesError;
 
 interface Item { id: number; docente: string; email: string; asignatura: string; grupo: string; estado: string; puntaje: number|null; url: string; cuatrimestre: string; firstTeacherSubmittedAt: string | null; latestTeacherSubmittedAt: string | null; evaluacionDetalle: Record<string,{score:string}> | null; }
 const items: Item[] = [];
@@ -32,7 +38,7 @@ for (const p of (raw || [])) {
   } catch {}
   items.push({
     id: (p as any).id as number,
-    docente: doc ? doc.nombre+' '+doc.apellidos : '',
+    docente: formatPersonName(doc ? `${doc.nombre || ''} ${doc.apellidos || ''}`.trim() : ''),
     email: doc?.email || '',
     asignatura: asig?.nombre || String((p as any).asignatura_id),
     grupo: (p as any).grupo as string,
@@ -47,7 +53,7 @@ for (const p of (raw || [])) {
 }
 const pendientes = items.filter(i => i.estado === 'Pendiente');
 const evaluadas = items.filter(i => i.estado !== 'Pendiente');
-const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
+const formatDate = formatPlanningSubmissionDate;
 ---
 
 <LayoutAdmin titulo="Planeaciones — Admin">

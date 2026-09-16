@@ -78,12 +78,4 @@
       cargarNotificaciones();
     });
   });
-  // Cargar badge al inicio
-  fetch('/api/notificaciones').then(function(r){return r.json()}).then(function(d){
-    var badge = document.getElementById('unread-badge');
-    if (d.noLeidas > 0) {
-      badge.textContent = d.noLeidas > 99 ? '99+' : d.noLeidas;
-      badge.classList.remove('hidden');
-    }
-  }).catch(function(){});
 </script>

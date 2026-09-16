@@ -3,18 +3,60 @@ import LayoutDocente from '../../layouts/LayoutDocente.astro';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres, obtenerOfertasAcademicas, obtenerCampus, obtenerTurnos } from '../../services/catalogos';
 import { obtenerAutodiagnostico } from '../../services/autodiagnostico';
 import { db } from '../../lib/db';
+import { autodiagnosticoSubmissionMessage, getAutodiagnosticoSubmissionWindow } from '../../lib/autodiagnosticoSubmissionWindow';
+
+const correlationId = crypto.randomUUID();
+const accessStartedAt = Date.now();
+
+function safeErrorDetails(error: unknown) {
+  const value = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  return {
+    name: typeof value.name === "string" ? value.name : null,
+    code: typeof value.code === "string" ? value.code : null,
+    status: typeof value.status === "number" ? value.status : null,
+  };
+}
+
+function logAutodiagnosticoAccess(stage: string, details: Record<string, unknown> = {}) {
+  console.error({
+    event: "autodiagnostico_access",
+    stage,
+    correlationId,
+    elapsedMs: Date.now() - accessStartedAt,
+    ...details,
+  });
+}
 
 const tokenAcceso = Astro.cookies.get('sb-access-token')?.value;
 const tokenRefresco = Astro.cookies.get('sb-refresh-token')?.value;
 const currentSearch = Astro.url.search || '';
-if (!tokenAcceso || !tokenRefresco) return Astro.redirect('/auth');
+if (!tokenAcceso || !tokenRefresco) {
+  logAutodiagnosticoAccess("session_missing", {
+    hasAccessToken: Boolean(tokenAcceso),
+    hasRefreshToken: Boolean(tokenRefresco),
+  });
+  return Astro.redirect('/auth');
+}
 
 const cliente = db();
-const { data: sesion } = await cliente.auth.setSession({ access_token: tokenAcceso, refresh_token: tokenRefresco });
-if (!sesion.user) return Astro.redirect('/auth');
+const { data: sesion, error: sesionError } = await cliente.auth.setSession({ access_token: tokenAcceso, refresh_token: tokenRefresco });
+if (sesionError || !sesion.user) {
+  logAutodiagnosticoAccess("session_invalid", {
+    authError: safeErrorDetails(sesionError),
+  });
+  return Astro.redirect('/auth');
+}
 
-const { data: usuario } = await cliente.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
-if (!usuario || usuario.rol !== 'docente') return Astro.redirect(`/docente/dashboard${currentSearch}`);
+const { data: usuario, error: usuarioError } = await cliente.from('usuarios').select('entidad_id,rol,email').eq('id', sesion.user.id).maybeSingle();
+if (!usuario || !['docente', 'pendiente'].includes(usuario.rol)) {
+  logAutodiagnosticoAccess("profile_or_role_rejected", {
+    authUserId: sesion.user.id,
+    role: usuario?.rol ?? null,
+    hasProfile: Boolean(usuario),
+    profileError: safeErrorDetails(usuarioError),
+  });
+  return Astro.redirect(`/docente/dashboard${currentSearch}`);
+}
 let docenteId = usuario.entidad_id;
 // Si no tiene entidad_id, buscar por email
 if (!docenteId && usuario.email) {
@@ -22,20 +64,74 @@ if (!docenteId && usuario.email) {
   if (doc) docenteId = doc.id;
 }
 
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
+const [cuatrimestreActivo, cuatrimestres] = await (async () => {
+  try {
+    const activo = await obtenerCuatrimestreActivo(cliente);
+    const ciclos = await obtenerCuatrimestres(cliente);
+    return [activo, ciclos] as const;
+  } catch (error) {
+    logAutodiagnosticoAccess("cycle_lookup_failed", {
+      authUserId: sesion.user.id,
+      role: usuario.rol,
+      cycleError: safeErrorDetails(error),
+    });
+    throw error;
+  }
+})();
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
-const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
-if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id) {
-  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
+const requestedCycleIdParsed = parseInt(cuatrimestreIdParam || '');
+const requestedCycleId = Number.isInteger(requestedCycleIdParsed) ? requestedCycleIdParsed : null;
+const cookieCycleIdParsed = parseInt(cuatrimestreIdCookie || '');
+const cookieCycleId = Number.isInteger(cookieCycleIdParsed) ? cookieCycleIdParsed : null;
+const cuatrimestreFallback = cuatrimestres[0];
+const cuatrimestreId = [
+  requestedCycleId,
+  cuatrimestreActivo?.id,
+  cookieCycleId,
+  cuatrimestreFallback?.id,
+].find((id): id is number => typeof id === "number" && Number.isInteger(id) && cuatrimestres.some(c => c.id === id)) || 0;
+const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId);
+if (cuatrimestreId) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
-if (!cuatrimestre) return Astro.redirect('/docente/dashboard');
+if (!cuatrimestre) {
+  logAutodiagnosticoAccess("cycle_unresolved", {
+    authUserId: sesion.user.id,
+    role: usuario.rol,
+    requestedCycleId,
+    activeCycleId: cuatrimestreActivo?.id ?? null,
+    cookieCycleId,
+    availableCycleCount: cuatrimestres.length,
+    availableCycleIds: cuatrimestres.map((c) => c.id),
+    selectedCycleId: cuatrimestreId || null,
+  });
+  return Astro.redirect('/docente/dashboard');
+}
 const dashboardUrl = `/docente/dashboard?cuatrimestre=${cuatrimestreId}`;
 
 const { data: existente } = docenteId ? await cliente.from('autodiagnosticos').select('id').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestre.id).maybeSingle() : { data: null };
 const yaRespondido = !!existente;
+const submissionWindow = await getAutodiagnosticoSubmissionWindow(cliente, cuatrimestre.id);
+const submissionOpen = submissionWindow.state === 'open';
+if (!submissionOpen) {
+  logAutodiagnosticoAccess("submission_window_unavailable", {
+    authUserId: sesion.user.id,
+    role: usuario.rol,
+    cycleId: cuatrimestre.id,
+    configured: submissionWindow.configured,
+    mode: submissionWindow.mode,
+    state: submissionWindow.state,
+  });
+}
+if (yaRespondido) {
+  logAutodiagnosticoAccess("already_completed", {
+    authUserId: sesion.user.id,
+    role: usuario.rol,
+    cycleId: cuatrimestre.id,
+    alreadyCompleted: true,
+  });
+}
 
 // Cargar datos del docente para pre-llenar el formulario
 const { data: datosDocente } = docenteId ? await cliente.from('docentes').select('nombre,apellido_paterno,apellido_materno,campus,oferta_academica,modalidad').eq('id', docenteId).maybeSingle() : { data: null };
@@ -45,9 +141,9 @@ const docenteApMaterno = datosDocente?.apellido_materno || '';
 const docenteCampus = datosDocente?.campus || '';
 const docenteModalidad = datosDocente?.modalidad || '';
 
-const ofertas = await obtenerOfertasAcademicas();
-const campusList = await obtenerCampus();
-const turnosList = await obtenerTurnos();
+const ofertas = await obtenerOfertasAcademicas(cliente);
+const campusList = await obtenerCampus(cliente);
+const turnosList = await obtenerTurnos(cliente);
 const OFERTA = ofertas.map(o => o.nombre);
 const CAMPUS = campusList.map(c => c.nombre);
 const TURNOS = turnosList.map(t => t.nombre);
@@ -90,7 +186,7 @@ const REACTIVOS = [
         <p class="text-emerald-600 text-sm mt-2">No es posible enviarlo nuevamente para este cuatrimestre.</p>
         <a href={dashboardUrl} class="inline-block mt-4 px-6 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Volver al Dashboard</a>
       </div>
-    ) : (
+    ) : submissionOpen ? (
       <>
         <!-- Barra de progreso -->
         <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
@@ -184,10 +280,16 @@ const REACTIVOS = [
           <button id="btn-atras" class="px-6 py-3 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors hidden">← Atrás</button>
           <button id="btn-siguiente" class="px-6 py-3 rounded-xl bg-tup text-white text-sm font-medium hover:bg-tup/90 transition-colors ml-auto">Siguiente →</button>
         </div>
-      </>
-    )}
+          </>
+        ) : (
+          <div class="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+            <p class="text-amber-900 font-semibold text-lg">Autoevaluación docente no disponible</p>
+            <p class="text-amber-800 text-sm mt-2">{autodiagnosticoSubmissionMessage(submissionWindow)}</p>
+            <a href={dashboardUrl} class="inline-block mt-4 px-6 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Volver al Dashboard</a>
+          </div>
+        )}
 
-    <!-- Modal de resultado -->
+        <!-- Modal de resultado -->
     <div id="modal-resultado" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm">
       <div class="bg-white rounded-3xl p-8 shadow-modal max-w-sm w-full mx-4 text-center animate-flotar-entrada">
         <div id="modal-icono" class="w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4"></div>
@@ -238,10 +340,12 @@ const REACTIVOS = [
     return true;
   }
 
-  document.getElementById('btn-siguiente').addEventListener('click', function () {
+  var siguiente = document.getElementById('btn-siguiente');
+  if (siguiente) siguiente.addEventListener('click', function () {
     if (validarPaso(pasoActual)) mostrarPaso(pasoActual + 1);
   });
-  document.getElementById('btn-atras').addEventListener('click', function () {
+  var atras = document.getElementById('btn-atras');
+  if (atras) atras.addEventListener('click', function () {
     mostrarPaso(pasoActual - 1);
   });
 
@@ -258,7 +362,8 @@ const REACTIVOS = [
   });
 
   // Enviar formulario
-  document.getElementById('form-autodiagnostico').addEventListener('submit', async function (e) {
+  var formAutodiagnostico = document.getElementById('form-autodiagnostico');
+  if (formAutodiagnostico) formAutodiagnostico.addEventListener('submit', async function (e) {
     e.preventDefault();
     var btn = document.getElementById('btn-enviar');
     btn.disabled = true;

@@ -1,8 +1,9 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../lib/db';
-import { formatScore } from '../../services/scoring';
+import { formatScore, roundTo2 } from '../../services/scoring';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
+import { formatPersonName } from '../../lib/personName';
 
 const cl = dbAdmin();
 const { data: cuatrisData, error: cuatrisError } = await cl
@@ -13,11 +14,19 @@ if (cuatrisError) throw cuatrisError;
 const cuatrisRes = { data: cuatrisData };
 
 const cuatrimestres = (cuatrisRes.data || []).sort((a, b) => a.id - b.id);
-const activeCuatriId = cuatrimestres.find((c: any) => c.activo)?.id ?? cuatrimestres[cuatrimestres.length - 1]?.id ?? 0;
-const queryCuatriId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || 0;
-const cookieCuatriId = parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '') || 0;
-const cuatrimestreId = queryCuatriId || activeCuatriId || cookieCuatriId || 0;
-const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
+const queryCuatriId = Number(Astro.url.searchParams.get('cuatrimestre'));
+const cookieCuatriId = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+const cicloPorQuery = cuatrimestres.find((c: any) => c.id === queryCuatriId);
+const cicloPorCookie = cuatrimestres.find((c: any) => c.id === cookieCuatriId);
+const cicloActivo = cuatrimestres.find((c: any) => c.activo);
+const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0])?.id || 0;
+const navigationParams = new URLSearchParams(Astro.url.searchParams);
+if (cuatrimestreId) navigationParams.set('cuatrimestre', String(cuatrimestreId));
+else navigationParams.delete('cuatrimestre');
+const qs = navigationParams.size ? `?${navigationParams.toString()}` : '';
+const clearSearchParams = new URLSearchParams(navigationParams);
+clearSearchParams.delete('q');
+const qsWithoutSearch = clearSearchParams.size ? `?${clearSearchParams.toString()}` : '';
 
 if (Astro.url.searchParams.has('cuatrimestre') && cuatrimestreId) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
@@ -53,7 +62,7 @@ const cards = busqueda
   ? cardsConResultados.filter((d) => `${d.nombre} ${d.apellidos} ${d.email} ${d.campus || ''} ${d.modalidad || ''}`.toLowerCase().includes(busqueda))
   : cardsConResultados;
 const sobresalientes = cards.filter((c) => c.category === 'Sobresaliente');
-const promedioGeneral = cards.length ? Math.round(cards.reduce((sum, c) => sum + (c.final || 0), 0) / cards.length) : null;
+const promedioGeneral = cards.length ? roundTo2(cards.reduce((sum, c) => sum + (c.final || 0), 0) / cards.length) : null;
 const mejorDocente = cards[0] || null;
 
 function scoreClass(n: number | null | undefined): string {
@@ -105,7 +114,7 @@ function fmt(n: number | null | undefined): string {
           <input type="text" name="q" value={busqueda} placeholder="Nombre, email, campus..." class="rounded-xl border border-slate-200 px-3 py-2 text-sm w-72 max-w-full" />
         </div>
         <button type="submit" class="px-4 py-2 rounded-xl bg-tup text-white text-sm font-medium">Filtrar</button>
-        {busqueda && <a href={`/admin/resultados-docentes${qs}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600">Limpiar</a>}
+        {busqueda && <a href={`/admin/resultados-docentes${qsWithoutSearch}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600">Limpiar</a>}
         {cuatrimestreId && <a href={`/api/admin/exportar-resultados?cuatrimestre_id=${cuatrimestreId}`} class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium">Descargar CSV para Excel</a>}
       </form>
     </div>
@@ -126,7 +135,7 @@ function fmt(n: number | null | undefined): string {
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
         <p class="text-xs uppercase tracking-wider text-slate-400">Mejor resultado</p>
         <p class={`text-3xl font-bold mt-1 ${scoreClass(mejorDocente?.final)}`}>{fmt(mejorDocente?.final)}</p>
-        <p class="text-xs text-slate-400 mt-1">{mejorDocente ? `${mejorDocente.nombre} ${mejorDocente.apellidos}` : 'Sin datos'}</p>
+        <p class="text-xs text-slate-400 mt-1">{mejorDocente ? formatPersonName(`${mejorDocente.nombre} ${mejorDocente.apellidos}`.trim()) : 'Sin datos'}</p>
       </div>
     </div>
 
@@ -139,7 +148,7 @@ function fmt(n: number | null | undefined): string {
             <div class="flex items-start justify-between gap-4">
               <div>
                 <p class="text-[11px] uppercase tracking-wider text-slate-400">Docente</p>
-                <h2 class="text-lg font-bold text-slate-800 group-hover:text-tup">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</h2>
+                <h2 class="text-lg font-bold text-slate-800 group-hover:text-tup">{formatPersonName(`${d.nombre} ${d.apellidos}`.trim())}</h2>
                 <p class="text-sm text-slate-500">{d.email}</p>
                 <p class="text-xs text-slate-400 mt-1">{d.campus || 'Sin campus'} · {d.modalidad || 'Sin modalidad'}</p>
               </div>

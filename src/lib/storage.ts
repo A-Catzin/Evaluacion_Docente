@@ -1,23 +1,24 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 let _clienteR2: S3Client | null = null;
 
 type R2Environment = Record<string, string | undefined>;
 
 export type R2DiagnosticCode =
-  | 'r2_config_missing'
-  | 'r2_public_url_invalid'
-  | 'r2_list_ok'
-  | 'r2_access_denied'
-  | 'r2_bucket_not_found'
-  | 'r2_connection_failed';
+  | "r2_config_missing"
+  | "r2_public_url_invalid"
+  | "r2_list_ok"
+  | "r2_access_denied"
+  | "r2_bucket_not_found"
+  | "r2_connection_failed";
 
 export type R2ConfigurationStatus = {
   enabled: boolean;
@@ -42,7 +43,14 @@ function isHttpsUrl(value: string | undefined): boolean {
   if (!hasValue(value)) return false;
   try {
     const url = new URL(value!);
-    return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password && !url.search && !url.hash;
+    return (
+      url.protocol === "https:" &&
+      Boolean(url.hostname) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
   } catch {
     return false;
   }
@@ -59,7 +67,12 @@ export function r2ConfigurationStatus(
   const publicUrlHttps = isHttpsUrl(values.R2_PUBLIC_URL);
 
   return {
-    enabled: accountIdPresent && accessKeyPresent && secretAccessKeyPresent && bucketPresent && publicUrlHttps,
+    enabled:
+      accountIdPresent &&
+      accessKeyPresent &&
+      secretAccessKeyPresent &&
+      bucketPresent &&
+      publicUrlHttps,
     accountIdPresent,
     accessKeyPresent,
     secretAccessKeyPresent,
@@ -71,27 +84,46 @@ export function r2ConfigurationStatus(
 
 export function r2ConfigurationDiagnosticCode(
   configuration: R2ConfigurationStatus,
-): Extract<R2DiagnosticCode, 'r2_config_missing' | 'r2_public_url_invalid'> | null {
-  if (!configuration.accountIdPresent || !configuration.accessKeyPresent || !configuration.secretAccessKeyPresent || !configuration.bucketPresent || !configuration.publicUrlPresent) {
-    return 'r2_config_missing';
+): Extract<
+  R2DiagnosticCode,
+  "r2_config_missing" | "r2_public_url_invalid"
+> | null {
+  if (
+    !configuration.accountIdPresent ||
+    !configuration.accessKeyPresent ||
+    !configuration.secretAccessKeyPresent ||
+    !configuration.bucketPresent ||
+    !configuration.publicUrlPresent
+  ) {
+    return "r2_config_missing";
   }
-  if (!configuration.publicUrlHttps) return 'r2_public_url_invalid';
+  if (!configuration.publicUrlHttps) return "r2_public_url_invalid";
   return null;
 }
 
 function requireR2Configuration(): R2Environment {
   if (r2ConfigurationDiagnosticCode(r2ConfigurationStatus())) {
-    throw new Error('La configuración de R2 no está disponible');
+    throw new Error("La configuración de R2 no está disponible");
   }
   return environment();
 }
 
-function r2ErrorCode(error: unknown): Exclude<R2DiagnosticCode, 'r2_config_missing' | 'r2_public_url_invalid' | 'r2_list_ok'> {
-  const value = error as { name?: unknown; $metadata?: { httpStatusCode?: unknown } };
+function r2ErrorCode(
+  error: unknown,
+): Exclude<
+  R2DiagnosticCode,
+  "r2_config_missing" | "r2_public_url_invalid" | "r2_list_ok"
+> {
+  const value = error as {
+    name?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
   const status = value?.$metadata?.httpStatusCode;
-  if (status === 401 || status === 403 || value?.name === 'AccessDenied') return 'r2_access_denied';
-  if (status === 404 || value?.name === 'NoSuchBucket') return 'r2_bucket_not_found';
-  return 'r2_connection_failed';
+  if (status === 401 || status === 403 || value?.name === "AccessDenied")
+    return "r2_access_denied";
+  if (status === 404 || value?.name === "NoSuchBucket")
+    return "r2_bucket_not_found";
+  return "r2_connection_failed";
 }
 
 export function r2UploadErrorCode(error: unknown): R2DiagnosticCode {
@@ -113,7 +145,7 @@ export async function diagnosticarR2(): Promise<{
         MaxKeys: 0,
       }),
     );
-    return { configuration, code: 'r2_list_ok' };
+    return { configuration, code: "r2_list_ok" };
   } catch (error) {
     return { configuration, code: r2ErrorCode(error) };
   }
@@ -132,11 +164,13 @@ function obtenerClienteR2(): S3Client {
   const secretKey = values.R2_SECRET_ACCESS_KEY;
 
   if (!accountId || !accessKey || !secretKey) {
-    throw new Error('Faltan variables de entorno R2 (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY)');
+    throw new Error(
+      "Faltan variables de entorno R2 (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY)",
+    );
   }
 
   _clienteR2 = new S3Client({
-    region: 'auto',
+    region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
     forcePathStyle: true,
@@ -147,13 +181,13 @@ function obtenerClienteR2(): S3Client {
 
 export function obtenerR2PublicUrl(): string {
   const url = requireR2Configuration().R2_PUBLIC_URL;
-  return url!.replace(/\/$/, '');
+  return url!.replace(/\/$/, "");
 }
 
 export async function subirArchivo(
   path: string,
   buffer: ArrayBuffer,
-  contentType: string
+  contentType: string,
 ): Promise<{ url: string }> {
   // Validate the public reference before creating an object to avoid orphaned uploads.
   const publicBase = obtenerR2PublicUrl();
@@ -166,7 +200,7 @@ export async function subirArchivo(
       Key: path,
       Body: new Uint8Array(buffer),
       ContentType: contentType,
-    })
+    }),
   );
 
   const url = `${publicBase}/${path}`;
@@ -179,9 +213,77 @@ export function obtenerUrlPublica(path: string): string {
   return `${publicBase}/${path}`;
 }
 
+export const R2_DIRECT_UPLOAD_UNAVAILABLE = "r2_direct_upload_unavailable";
+export const R2_DIRECT_UPLOAD_EXPIRES_SECONDS = 10 * 60;
+
+// Bucket CORS must allow PUT from https://sed-360.vercel.app (and the local
+// development origin when used) with Content-Type and If-None-Match request
+// headers. R2 CORS is bucket configuration and cannot be configured safely by
+// this application.
+// Browsers cannot set Content-Length, and R2 does not enforce an exact object
+// size before creation. The endpoint validates declared PDF metadata at 30 MiB;
+// the completion endpoint verifies the uploaded ContentLength with HEAD.
+export async function crearUrlSubidaR2Firmada(
+  path: string,
+  contentType: "application/pdf",
+  expiresIn: number = R2_DIRECT_UPLOAD_EXPIRES_SECONDS,
+): Promise<string> {
+  const cliente = obtenerClienteR2();
+  const bucketName = requireR2Configuration().R2_BUCKET!;
+  return getSignedUrl(
+    cliente,
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: path,
+      ContentType: contentType,
+      // R2 supports this conditional write, preventing a valid capability from
+      // overwriting an object that already exists at its opaque server-owned key.
+      IfNoneMatch: "*",
+    }),
+    { expiresIn },
+  );
+}
+
+export type R2ObjectHead =
+  | { status: "exists"; contentLength: number; contentType: string | undefined }
+  | { status: "missing" }
+  | { status: "unavailable" };
+
+/** Returns only object metadata; it never reads or exposes object contents. */
+export async function obtenerCabeceraArchivoR2(
+  path: string,
+): Promise<R2ObjectHead> {
+  try {
+    const result = await obtenerClienteR2().send(
+      new HeadObjectCommand({
+        Bucket: requireR2Configuration().R2_BUCKET!,
+        Key: path,
+      }),
+    );
+    return {
+      status: "exists",
+      contentLength: result.ContentLength ?? -1,
+      contentType: result.ContentType,
+    };
+  } catch (error) {
+    const value = error as {
+      name?: unknown;
+      $metadata?: { httpStatusCode?: unknown };
+    };
+    if (
+      value?.$metadata?.httpStatusCode === 404 ||
+      value?.name === "NotFound" ||
+      value?.name === "NoSuchKey"
+    ) {
+      return { status: "missing" };
+    }
+    return { status: "unavailable" };
+  }
+}
+
 export async function obtenerUrlFirmada(
   key: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
 ): Promise<string> {
   const cliente = obtenerClienteR2();
   const bucketName = requireR2Configuration().R2_BUCKET!;
@@ -189,7 +291,7 @@ export async function obtenerUrlFirmada(
   return getSignedUrl(
     cliente,
     new GetObjectCommand({ Bucket: bucketName, Key: key }),
-    { expiresIn }
+    { expiresIn },
   );
 }
 
@@ -204,9 +306,11 @@ function extraerRutaDesdeUrl(url: string): string | null {
 
   try {
     const parsed = new URL(url);
-    const pathname = parsed.pathname.replace(/^\//, '');
+    const pathname = parsed.pathname.replace(/^\//, "");
 
-    const supabaseMatch = pathname.match(/^storage\/v1\/object\/public\/[^/]+\/(.+)$/);
+    const supabaseMatch = pathname.match(
+      /^storage\/v1\/object\/public\/[^/]+\/(.+)$/,
+    );
     if (supabaseMatch) return supabaseMatch[1];
 
     const r2Match = pathname.match(/^([^/].+)$/);
@@ -220,7 +324,7 @@ function extraerRutaDesdeUrl(url: string): string | null {
 
 export async function obtenerUrlFirmadaDesdeUrlAlmacenada(
   url: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
 ): Promise<string> {
   if (!estaHabilitadoR2()) return url;
 

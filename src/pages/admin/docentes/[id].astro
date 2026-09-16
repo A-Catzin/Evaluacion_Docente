@@ -2,10 +2,12 @@
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../../lib/db';
 import { requireRole } from '../../../lib/auth';
-import { calcFinalScore, calcObservationScore, fetchNativeStudentEvaluationScores, formatScore, OBSERVATION_SELECT } from '../../../services/scoring';
-import { normalizePlanningSubjectName } from '../../../lib/planningSubjectScope';
+import { calcFinalScore, calcObservationScore, fetchNativeStudentEvaluationScores, formatScore, OBSERVATION_SELECT, roundTo2 } from '../../../services/scoring';
+import { groupPlanningAssignmentsBySubjectName, normalizePlanningSubjectName } from '../../../lib/planningSubjectScope';
+import { getPlanningSubjectStatus } from '../../../lib/planningSubjectStatus';
 import { obtenerCalificacionDocente } from '../../../services/calificaciones';
 import { OBSERVATION_INSTRUMENT_DEFINITIONS, OBSERVATION_STORAGE_SECTIONS, getObservationQuestion, isObservationInstrumentVersion, type ObservationInstrumentVersion } from '../../../lib/observationDefinitions';
+import { formatPersonName } from '../../../lib/personName';
 
 const COORD_SECTION_DEFS = [
   { code: 'A', title: 'Cumplimiento Académico', fields: ['a1', 'a2', 'a3'] },
@@ -39,14 +41,29 @@ const docente = docenteRes.data as any;
 if (!docente) return Astro.redirect(`/admin/resultados-docentes${currentSearch}`);
 
 const cuatrimestres = ((cuatrisRes.data || []) as any[]).sort((a, b) => a.id - b.id);
-const activeCuatriId = cuatrimestres.find((c) => c.activo)?.id ?? cuatrimestres[cuatrimestres.length - 1]?.id ?? 0;
-const queryCuatriId = parseInt(Astro.url.searchParams.get('cuatrimestre') || '') || 0;
-const cookieCuatriId = parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '') || 0;
-const cuatrimestreId = queryCuatriId || activeCuatriId || cookieCuatriId || 0;
-const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
-const cuatrimestreQuery = cuatrimestreId ? `&cuatrimestre=${cuatrimestreId}` : '';
+const queryCuatriId = Number(Astro.url.searchParams.get('cuatrimestre'));
+const cookieCuatriId = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+const cicloPorQuery = cuatrimestres.find((c) => c.id === queryCuatriId);
+const cicloPorCookie = cuatrimestres.find((c) => c.id === cookieCuatriId);
+const cicloActivo = cuatrimestres.find((c) => c.activo);
+const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0])?.id || 0;
+const navigationParams = new URLSearchParams(Astro.url.searchParams);
+if (cuatrimestreId) navigationParams.set('cuatrimestre', String(cuatrimestreId));
+else navigationParams.delete('cuatrimestre');
+const qs = navigationParams.size ? `?${navigationParams.toString()}` : '';
+const reportParams = new URLSearchParams(navigationParams);
+reportParams.set('modo', 'individual');
+reportParams.set('docente_id', String(docenteId));
+const reporteAnualQs = `?${reportParams.toString()}`;
 const selectedCuatrimestre = cuatrimestres.find((c) => c.id === cuatrimestreId) || null;
 const feedbackStatus = Astro.url.searchParams.get('feedback') || '';
+function detailUrl(feedback: string, selectedCycleId = cuatrimestreId): string {
+  const params = new URLSearchParams(navigationParams);
+  if (selectedCycleId) params.set('cuatrimestre', String(selectedCycleId));
+  else params.delete('cuatrimestre');
+  params.set('feedback', feedback);
+  return `/admin/docentes/${docenteId}?${params.toString()}`;
+}
 
 if (Astro.url.searchParams.has('cuatrimestre') && cuatrimestreId) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
@@ -69,14 +86,14 @@ if (Astro.request.method === 'POST') {
       { onConflict: 'docente_id,cuatrimestre_id' }
     );
 
-    if (saveError) return Astro.redirect(`/admin/docentes/${docenteId}?cuatrimestre=${submittedCuatriId}&feedback=error`);
-    return Astro.redirect(`/admin/docentes/${docenteId}?cuatrimestre=${submittedCuatriId}&feedback=saved`);
+    if (saveError) return Astro.redirect(detailUrl('error', submittedCuatriId));
+    return Astro.redirect(detailUrl('saved', submittedCuatriId));
   }
 
-  return Astro.redirect(`/admin/docentes/${docenteId}?feedback=error`);
+  return Astro.redirect(detailUrl('error'));
 }
 
-const [feedbackRes, eeRes, coordRes, planRes, obsRes, autoRes, preguntasRes, teacherGroupsRes] = await Promise.all([
+const [feedbackRes, eeRes, coordRes, planRes, obsRes, autoRes, preguntasRes, teacherGroupsRes, planningSubjectNpRes, planningGroupNpRes] = await Promise.all([
   cuatrimestreId
     ? cl.from('docente_360_feedback').select('id,docente_id,cuatrimestre_id,feedback_text,improvement_areas,created_at,updated_at').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId).maybeSingle()
     : Promise.resolve({ data: null }),
@@ -99,6 +116,12 @@ const [feedbackRes, eeRes, coordRes, planRes, obsRes, autoRes, preguntasRes, tea
   cuatrimestreId
     ? cl.from('grupos').select('id,clave,asignatura_id,modalidad').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId)
     : Promise.resolve({ data: [] }),
+  cuatrimestreId
+    ? cl.from('planning_subject_np').select('subject_key,estado').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId)
+    : Promise.resolve({ data: [] }),
+  cuatrimestreId
+    ? cl.from('planning_group_np').select('grupo_id,estado').eq('docente_id', docenteId).eq('cuatrimestre_id', cuatrimestreId)
+    : Promise.resolve({ data: [] }),
 ]);
 
 const feedback = feedbackRes.data as any;
@@ -109,8 +132,11 @@ const obsRows = (obsRes.data || []) as any[];
 const autoRows = (autoRes.data || []) as any[];
 const preguntaRows = (preguntasRes.data || []) as any[];
 const teacherGroups = (teacherGroupsRes.data || []) as any[];
+const planningSubjectNpRecords = (planningSubjectNpRes.data || []) as any[];
+const planningGroupNpRecords = (planningGroupNpRes.data || []) as any[];
 
 const asigIds = new Set<number>();
+
 const grupoIds = new Set<number>();
 for (const row of [...eeRows, ...coordRows, ...planRows, ...obsRows, ...teacherGroups]) {
   if (row.asignatura_id) asigIds.add(row.asignatura_id);
@@ -129,6 +155,24 @@ const asigMap = new Map<number, any>();
 for (const item of (asigLookupRes.data || []) as any[]) asigMap.set(item.id, item);
 const grupoMap = new Map<number, any>();
 for (const item of (grupoLookupRes.data || []) as any[]) grupoMap.set(item.id, item);
+
+const planningScopes = groupPlanningAssignmentsBySubjectName(teacherGroups.flatMap((group) => {
+  const asignatura = asigMap.get(group.asignatura_id);
+  return asignatura?.nombre
+    ? [{ grupoId: group.id, asignaturaId: group.asignatura_id, asignaturaNombre: asignatura.nombre, grupo: group.clave, modalidad: group.modalidad }]
+    : [];
+}));
+const planningStatusBySubject = new Map(
+  planningScopes.map((scope) => [
+    scope.key,
+    getPlanningSubjectStatus(
+      scope,
+      planRows.map((row) => ({ asignaturaNombre: asigMap.get(row.asignatura_id)?.nombre || '', estado: row.estado })),
+      planningSubjectNpRecords,
+      planningGroupNpRecords,
+    ),
+  ] as const),
+);
 
 const preguntaMap = new Map<string, any[]>();
 for (const p of preguntaRows) {
@@ -411,7 +455,9 @@ const subjectPerformanceRows = [...subjectPerformance.values()]
       coord,
       plan,
       obs,
+      planningStatus: planningStatusBySubject.get(performance.key) || 'pending',
       final: hasScore ? calcFinalScore({ ee: ee ?? undefined, coord: coord ?? undefined, plan: plan ?? undefined, obs: obs ?? undefined }).final : null,
+
     };
   })
   .sort((left, right) => left.asignatura.localeCompare(right.asignatura, 'es-MX'));
@@ -460,10 +506,10 @@ for (const c of cuatrimestres) {
 }
 
 const cyclesEvaluated = historial.length;
-const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluated) : 0;
+const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated) : 0;
 ---
 
-<LayoutAdmin titulo={`Docente 360 — ${docente.nombre} ${docente.apellidos}`}>
+<LayoutAdmin titulo={`Docente 360 — ${formatPersonName(`${docente.nombre} ${docente.apellidos}`.trim())}`}>
   <div class="animate-flotar-entrada max-w-7xl mx-auto">
     <div class="flex items-center gap-2 text-sm text-slate-400 mb-6 flex-wrap">
       <a href={`/admin/resultados-docentes${qs}`} class="hover:text-tup">Resultados 360</a>
@@ -476,13 +522,13 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
     <div class="bg-white rounded-3xl p-6 shadow-tarjeta mb-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 class="text-3xl font-bold text-tup">{docente.nombre.toUpperCase()} {docente.apellidos.toUpperCase()}</h1>
+          <h1 class="text-3xl font-bold text-tup">{formatPersonName(`${docente.nombre} ${docente.apellidos}`.trim())}</h1>
           <p class="text-sm text-slate-500 mt-1">{docente.email}</p>
           <p class="text-xs text-slate-400 mt-1">{docente.campus || 'Sin campus'} · {docente.modalidad || 'Sin modalidad'} · {selectedCuatrimestre?.clave || 'Sin ciclo'}</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <a href={`/admin/resultados-docentes${qs}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">← Volver a tarjetas</a>
-          <a href={`/admin/reporte-anual?modo=individual&docente_id=${docenteId}${cuatrimestreQuery}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">📈 Reporte anual</a>
+          <a href={`/admin/reporte-anual${reporteAnualQs}`} class="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">📈 Reporte anual</a>
           <a href={`/api/admin/historial-docente?docente_id=${docenteId}&format=csv`} class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium">⬇ CSV</a>
         </div>
       </div>
@@ -563,7 +609,7 @@ const historicalAvg = cyclesEvaluated > 0 ? Math.round(sumFinals / cyclesEvaluat
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
         <thead><tr class="bg-slate-50 border-b text-slate-500"><th class="text-left px-3 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-3 py-3 text-xs uppercase">Grupos</th><th class="text-center px-3 py-3 text-xs uppercase">Estudiantil</th><th class="text-center px-3 py-3 text-xs uppercase">Coordinación</th><th class="text-center px-3 py-3 text-xs uppercase">Planeación</th><th class="text-center px-3 py-3 text-xs uppercase">Observación</th><th class="text-center px-3 py-3 text-xs uppercase">Final</th></tr></thead>
-        <tbody class="divide-y">{subjectPerformanceRows.map((row) => (<tr class="hover:bg-slate-50"><td class="px-3 py-3 font-medium text-slate-700">{row.asignatura}</td><td class="px-3 py-3 text-slate-600">{row.grupos.join(', ') || '—'}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.ee)}`}>{fmt(row.ee)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.coord)}`}>{fmt(row.coord)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.plan)}`}>{fmt(row.plan)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.obs)}`}>{fmt(row.obs)}</td><td class={`px-3 py-3 text-center font-bold ${scoreClass(row.final)}`}>{fmt(row.final)}</td></tr>))}</tbody>
+        <tbody class="divide-y">{subjectPerformanceRows.map((row) => (<tr class="hover:bg-slate-50"><td class="px-3 py-3 font-medium text-slate-700">{row.asignatura}</td><td class="px-3 py-3 text-slate-600">{row.grupos.join(', ') || '—'}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.ee)}`}>{fmt(row.ee)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.coord)}`}>{fmt(row.coord)}</td><td class={`px-3 py-3 text-center font-medium ${row.planningStatus === 'np' ? 'text-slate-500' : scoreClass(row.plan)}`}>{row.planningStatus === 'np' ? 'NP' : fmt(row.plan)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.obs)}`}>{fmt(row.obs)}</td><td class={`px-3 py-3 text-center font-bold ${scoreClass(row.final)}`}>{fmt(row.final)}</td></tr>))}</tbody>
           </table>
         </div>
       )}

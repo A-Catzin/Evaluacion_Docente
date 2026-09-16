@@ -1,27 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  groupImportIdentity,
   selectCanonicalEquivalentBaseCandidate,
   selectUniqueGroupCandidate,
 } from "./groupImportResolution";
 
-describe("selectUniqueGroupCandidate", () => {
-  it("devuelve undefined cuando no hay candidatos", () => {
-    expect(selectUniqueGroupCandidate([])).toBeUndefined();
-  });
-
-  it("devuelve el único candidato", () => {
-    const candidate = { id: 631 };
-    expect(selectUniqueGroupCandidate([candidate])).toBe(candidate);
-  });
-
-  it("devuelve undefined cuando hay múltiples candidatos", () => {
-    expect(
-      selectUniqueGroupCandidate([{ id: 631 }, { id: 1209 }]),
-    ).toBeUndefined();
-  });
-});
-
-describe("selectCanonicalEquivalentBaseCandidate", () => {
+describe("group import resolution", () => {
   const base = {
     id: 1687,
     cuatrimestre_id: 11,
@@ -29,16 +13,15 @@ describe("selectCanonicalEquivalentBaseCandidate", () => {
     grado: "9",
     grupo_normalizado: "27-1 PP ARQ D",
     asignatura_id: null,
-    docente_id: null,
   };
 
-  it("resuelve bases equivalentes al ID numérico más bajo", () => {
+  it("selects one existing base even when grade is unavailable", () => {
     expect(
-      selectCanonicalEquivalentBaseCandidate([base, { ...base, id: 1661 }])?.id,
-    ).toBe(1661);
+      selectCanonicalEquivalentBaseCandidate([{ ...base, grado: "" }])?.id,
+    ).toBe(1687);
   });
 
-  it("conserva la ambigüedad cuando la identidad base difiere", () => {
+  it("keeps multiple persisted base rows ambiguous rather than choosing one", () => {
     expect(
       selectCanonicalEquivalentBaseCandidate([
         base,
@@ -47,18 +30,23 @@ describe("selectCanonicalEquivalentBaseCandidate", () => {
     ).toBeUndefined();
   });
 
-  it("no selecciona una base que ya tiene docente o asignatura", () => {
+  it("does not treat assignment rows as bases", () => {
     expect(
-      selectCanonicalEquivalentBaseCandidate([
-        base,
-        { ...base, id: 1661, docente_id: 55 },
-      ]),
+      selectCanonicalEquivalentBaseCandidate([{ ...base, asignatura_id: 8 }]),
     ).toBeUndefined();
+  });
+
+  it("normalizes the cycle/plan/group identity without grade", () => {
     expect(
-      selectCanonicalEquivalentBaseCandidate([
-        base,
-        { ...base, id: 1661, asignatura_id: 8 },
-      ]),
+      groupImportIdentity(11, "Práctica profesional", "27_1 pp arq d"),
+    ).toBe("11|PRACTICA PROFESIONAL|27 1 PP ARQ D");
+  });
+
+  it("returns only a genuinely unique arbitrary candidate", () => {
+    expect(selectUniqueGroupCandidate([])).toBeUndefined();
+    expect(selectUniqueGroupCandidate([{ id: 631 }])?.id).toBe(631);
+    expect(
+      selectUniqueGroupCandidate([{ id: 631 }, { id: 1209 }]),
     ).toBeUndefined();
   });
 });

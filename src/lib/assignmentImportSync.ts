@@ -25,26 +25,27 @@ export type AssignmentSyncRow = {
   teacherEmployee: string;
 };
 
+type RuntimeId = number | string | null | undefined;
+
 export type AssignmentSyncTeacher = {
-  id: number;
+  id: number | string;
   nombre?: string | null;
   apellidos?: string | null;
   email?: string | null;
   num_empleado?: string | null;
   activo?: boolean | null;
 };
-
 export type AssignmentSyncSubject = {
-  id: number;
+  id: number | string;
   clave?: string | null;
   nombre?: string | null;
 };
 export type AssignmentSyncGroup = {
-  id: number;
+  id: number | string;
   clave?: string | null;
-  cuatrimestre_id?: number | null;
-  docente_id?: number | null;
-  asignatura_id?: number | null;
+  cuatrimestre_id?: RuntimeId;
+  docente_id?: RuntimeId;
+  asignatura_id?: RuntimeId;
   num_alumnos?: number | null;
   plan_normalizado?: string | null;
   grado?: string | null;
@@ -57,7 +58,6 @@ export type AssignmentSyncOpenIssue = {
   grupo?: string | null;
   clave_asignatura?: string | null;
 };
-
 export type AssignmentSyncBlocker = {
   row: number;
   reason: string;
@@ -72,7 +72,9 @@ export type AssignmentSyncAction = {
   grade: string;
   group: string;
   subjectKey: string;
-  subjectId: number;
+  subjectName: string;
+  subjectId: number | null;
+  subjectAction: "create" | "existing";
   teacherId: number;
   teacherLabel: string;
   previousTeacherId: number | null;
@@ -80,9 +82,9 @@ export type AssignmentSyncAction = {
   baseKey: string;
   numAlumnos: number;
   existingGroupId: number | null;
+  groupAction: "create" | "existing";
   issueCount: number;
 };
-
 export type AssignmentSyncPlan = {
   rowsRead: number;
   actions: AssignmentSyncAction[];
@@ -92,8 +94,12 @@ export type AssignmentSyncPlan = {
     create: number;
     update: number;
     noOp: number;
+    subjectsCreated: number;
+    groupsCreated: number;
     blockers: number;
     issuesToResolve: number;
+    issuesToClean: number;
+    warningCount: number;
   };
 };
 
@@ -169,6 +175,15 @@ export function parseAssignmentSyncCsv(text: string): {
   };
 }
 
+function numericId(value: RuntimeId): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+function sameId(left: RuntimeId, right: RuntimeId): boolean {
+  const normalized = numericId(left);
+  return normalized !== null && normalized === numericId(right);
+}
 function teacherCandidates(
   row: AssignmentSyncRow,
   teachers: AssignmentSyncTeacher[],
@@ -207,7 +222,6 @@ function teacherCandidates(
     return row.teacher === direct || row.teacher === reversed;
   });
 }
-
 function teacherLabel(teacher: AssignmentSyncTeacher) {
   return (
     `${teacher.nombre || ""} ${teacher.apellidos || ""}`.trim() ||
@@ -216,7 +230,7 @@ function teacherLabel(teacher: AssignmentSyncTeacher) {
   );
 }
 
-/** Pure reconciliation: preview callers can prove this function has no database writes. */
+/** Pure, read-only reconciliation for the preview and apply revalidation. */
 export function planAssignmentImportSync(input: {
   cycleId: number;
   rows: AssignmentSyncRow[];
@@ -234,122 +248,75 @@ export function planAssignmentImportSync(input: {
   );
 
   for (const row of input.rows) {
-    if (
-      !row.plan ||
-      !row.group ||
-      !row.subjectKey ||
-      !row.subjectName ||
-      !row.teacher
-    ) {
-      blockers.push({ row: row.row, reason: "fila_incompleta" });
+    const missingFields = [
+      ["plan", row.plan],
+      ["group", row.group],
+      ["subjectKey", row.subjectKey],
+      ["subjectName", row.subjectName],
+      ["teacher", row.teacher],
+    ]
+      .filter(([, value]) => !value)
+      .map(([field]) => field);
+    if (missingFields.length) {
+      warnings.push({
+        row: row.row,
+        reason: "fila_incompleta",
+        details: { missingFields },
+      });
       continue;
     }
     const teacherMatches = teacherCandidates(row, activeTeachers);
-    if (teacherMatches.length !== 1) {
+    if (
+      teacherMatches.length !== 1 ||
+      numericId(teacherMatches[0]?.id) === null
+    ) {
       blockers.push({
         row: row.row,
-        reason: teacherMatches.length
-          ? "docente_ambiguo"
-          : "docente_no_encontrado",
+        reason:
+          teacherMatches.length > 1
+            ? "docente_ambiguo"
+            : "docente_no_encontrado",
         details: { matches: teacherMatches.length },
       });
       continue;
     }
+    const teacherId = numericId(teacherMatches[0].id)!;
+    const plan = normalizeImportedPlan(row.plan);
+    const group = normalizeImportedGroup(row.group);
     const subjectMatches = input.subjects.filter(
       (subject) =>
         normalizeImportedSubjectKey(subject.clave) === row.subjectKey,
     );
-    if (subjectMatches.length !== 1) {
+    if (subjectMatches.length > 1) {
       blockers.push({
         row: row.row,
-        reason: subjectMatches.length
-          ? "asignatura_ambigua"
-          : "asignatura_no_encontrada",
+        reason: "asignatura_ambigua",
         details: { matches: subjectMatches.length },
       });
       continue;
     }
-
-    const plan = normalizeImportedPlan(row.plan);
-    const group = normalizeImportedGroup(row.group);
-    // Report IDs are not necessarily public.grupos IDs. Resolve the row from its
-    // canonical CSV identity first, retaining all equivalent bases for enrollment.
-    const baseCandidates = input.groups.filter(
-      (candidate) =>
-        candidate.cuatrimestre_id === input.cycleId &&
-        !candidate.asignatura_id &&
-        normalizeImportedPlan(candidate.plan_normalizado) === plan &&
-        normalizeImportedGroup(
-          candidate.grupo_normalizado || candidate.clave,
-        ) === group,
-    );
-    const canonicalBase =
-      selectCanonicalEquivalentBaseCandidate(baseCandidates);
-    if (!canonicalBase) {
+    const subjectId =
+      subjectMatches.length === 1 ? numericId(subjectMatches[0].id) : null;
+    if (subjectMatches.length === 1 && subjectId === null) {
       blockers.push({
         row: row.row,
-        reason: baseCandidates.length
-          ? "grupo_base_ambiguo"
-          : "grupo_base_no_encontrado",
-        details: {
-          cycleId: input.cycleId,
-          normalizedPlan: plan,
-          normalizedGroup: group,
-          csvGroupId: row.groupId || null,
-          baseCandidateIds: baseCandidates.map((candidate) => candidate.id),
-          baseCandidateCount: baseCandidates.length,
-        },
+        reason: "asignatura_ambigua",
+        details: { matches: 1 },
       });
       continue;
     }
-
-    // A database ID is only a hint. Use it when it names the same current, unassigned
-    // base; subject rows and conflicting identities fall back to canonical resolution.
-    const hintedId = Number(row.groupId);
-    const hintedBase =
-      row.groupId && Number.isSafeInteger(hintedId) && hintedId > 0
-        ? input.groups.find(
-            (candidate) =>
-              candidate.id === hintedId &&
-              candidate.cuatrimestre_id === input.cycleId &&
-              !candidate.asignatura_id &&
-              !candidate.docente_id &&
-              normalizeImportedPlan(candidate.plan_normalizado) === plan &&
-              normalizeImportedGroup(
-                candidate.grupo_normalizado || candidate.clave,
-              ) === group &&
-              normalizeText(candidate.grado) ===
-                normalizeText(canonicalBase.grado),
-          )
-        : undefined;
-    const base = hintedBase || canonicalBase;
-    const resolvedPlan = normalizeImportedPlan(base.plan_normalizado || plan);
-    const resolvedGroup = normalizeImportedGroup(
-      base.grupo_normalizado || base.clave || group,
-    );
-    const grade = normalizeText(base.grado);
-    if (!resolvedPlan || !resolvedGroup || !grade) {
-      blockers.push({ row: row.row, reason: "grupo_base_inseguro" });
-      continue;
-    }
-    const key = assignmentImportKey(
-      input.cycleId,
-      resolvedPlan,
-      grade,
-      resolvedGroup,
-      row.subjectKey,
-    );
+    const key = assignmentImportKey(input.cycleId, plan, group, row.subjectKey);
     const existing = input.groups.filter(
       (candidate) =>
-        Boolean(candidate.asignatura_id) &&
+        sameId(candidate.cuatrimestre_id, input.cycleId) &&
+        numericId(candidate.asignatura_id) !== null &&
         (candidate.importacion_key === key ||
-          (candidate.asignatura_id === subjectMatches[0].id &&
-            normalizeImportedPlan(candidate.plan_normalizado) ===
-              resolvedPlan &&
-            normalizeText(candidate.grado) === grade &&
+          (subjectId !== null &&
+            sameId(candidate.asignatura_id, subjectId) &&
+            normalizeImportedPlan(candidate.plan_normalizado) === plan &&
             normalizeImportedGroup(
               candidate.grupo_normalizado || candidate.clave,
-            ) === resolvedGroup)),
+            ) === group)),
     );
     if (existing.length > 1) {
       blockers.push({
@@ -359,47 +326,83 @@ export function planAssignmentImportSync(input: {
       });
       continue;
     }
-    const issueCount = input.openIssues.filter(
-      (issue) =>
-        normalizeImportedPlan(issue.plan) === resolvedPlan &&
-        normalizeImportedGroup(issue.grupo) === resolvedGroup &&
-        normalizeImportedSubjectKey(issue.clave_asignatura) === row.subjectKey,
-    ).length;
-    const prior = actions.get(key);
-    if (prior) {
-      if (prior.teacherId === teacherMatches[0].id) prior.rows.push(row.row);
-      else
-        blockers.push({
-          row: row.row,
-          reason: "csv_asignacion_docente_conflictiva",
-          details: { firstRow: prior.row },
-        });
+    const baseCandidates = input.groups.filter(
+      (candidate) =>
+        sameId(candidate.cuatrimestre_id, input.cycleId) &&
+        numericId(candidate.asignatura_id) === null &&
+        normalizeImportedPlan(candidate.plan_normalizado) === plan &&
+        normalizeImportedGroup(
+          candidate.grupo_normalizado || candidate.clave,
+        ) === group,
+    );
+    const validBaseCandidates = baseCandidates.flatMap((candidate) => {
+      const id = numericId(candidate.id);
+      return id === null ? [] : [{ ...candidate, id }];
+    });
+    const base = selectCanonicalEquivalentBaseCandidate(validBaseCandidates);
+    if (
+      !existing.length &&
+      (baseCandidates.length > 1 ||
+        validBaseCandidates.length !== baseCandidates.length)
+    ) {
+      blockers.push({
+        row: row.row,
+        reason: "grupo_base_ambiguo",
+        details: { ids: baseCandidates.map((candidate) => candidate.id) },
+      });
       continue;
     }
-    const current = existing[0] || null;
+    const prior = actions.get(key);
+    if (prior) {
+      if (
+        prior.teacherId === teacherId &&
+        prior.subjectName === row.subjectName
+      ) {
+        prior.rows.push(row.row);
+      } else {
+        blockers.push({
+          row: row.row,
+          reason:
+            prior.teacherId === teacherId
+              ? "csv_asignacion_conflictiva"
+              : "csv_asignacion_docente_conflictiva",
+          details: { firstRow: prior.row },
+        });
+      }
+      continue;
+    }
+    const current = existing[0];
+    const baseId = base ? numericId(base.id) : null;
+    const issueCount = input.openIssues.filter(
+      (issue) =>
+        normalizeImportedPlan(issue.plan) === plan &&
+        normalizeImportedGroup(issue.grupo) === group &&
+        normalizeImportedSubjectKey(issue.clave_asignatura) === row.subjectKey,
+    ).length;
     actions.set(key, {
       row: row.row,
       rows: [row.row],
       kind: current
-        ? current.docente_id === teacherMatches[0].id
+        ? sameId(current.docente_id, teacherId)
           ? "no-op"
           : "update"
         : "create",
       assignmentKey: key,
-      plan: resolvedPlan,
-      grade,
-      group: resolvedGroup,
+      plan,
+      grade: normalizeText(base?.grado),
+      group,
       subjectKey: row.subjectKey,
-      subjectId: subjectMatches[0].id,
-      teacherId: teacherMatches[0].id,
+      subjectName: row.subjectName,
+      subjectId,
+      subjectAction: subjectId === null ? "create" : "existing",
+      teacherId,
       teacherLabel: teacherLabel(teacherMatches[0]),
-      previousTeacherId: current?.docente_id || null,
-      baseIds: baseCandidates
-        .map((candidate) => candidate.id)
-        .sort((a, b) => a - b),
-      baseKey: base.clave || resolvedGroup.slice(0, 20),
-      numAlumnos: base.num_alumnos || 0,
-      existingGroupId: current?.id || null,
+      previousTeacherId: numericId(current?.docente_id),
+      baseIds: baseId === null ? [] : [baseId],
+      baseKey: base?.clave || group.slice(0, 20),
+      numAlumnos: base?.num_alumnos || 0,
+      existingGroupId: numericId(current?.id),
+      groupAction: baseId === null && !current ? "create" : "existing",
       issueCount,
     });
   }
@@ -413,11 +416,20 @@ export function planAssignmentImportSync(input: {
       create: result.filter((action) => action.kind === "create").length,
       update: result.filter((action) => action.kind === "update").length,
       noOp: result.filter((action) => action.kind === "no-op").length,
+      subjectsCreated: new Set(
+        result
+          .filter((action) => action.subjectAction === "create")
+          .map((action) => action.subjectKey),
+      ).size,
+      groupsCreated: result.filter((action) => action.groupAction === "create")
+        .length,
       blockers: blockers.length,
       issuesToResolve: result.reduce(
         (total, action) => total + action.issueCount,
         0,
       ),
+      issuesToClean: input.openIssues.length,
+      warningCount: warnings.length,
     },
   };
 }

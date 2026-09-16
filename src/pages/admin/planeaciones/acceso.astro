@@ -1,14 +1,19 @@
 ---
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { requireRole } from '../../../lib/auth';
+import { dbAdmin } from '../../../lib/db';
 import { formatCancunDateTimeLocal } from '../../../lib/planningSubmissionWindow';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 
 const auth = await requireRole(Astro.cookies, ['superadmin']);
-const cycles = await obtenerCuatrimestres();
-const activeCycle = await obtenerCuatrimestreActivo();
+const cycles = await obtenerCuatrimestres(dbAdmin());
+const activeCycle = await obtenerCuatrimestreActivo(dbAdmin());
 const requestedCycleId = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10);
-const cuatrimestreId = cycles.some((cycle) => cycle.id === requestedCycleId) ? requestedCycleId : activeCycle?.id || cycles[0]?.id || 0;
+const cookieCycleId = Number.parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '', 10);
+const cicloPorQuery = cycles.find((cycle) => cycle.id === requestedCycleId);
+const cicloPorCookie = cycles.find((cycle) => cycle.id === cookieCycleId);
+const cicloActivo = cycles.find((cycle) => cycle.id === activeCycle?.id);
+const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cycles[0])?.id || 0;
 const { data: windows, error } = await auth.client.rpc('planning_submission_window_admin_list');
 if (error) throw error;
 const window = (windows || []).find((item: any) => Number(item.cuatrimestre_id) === cuatrimestreId) as any;

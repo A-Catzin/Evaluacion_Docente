@@ -121,6 +121,12 @@ function resolveTable(builder: MockQueryBuilder) {
   }
 
   if (table === "grupos" && operation === "select") {
+    if (
+      builder.selectFields.includes("asignatura_id") &&
+      nextSubjectAssignments
+    ) {
+      return { data: nextSubjectAssignments, error: null };
+    }
     const ids = nextGrupos.length ? nextGrupos : [1];
     return {
       data: ids.map((id) => ({ docente_id: id })),
@@ -137,11 +143,22 @@ function resolveTable(builder: MockQueryBuilder) {
   }
 
   if (table === "planeaciones" && operation === "select") {
+    if (builder.selectFields.includes("asignatura_id") && nextSubjectPlans) {
+      return { data: nextSubjectPlans, error: null };
+    }
     const ids = nextInstrumentos.planeaciones ?? [1];
     return {
       data: ids.map((id) => ({ docente_id: id, puntaje_promedio: 70 })),
       error: null,
     };
+  }
+
+  if (table === "planning_subject_np" && operation === "select") {
+    return { data: nextSubjectNp, error: null };
+  }
+
+  if (table === "planning_group_np" && operation === "select") {
+    return { data: [], error: null };
   }
 
   if (table === "observaciones" && operation === "select") {
@@ -181,7 +198,10 @@ function resolveTable(builder: MockQueryBuilder) {
 let capturedSnapshotCall: Record<string, unknown> | null = null;
 let capturedUpsertPayload: Record<string, unknown> | null = null;
 let nextSnapshot: Record<string, unknown> | null = null;
-let nextCalificacionFinal: Record<string, unknown> | null = null;
+let nextCalificacionFinal:
+  | Record<string, unknown>
+  | Record<string, unknown>[]
+  | null = null;
 
 type InstrumentTable =
   | "evaluacion_coordinacion"
@@ -192,6 +212,10 @@ type InstrumentTable =
 
 let nextGrupos: number[] = [];
 let nextInstrumentos: Partial<Record<InstrumentTable, number[]>> = {};
+let nextSubjectAssignments: Record<string, unknown>[] | null = null;
+let nextSubjectPlans: Record<string, unknown>[] | null = null;
+let nextSubjectNp: Record<string, unknown>[] = [];
+let nextNativeScores: Record<string, unknown>[] | null = null;
 let nextUpsertErrorForDocenteId: number | null = null;
 
 function resolveSnapshot(builder: MockQueryBuilder) {
@@ -258,7 +282,7 @@ function createMockClient(): SupabaseClient {
     rpc: vi.fn((fn: string, params: Record<string, unknown>) => {
       if (fn === "obtener_scores_encuesta_estudiantil_nativa") {
         return Promise.resolve({
-          data: [
+          data: nextNativeScores ?? [
             {
               docente_id: params.p_cuatrimestre_id === 10 ? 1 : 999,
               asignatura_id: 100,
@@ -308,6 +332,10 @@ describe("calificaciones", () => {
     nextCalificacionFinal = null;
     nextGrupos = [];
     nextInstrumentos = {};
+    nextSubjectAssignments = null;
+    nextSubjectPlans = null;
+    nextSubjectNp = [];
+    nextNativeScores = null;
     nextUpsertErrorForDocenteId = null;
   });
 
@@ -320,10 +348,8 @@ describe("calificaciones", () => {
       expect(result.cuatrimestre_id).toBe(10);
       expect(result.modalidad_snapshot).toBe("Escolarizado");
       expect(result.num_instrumentos_esperados).toBe(5);
-      expect(result.version_calculo).toBe("v2.3-subject-aware-np");
-      expect(result.calificacion_final).toBe(
-        Math.round(80 * 0.35 + 90 * 0.2 + 70 * 0.15 + 80 * 0.25 + 100 * 0.05),
-      );
+      expect(result.version_calculo).toBe("v2.5-teacher-cycle-aggregate");
+      expect(result.calificacion_final).toBe(81.5);
       expect(result.categoria_final).toBe("Distinguido");
 
       expect(capturedSnapshotCall).toMatchObject({
@@ -344,7 +370,63 @@ describe("calificaciones", () => {
         score_autoevaluacion: 100,
         num_instrumentos_completados: 5,
         num_instrumentos_esperados: 5,
-        version_calculo: "v2.3-subject-aware-np",
+        version_calculo: "v2.5-teacher-cycle-aggregate",
+      });
+    });
+
+    it("persists one teacher-cycle final when one approved plan coexists with NP subjects", async () => {
+      const npSubjects = ["Civil", "Penal", "Mercantil", "Fiscal", "Laboral"];
+      nextSubjectAssignments = [
+        {
+          id: 1,
+          clave: "11A",
+          asignatura_id: 100,
+          modalidad: "Escolarizado",
+          asignaturas: { nombre: "JUICIO DE AMPARO" },
+        },
+        ...npSubjects.map((nombre, index) => ({
+          id: index + 2,
+          clave: `11${index + 2}`,
+          asignatura_id: index + 101,
+          modalidad: "Escolarizado",
+          asignaturas: { nombre },
+        })),
+      ];
+      nextSubjectPlans = [
+        {
+          asignatura_id: 100,
+          puntaje_promedio: 100,
+          estado: "Aprobado",
+          asignaturas: { nombre: "JUICIO DE AMPARO" },
+        },
+      ];
+      nextSubjectNp = npSubjects.map((subject_key) => ({
+        subject_key: subject_key.toLowerCase(),
+        estado: "NP",
+      }));
+      nextNativeScores = [];
+      nextInstrumentos = {
+        evaluacion_coordinacion: [],
+        observaciones: [],
+        planeaciones: [],
+        autodiagnosticos: [],
+      };
+
+      const result = await recalcularCalificacionDocente(
+        createMockClient(),
+        1,
+        10,
+      );
+
+      expect(result).toMatchObject({
+        calificacion_final: 15,
+        num_instrumentos_completados: 1,
+        num_instrumentos_esperados: 5,
+        categoria_final: "Parcial",
+      });
+      expect(capturedUpsertPayload).toMatchObject({
+        score_planeacion: 100,
+        calificacion_final: 15,
       });
     });
 
@@ -398,7 +480,9 @@ describe("calificaciones", () => {
       expect(result).not.toBeNull();
       expect(result?.docente_id).toBe(1);
       expect(result?.cuatrimestre_id).toBe(10);
-      expect(result?.version_calculo).toBe("v2.3-subject-aware-np-inline");
+      expect(result?.version_calculo).toBe(
+        "v2.5-teacher-cycle-aggregate-inline",
+      );
     });
   });
 
@@ -414,6 +498,64 @@ describe("calificaciones", () => {
         calificacion_final: 82,
         categoria_final: "Distinguido",
       });
+    });
+
+    it("omite la detección y cálculo inline en modo de filas precalculadas", async () => {
+      nextCalificacionFinal = [
+        {
+          id: 2,
+          docente_id: 2,
+          cuatrimestre_id: 10,
+          modalidad_snapshot: "Escolarizado",
+          score_encuesta_estudiantil: 80,
+          score_coordinacion: 90,
+          score_planeacion: 70,
+          score_observacion: 80,
+          score_autoevaluacion: 100,
+          calificacion_final: 82,
+          categoria_final: "Distinguido",
+          num_instrumentos_completados: 5,
+          num_instrumentos_esperados: 5,
+          version_calculo: "v2.2-versioned-instruments",
+          calculada_en: "2025-01-01T00:00:00Z",
+        },
+        {
+          id: 1,
+          docente_id: 1,
+          cuatrimestre_id: 10,
+          modalidad_snapshot: "Escolarizado",
+          score_encuesta_estudiantil: 80,
+          score_coordinacion: 90,
+          score_planeacion: 70,
+          score_observacion: 80,
+          score_autoevaluacion: 100,
+          calificacion_final: 82,
+          categoria_final: "Distinguido",
+          num_instrumentos_completados: 5,
+          num_instrumentos_esperados: 5,
+          version_calculo: "v2.2-versioned-instruments",
+          calculada_en: "2025-01-01T00:00:00Z",
+        },
+      ];
+      const client = createMockClient();
+
+      const results = await obtenerCalificacionesPorCuatrimestre(client, 10, {
+        incluirFallbackInline: false,
+      });
+
+      expect(results.map((result) => result.docente_id)).toEqual([1, 2]);
+      const queriedTables = vi
+        .mocked(client.from)
+        .mock.calls.map(([table]) => table);
+      expect(queriedTables).not.toEqual(
+        expect.arrayContaining([
+          "evaluacion_coordinacion",
+          "observaciones",
+          "planeaciones",
+          "autodiagnosticos",
+          "encuesta_estudiantil_respuestas",
+        ]),
+      );
     });
   });
 

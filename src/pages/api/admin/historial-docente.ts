@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { db } from "../../../lib/db";
-import { formatScoreCsv } from "../../../services/scoring";
+import { formatScoreCsv, roundTo2 } from "../../../services/scoring";
 import {
   obtenerCalificacionesPorDocenteYCuatrimestres,
   type CalificacionFinal,
@@ -65,7 +65,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
     }
   }
 
-  const annualAvg = totalCycles > 0 ? Math.round(sumFinals / totalCycles) : 0;
+  const annualAvg = totalCycles > 0 ? roundTo2(sumFinals / totalCycles) : 0;
 
   const format = url.searchParams.get("format") || "json";
   if (format === "csv") {

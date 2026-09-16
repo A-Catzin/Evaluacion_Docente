@@ -5,17 +5,23 @@ import { obtenerCuatrimestreActivo, obtenerCampus, obtenerCuatrimestres } from '
 import { db, dbAdmin } from '../../../lib/db';
 import { fetchNativeStudentEvaluationScores } from '../../../services/scoring';
 
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
-const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+const cuatrimestreActivo = await obtenerCuatrimestreActivo(dbAdmin());
+const cuatrimestres = await obtenerCuatrimestres(dbAdmin());
+const cuatrimestreIdParam = Number(Astro.url.searchParams.get('cuatrimestre'));
+const cuatrimestreIdCookie = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+const cicloPorQuery = cuatrimestres.find(c => c.id === cuatrimestreIdParam);
+const cicloPorCookie = cuatrimestres.find(c => c.id === cuatrimestreIdCookie);
+const cicloActivo = cuatrimestres.find(c => c.id === cuatrimestreActivo?.id);
+const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0])?.id || 0;
 if (Astro.url.searchParams.has('cuatrimestre') || cuatrimestreActivo?.id) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
 const cuatrimestre = cuatrimestres.find(c=>c.id===cuatrimestreId) || cuatrimestreActivo;
 const cuatrimestreClave = cuatrimestre?.clave || '26-2';
-const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
+const navigationParams = new URLSearchParams(Astro.url.searchParams);
+if (cuatrimestreId) navigationParams.set('cuatrimestre', String(cuatrimestreId));
+else navigationParams.delete('cuatrimestre');
+const qs = navigationParams.size ? `?${navigationParams.toString()}` : '';
 
 const cliente = db();
 const todos = await obtenerDocentes();
@@ -39,6 +45,7 @@ const docentePre = docenteIdParam ? docentes.find(d => d.id === parseInt(docente
     <div class="flex items-center justify-between gap-4 mb-4 flex-wrap">
       <a href={`/admin/evaluar-docentes${qs}`} class="text-sm text-tup hover:underline inline-block">← Volver a Evaluar Docentes</a>
       <form method="GET" class="flex items-center gap-2">
+        {docenteIdParam && <input type="hidden" name="docente_id" value={docenteIdParam} />}
         <span class="text-xs uppercase text-slate-400 font-semibold">Ciclo</span>
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
           {cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.clave}</option>))}

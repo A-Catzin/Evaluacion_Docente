@@ -11,9 +11,13 @@ describe("group import identity", () => {
     expect(baseImportedGroup("A_1 - Matemáticas")).toBe("A 1");
   });
 
-  it("uses the canonical group identity in assignment keys", () => {
-    expect(assignmentImportKey(7, "Plan A", "1", "A_1", "MAT-01")).toBe(
-      "7|PLAN A|1|A 1|MAT-01",
+  it("uses cycle, plan, group and subject key without grade", () => {
+    expect(assignmentImportKey(7, "Plan A", "A_1", "MAT-01")).toBe(
+      "7|PLAN A|A 1|MAT-01",
+    );
+    // Legacy callers may still pass grade, but it cannot split identity.
+    expect(assignmentImportKey(7, "Plan A", "9", "A_1", "MAT-01")).toBe(
+      "7|PLAN A|A 1|MAT-01",
     );
   });
 });

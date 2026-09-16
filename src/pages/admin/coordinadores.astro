@@ -1,6 +1,7 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { db } from '../../lib/db';
+import { formatPersonName } from '../../lib/personName';
 
 const cliente = db();
 const { data: coordinadores } = await cliente.from('usuarios').select('id,email,rol,entidad_id').eq('rol', 'coordinador');
@@ -39,9 +40,9 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
         <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
           <div class="flex items-center justify-between px-6 py-4">
             <div class="flex items-center gap-4">
-              <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{f.nombre.charAt(0)}</div>
+              <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{formatPersonName(f.nombre).charAt(0)}</div>
               <div>
-                <p class="font-medium text-slate-800">{f.nombre.toUpperCase()} {f.apellidos.toUpperCase()}</p>
+                <p class="font-medium text-slate-800">{formatPersonName(`${f.nombre} ${f.apellidos}`.trim())}</p>
                 <p class="text-xs ">{f.email}</p>
               </div>
             </div>
@@ -81,7 +82,7 @@ let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqued
       var docentes = await res.json();
       if (!docentes || docentes.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No ha evaluado docentes todavía.</p>'; return; }
       container.innerHTML = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-left px-3 py-2 font-medium text-slate-600">Docente</th><th class="text-left px-3 py-2 font-medium text-slate-600">Email</th><th class="text-center px-3 py-2 font-medium text-slate-600">Acciones</th></tr></thead><tbody class="divide-y">' +
-        docentes.map(function(d){ return '<tr><td class="px-3 py-2 font-medium">'+d.nombre+' '+d.apellidos+'</td><td class="px-3 py-2 text-slate-500">'+d.email+'</td><td class="px-3 py-2 text-center"><a href="/admin/docentes?q='+encodeURIComponent(d.nombre+' '+d.apellidos)+'" class="px-2 py-1 rounded-lg bg-tup/10 text-tup text-[10px] hover:bg-tup/20 mr-1">Ver desempeño</a></td></tr>' }).join('') +
+        docentes.map(function(d){ return '<tr><td class="px-3 py-2 font-medium">'+(d.nombre+' '+d.apellidos).toLocaleUpperCase('es-MX')+'</td><td class="px-3 py-2 text-slate-500">'+d.email+'</td><td class="px-3 py-2 text-center"><a href="/admin/docentes?q='+encodeURIComponent(d.nombre+' '+d.apellidos)+'" class="px-2 py-1 rounded-lg bg-tup/10 text-tup text-[10px] hover:bg-tup/20 mr-1">Ver desempeño</a></td></tr>' }).join('') +
         '</tbody></table>';
     } catch(err) { container.innerHTML = '<p class="text-xs text-red-500 text-center py-4">Error al cargar docentes</p>'; }
   }

@@ -63,6 +63,18 @@ supabase/migrations/055_fix_cycle_teacher_candidate_eligibility.sql
 !supabase/migrations/064_planning_correction_reason.sql
 !supabase/migrations/065_planning_subject_np.sql
 !supabase/migrations/066_planning_subject_np_bulk.sql
+!supabase/migrations/077_retire_unused_planning_group_document_status.sql
+!supabase/migrations/078_autodiagnostico_submission_access_window.sql
+!supabase/migrations/079_idempotent_assignment_import.sql
+!supabase/migrations/080_assignment_import_timeout_fix.sql
+!supabase/migrations/081_assignment_import_audit_and_index_perf.sql
+!supabase/migrations/082_assignment_import_indexes_concurrently.sql
+!supabase/migrations/083_assignment_import_timeout_diagnostics.sql
+!supabase/migrations/084_assignment_import_lock_diagnostics.sql
+!supabase/migrations/085_assignment_import_set_based.sql
+!supabase/migrations/086_assignment_import_audit_trigger_fast_path.sql
+!supabase/migrations/087_assignment_import_groups_without_enrollment_copy.sql
+!supabase/migrations/088_horarios_grupo.sql
 
 openspec/
 src/supabase/

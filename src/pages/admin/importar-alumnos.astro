@@ -1,12 +1,16 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 
-const cuatrimestres = await obtenerCuatrimestres();
-const activo = await obtenerCuatrimestreActivo();
+const cuatrimestres = await obtenerCuatrimestres(dbAdmin());
+const activo = await obtenerCuatrimestreActivo(dbAdmin());
 const queryId = Number(Astro.url.searchParams.get('cuatrimestre'));
 const cookieId = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
-const cuatrimestreId = cuatrimestres.some(c => c.id === queryId) ? queryId : activo?.id || cookieId || cuatrimestres[0]?.id || 0;
+const cicloPorQuery = cuatrimestres.find(c => c.id === queryId);
+const cicloPorCookie = cuatrimestres.find(c => c.id === cookieId);
+const cicloActivo = cuatrimestres.find(c => c.id === activo?.id);
+const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatrimestres[0])?.id || 0;
 ---
 
 <LayoutAdmin titulo="Importar alumnos — Admin">

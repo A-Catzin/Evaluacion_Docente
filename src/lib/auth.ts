@@ -1,6 +1,6 @@
 import type { APIContext } from "astro";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { crearClienteSuperbase } from "./supabaseClient";
+import { crearClienteSuperbase, obtenerClienteAdmin } from "./supabaseClient";
 
 export const DOMINIO_PERMITIDO = "@tecplayacar.edu.mx";
 
@@ -37,6 +37,30 @@ export function jsonAuthResponse(
       "Cache-Control": "no-store",
     },
   });
+}
+
+function boundedProfileLookupDiagnostic(value: unknown): string | number | null {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return null;
+
+  return value
+    .slice(0, 240)
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
+    .replace(/\b(?:access|refresh)?[_-]?token\b\s*[:=]?\s*\S+/gi, "[redacted-token]")
+    .replace(/\bcookie\b\s*[:=]?\s*\S+/gi, "[redacted-cookie]");
+}
+
+function profileLookupErrorDetails(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return { code: null, status: null, message: null };
+  }
+
+  const details = error as Record<string, unknown>;
+  return {
+    code: boundedProfileLookupDiagnostic(details.code),
+    status: boundedProfileLookupDiagnostic(details.status),
+    message: boundedProfileLookupDiagnostic(details.message),
+  };
 }
 
 export async function requireRole(
@@ -81,13 +105,61 @@ export async function requireRole(
     );
   }
 
-  const { data: profile, error: profileError } = await client
-    .from("usuarios")
-    .select("id,rol,email")
-    .eq("id", session.user.id)
-    .maybeSingle();
+  let sessionProfile: AuthProfile | null = null;
+  let sessionProfileError: unknown = null;
+  try {
+    const result = await client
+      .from("usuarios")
+      .select("id,rol,email")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    sessionProfile = result.data;
+    sessionProfileError = result.error;
+  } catch (error) {
+    sessionProfileError = error;
+  }
 
-  if (profileError || !profile) {
+  let profile = sessionProfileError ? null : sessionProfile;
+  let fallbackProfile: AuthProfile | null = null;
+  let fallbackError: unknown = null;
+  const fallbackAttempted = Boolean(sessionProfileError || !sessionProfile);
+
+  if (fallbackAttempted) {
+    try {
+      const result = await obtenerClienteAdmin()
+        .from("usuarios")
+        .select("id,rol,email")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      fallbackProfile = result.data;
+      fallbackError = result.error;
+      profile = result.error ? null : result.data;
+    } catch (error) {
+      fallbackError = error;
+    }
+  }
+
+  if (!profile) {
+    const fallbackErrorDetails = profileLookupErrorDetails(fallbackError);
+    console.warn("[auth] profile lookup failed", {
+      userId: session.user.id,
+      anonProfileFound: Boolean(sessionProfile),
+      anonProfileResult: sessionProfileError
+        ? "database_error"
+        : sessionProfile
+          ? "found"
+          : "no_row",
+      fallbackAttempted,
+      fallbackProfileFound: Boolean(fallbackProfile),
+      fallbackProfileResult: fallbackError
+        ? "database_error"
+        : fallbackProfile
+          ? "found"
+          : "no_row",
+      fallbackErrorCode: fallbackErrorDetails.code,
+      fallbackErrorStatus: fallbackErrorDetails.status,
+      fallbackErrorMessage: fallbackErrorDetails.message,
+    });
     throw new AuthError(
       jsonAuthResponse(
         {
