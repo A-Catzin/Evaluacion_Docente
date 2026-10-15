@@ -83,7 +83,10 @@ export const WEIGHTS = {
 } as const;
 
 export type ModalityProfile = {
-  weights: Required<Omit<InstrumentScores, "invalidPurposes">>;
+  weights: Pick<
+    Required<InstrumentScores>,
+    "ee" | "coord" | "plan" | "obs" | "auto"
+  >;
   expectedInstrumentCount: number;
 };
 
@@ -121,6 +124,8 @@ export interface InstrumentScores {
   plan?: number;
   obs?: number;
   auto?: number;
+  /** Whether the aggregate planning score represents at least one delivered plan. */
+  planCompleted?: boolean;
   invalidPurposes?: Array<"coordination" | "planning" | "observation">;
 }
 
@@ -243,12 +248,13 @@ export function calcFinalScore(
   scores: InstrumentScores,
   modalidad?: string | null,
 ): FinalScore {
-  const { ee, coord, plan, obs, auto: autoScore } = scores;
+  const { ee, coord, plan, planCompleted, obs, auto: autoScore } = scores;
   const profile = obtenerPerfilModalidad(modalidad);
+  const planForScore = planCompleted === false ? undefined : plan;
   const instruments: Array<number | undefined> = [
     ee,
     coord,
-    plan,
+    planForScore,
     obs,
     autoScore,
   ];
@@ -535,7 +541,8 @@ function latestVersionedScoresByPurpose(
 /**
  * Calculates normalized subject rows for detail views, but calculates the
  * teacher/cycle final only once from teacher-level instruments. Planning is the
- * sole subject-level instrument and is averaged across approved plans only.
+ * sole subject-level instrument. It is averaged across every non-NP subject,
+ * with missing or pending planning scores contributing zero.
  */
 export function calculateSubjectAwareFinal(
   subjects: Array<Omit<SubjectInstrumentScores, "final">>,
@@ -561,11 +568,19 @@ export function calculateSubjectAwareFinal(
     );
     return { ...subject, final };
   });
-  const plan = averageAvailable(
-    calculated
-      .filter((subject) => subject.planningStatus === "approved")
-      .map((subject) => subject.plan),
+  const planningSubjects = calculated.filter(
+    (subject) => subject.planningStatus !== "np",
   );
+  const plan = planningSubjects.length
+    ? planningSubjects.reduce(
+        (sum, subject) =>
+          sum +
+          (subject.plan != null && Number.isFinite(subject.plan)
+            ? subject.plan
+            : 0),
+        0,
+      ) / planningSubjects.length
+    : undefined;
   const invalidPurposes = [
     ...new Set([
       ...(teacherScores?.invalidPurposes || []),
@@ -582,8 +597,14 @@ export function calculateSubjectAwareFinal(
     coord:
       teacherScores?.coord ??
       firstAvailable(calculated.map((subject) => subject.coord)),
-    // NP/pending subjects never contribute a zero to the planning average.
+    // NP subjects are excluded; missing/pending planning contributes zero.
     plan,
+    planCompleted: calculated.some(
+      (subject) =>
+        subject.planningStatus === "approved" &&
+        subject.plan != null &&
+        Number.isFinite(subject.plan),
+    ),
     obs:
       teacherScores?.obs ??
       firstAvailable(calculated.map((subject) => subject.obs)),
@@ -592,21 +613,24 @@ export function calculateSubjectAwareFinal(
       firstAvailable(calculated.map((subject) => subject.auto)),
     invalidPurposes,
   };
-  const hasApprovedPlan = plan != null;
+  const hasApprovedPlan = calculated.some(
+    (subject) => subject.planningStatus === "approved",
+  );
   const hasNp = calculated.some((subject) => subject.planningStatus === "np");
   const hasNormalAssignedModality = calculated.some(
     (subject) =>
+      subject.planningStatus !== "np" &&
       obtenerPerfilModalidad(subject.modalidad ?? modalidad).weights.plan > 0,
   );
-  // An approved plan always selects normal weights. Otherwise NP activates the
-  // no-planning profile; pending planning derives its profile from assignments,
-  // never from a mixed teacher-level modality snapshot.
+  // An actually approved plan always selects normal weights. Otherwise NP
+  // activates the no-planning profile; pending planning derives its profile from
+  // assignments, never from a mixed teacher-level modality snapshot.
   const globalModality = hasApprovedPlan
     ? "Escolarizado"
-    : hasNp
-      ? "ejecutivo"
-      : hasNormalAssignedModality
-        ? "Escolarizado"
+    : hasNormalAssignedModality
+      ? "Escolarizado"
+      : hasNp
+        ? "ejecutivo"
         : (calculated[0]?.modalidad ?? modalidad);
   const final = calcFinalScore(aggregate, globalModality);
   return { subjects: calculated, aggregate, final };
@@ -789,7 +813,9 @@ export async function fetchSubjectAwareCuatrimestreScores(
       ee,
       coord: scopedCoordinationScore(scope, coordinationRows) ?? globalCoord,
       plan,
-      obs: scopedObservationScore(scope, observationRows) ?? globalObs,
+        obs: latestVersioned.has("observation")
+          ? globalObs
+          : scopedObservationScore(scope, observationRows) ?? globalObs,
       auto: legacy.auto,
       invalidPurposes: legacy.invalidPurposes,
     };

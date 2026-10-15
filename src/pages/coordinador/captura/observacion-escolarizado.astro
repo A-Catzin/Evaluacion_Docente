@@ -1,20 +1,36 @@
 ---
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import VersionedInstrumentCapture from '../../../components/VersionedInstrumentCapture.astro';
-import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 import { db } from '../../../lib/db';
+import { crearClienteConSesion } from '../../../lib/supabaseClient';
 import { getMyAssignedTeacherIds } from '../../../lib/teacherAssignments';
 import { getActiveInstrumentDefinition } from '../../../lib/versionedInstruments';
+import { getInstrumentSubmissionWindow, instrumentSubmissionMessage } from '../../../lib/instrumentSubmissionWindow';
+import { resolveCoordinatorCycle } from '../../../lib/coordinatorCycle';
 
-const client = db(); const activeCycle = await obtenerCuatrimestreActivo();
-const cycleId = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10) || activeCycle?.id || 0;
-const token = Astro.cookies.get('sb-access-token')?.value; const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-if (token && refresh) await client.auth.setSession({ access_token: token, refresh_token: refresh });
-const assignedIds = await getMyAssignedTeacherIds(client, 'observation', cycleId);
+const token = Astro.cookies.get('sb-access-token')?.value;
+const client = token ? crearClienteConSesion(token) : db();
+const [activeCycle, cycles] = await Promise.all([
+  obtenerCuatrimestreActivo(client),
+  obtenerCuatrimestres(client),
+]);
+const cycleQuery = Astro.url.searchParams.get('cuatrimestre');
+const cycleId = resolveCoordinatorCycle({
+  query: cycleQuery,
+  cookie: Astro.cookies.get('cuatrimestre_sel')?.value,
+  active: activeCycle?.id,
+  catalog: cycles,
+});
+if (cycleId > 0) {
+  Astro.cookies.set('cuatrimestre_sel', String(cycleId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+}
+const window = await getInstrumentSubmissionWindow(client, cycleId, 'observation');
+const assignedIds = window.state === 'open' ? await getMyAssignedTeacherIds(client, 'observation', cycleId) : new Set<number>();
 const { data: teachers } = assignedIds.size ? await client.from('docentes').select('id,nombre,apellidos,campus').in('id', [...assignedIds]).eq('activo', true).order('apellidos') : { data: [] };
 const { data: groups } = assignedIds.size ? await client.from('grupos').select('clave,docente_id,asignatura_id').in('docente_id', [...assignedIds]).eq('cuatrimestre_id', cycleId) : { data: [] };
-const { data: subjects } = await client.from('asignaturas').select('id,nombre').order('nombre');
-const definition = await getActiveInstrumentDefinition(client, 'observation_escolarizado');
+const { data: subjects } = window.state === 'open' ? await client.from('asignaturas').select('id,nombre').order('nombre') : { data: [] };
+const definition = window.state === 'open' ? await getActiveInstrumentDefinition(client, 'observation_escolarizado') : null;
 const selectedTeacherId = Number.parseInt(Astro.url.searchParams.get('docente_id') || '', 10) || undefined;
 ---
-<LayoutCoordinador titulo="Observación Escolarizado"><div class="animate-flotar-entrada max-w-4xl mx-auto"><h1 class="text-3xl font-bold text-tup mb-2">Observación de clase escolarizada</h1><p class="text-slate-500 mb-6">Versión 1.2 · Escala 1 a 3 · N/A condicionado y justificado.</p>{definition ? <VersionedInstrumentCapture definition={definition} cuatrimestreId={cycleId} teachers={teachers || []} groups={groups || []} subjects={subjects || []} selectedTeacherId={selectedTeacherId} returnUrl={`/coordinador/dashboard?cuatrimestre=${cycleId}`} /> : <div class="rounded-2xl bg-amber-50 p-6 text-amber-900">No hay una versión vigente del instrumento.</div>}</div></LayoutCoordinador>
+<LayoutCoordinador titulo="Observación Escolarizado"><div class="animate-flotar-entrada max-w-4xl mx-auto"><h1 class="text-3xl font-bold text-tup mb-2">Observación de clase escolarizada</h1><p class="text-slate-500 mb-6">Versión 1.2 · Escala 1 a 3 · N/A condicionado y justificado.</p>{window.state !== 'open' ? <div class="rounded-2xl bg-amber-50 p-6 text-amber-900" role="status">{instrumentSubmissionMessage('observation', window)}</div> : definition ? <VersionedInstrumentCapture definition={definition} cuatrimestreId={cycleId} teachers={teachers || []} groups={groups || []} subjects={subjects || []} selectedTeacherId={selectedTeacherId} allowReevaluation={true} returnUrl={`/coordinador/dashboard?cuatrimestre=${cycleId}`} /> : <div class="rounded-2xl bg-amber-50 p-6 text-amber-900">No hay una versión vigente del instrumento.</div>}</div></LayoutCoordinador>

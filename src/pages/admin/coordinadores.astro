@@ -1,93 +1,163 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
-import { db } from '../../lib/db';
+import { requireRole } from '../../lib/auth';
 import { formatPersonName } from '../../lib/personName';
 
-const cliente = db();
-const { data: coordinadores } = await cliente.from('usuarios').select('id,email,rol,entidad_id').eq('rol', 'coordinador');
+const auth = await requireRole(Astro.cookies, ['superadmin']);
+const resetFilters = Astro.url.searchParams.get('reset') === '1';
+const requestedCycleId = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10);
+const cookieCycleId = resetFilters
+  ? Number.NaN
+  : Number.parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '', 10);
+const search = (resetFilters ? '' : Astro.url.searchParams.get('q')?.trim() || '').slice(0, 120);
 
-interface CoordinadorInfo {
-  id: string; email: string; nombre: string; apellidos: string; maestrosEvaluados: number;
-  criticos: number; procesoMejora: number; adecuado: number; eficaz: number; ejemplar: number;
+const [cyclesResult, activeCycleResult, coordinatorsResult] = await Promise.all([
+  auth.client.from('cuatrimestres').select('id,clave,activo').order('id', { ascending: false }),
+  auth.client.from('cuatrimestres').select('id,clave,activo').eq('activo', true).maybeSingle(),
+  auth.client.from('usuarios').select('id,email').eq('rol', 'coordinador').eq('activo', true).order('email'),
+]);
+
+type Cycle = { id: number; clave: string; activo: boolean };
+type Coordinator = { id: string; email: string };
+type Assignment = { assignment_id: number; assignment_type: string; actor_id: string; docente_id: number; source: string; assigned_at: string };
+type Teacher = { id: number; nombre: string | null; apellidos: string | null; email: string | null };
+
+const cycles = (cyclesResult.data || []) as Cycle[];
+const activeCycle = activeCycleResult.data as Cycle | null;
+const requestedCycle = cycles.find((cycle) => cycle.id === requestedCycleId);
+const cookieCycle = cycles.find((cycle) => cycle.id === cookieCycleId);
+const configuredActiveCycle = cycles.find((cycle) => cycle.id === activeCycle?.id);
+const cuatrimestreId = (requestedCycle || cookieCycle || configuredActiveCycle || cycles[0])?.id || 0;
+
+if (cuatrimestreId) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 }
-const filas: CoordinadorInfo[] = [];
-if (coordinadores) {
-  for (const c of coordinadores) {
-    const [nombre, ...apellidos] = c.email.split('@')[0].replace(/[._]/g, ' ').split(' ');
-    const { data: obsData } = await cliente.from('observaciones').select('docente_id').eq('evaluador_id', c.id);
-    const { data: coordData } = await cliente.from('evaluacion_coordinacion').select('docente_id').eq('evaluador_id', c.id);
-    const idsUnicos = new Set([...(obsData||[]).map(o=>o.docente_id), ...(coordData||[]).map(c=>c.docente_id)]);
-    filas.push({ id: c.id, email: c.email, nombre: nombre || c.email, apellidos: apellidos.join(' ') || '—', maestrosEvaluados: idsUnicos.size, criticos: 0, procesoMejora: 0, adecuado: 0, eficaz: 0, ejemplar: 0 });
-  }
+
+const assignmentResult = cuatrimestreId
+  ? await auth.client.rpc('admin_teacher_assignment_list_v2', { p_cuatrimestre_id: cuatrimestreId })
+  : { data: [], error: null };
+const assignments = (assignmentResult.data || []) as Assignment[];
+const coordinatedAssignments = assignments.filter((assignment) => assignment.assignment_type === 'coordinated');
+const teacherIds = [...new Set(coordinatedAssignments.map((assignment) => Number(assignment.docente_id)).filter(Number.isFinite))];
+const teachersResult = teacherIds.length > 0
+  ? await auth.client.from('docentes').select('id,nombre,apellidos,email').in('id', teacherIds).order('apellidos').order('nombre')
+  : { data: [], error: null };
+const teachersById = new Map(((teachersResult.data || []) as Teacher[]).map((teacher) => [Number(teacher.id), teacher]));
+const coordinators = (coordinatorsResult.data || []) as Coordinator[];
+const assignmentsByCoordinator = new Map<string, Assignment[]>();
+
+for (const assignment of coordinatedAssignments) {
+  const current = assignmentsByCoordinator.get(assignment.actor_id) || [];
+  current.push(assignment);
+  assignmentsByCoordinator.set(assignment.actor_id, current);
 }
-const busqueda = Astro.url.searchParams.get('q') || '';
-let items = busqueda ? filas.filter(f => f.nombre.toLowerCase().includes(busqueda.toLowerCase()) || f.email.toLowerCase().includes(busqueda.toLowerCase())) : filas;
+
+const normalize = (value: string) => value.toLocaleLowerCase('es-MX');
+const searchTerm = normalize(search);
+const coordinatorRows = coordinators.map((coordinator) => {
+  const assignedTeachers = (assignmentsByCoordinator.get(coordinator.id) || []).map((assignment) => ({
+    assignment,
+    teacher: teachersById.get(Number(assignment.docente_id)) || null,
+  }));
+  const label = formatPersonName(coordinator.email.split('@')[0].replace(/[._-]/g, ' '));
+  const matchesSearch = !searchTerm || [
+    coordinator.email,
+    label,
+    ...assignedTeachers.flatMap(({ teacher }) => teacher ? [teacher.nombre || '', teacher.apellidos || '', teacher.email || ''] : []),
+  ].some((value) => normalize(value).includes(searchTerm));
+
+  return { ...coordinator, label, assignedTeachers, matchesSearch };
+}).filter((coordinator) => coordinator.matchesSearch);
+
+const failedLoads = [
+  { label: 'cuatrimestres', error: cyclesResult.error },
+  { label: 'cuatrimestre activo', error: activeCycleResult.error },
+  { label: 'coordinadores activos', error: coordinatorsResult.error },
+  { label: 'asignaciones', error: assignmentResult.error },
+  { label: 'docentes asignados', error: teachersResult.error },
+].filter((result) => Boolean(result.error));
+const hasLoadError = failedLoads.length > 0;
+const assignedTeacherCount = coordinatedAssignments.length;
 ---
 
 <LayoutAdmin titulo="Coordinadores — Admin">
-  <div class="animate-flotar-entrada">
-    <div class="flex items-center justify-between mb-6"><h1 class="text-3xl font-bold text-tup">Coordinadores</h1><span class="text-sm ">{items.length} coordinadores</span></div>
-    <div class="bg-white rounded-2xl p-4 shadow-tarjeta mb-6">
-      <form method="GET" class="flex gap-3">
-        <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
-        <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href="/admin/coordinadores" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
-      </form>
+  <div class="animate-flotar-entrada mx-auto max-w-7xl">
+    <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-3xl font-bold text-tup">Coordinadores</h1>
+        <p class="mt-1 text-sm text-slate-500">Consulta de docentes asignados por cuatrimestre.</p>
+      </div>
+      {!hasLoadError && <div class="flex gap-4 text-sm text-slate-500">
+        <span><strong class="text-tup">{coordinatorRows.length}</strong> coordinadores</span>
+        <span><strong class="text-tup">{assignedTeacherCount}</strong> docentes asignados</span>
+      </div>}
     </div>
 
-    <div class="space-y-4">
-      {items.map(f => (
-        <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
-          <div class="flex items-center justify-between px-6 py-4">
-            <div class="flex items-center gap-4">
-              <div class="w-10 h-10 rounded-lg bg-hero-tup flex items-center justify-center text-white font-bold">{formatPersonName(f.nombre).charAt(0)}</div>
-              <div>
-                <p class="font-medium text-slate-800">{formatPersonName(`${f.nombre} ${f.apellidos}`.trim())}</p>
-                <p class="text-xs ">{f.email}</p>
+    <form method="GET" class="mb-6 grid gap-3 rounded-2xl bg-white p-4 shadow-tarjeta md:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_auto]">
+      <label class="text-sm font-medium text-slate-700">Cuatrimestre
+        <select name="cuatrimestre" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+          {cycles.map((cycle) => <option value={cycle.id} selected={cycle.id === cuatrimestreId}>{cycle.clave}</option>)}
+        </select>
+      </label>
+      <label class="text-sm font-medium text-slate-700">Buscar coordinador o docente
+        <input name="q" value={search} placeholder="Nombre o correo electrónico..." class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-tup" />
+      </label>
+      <div class="flex items-end gap-2">
+        <button class="rounded-xl bg-tup px-4 py-2.5 text-sm font-medium text-white hover:bg-tup/90">Buscar</button>
+        <a href="/admin/coordinadores?reset=1" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50">Limpiar</a>
+      </div>
+    </form>
+
+    {hasLoadError && (
+      <div class="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <p class="font-semibold">No se pudo cargar la consulta de coordinadores.</p>
+        <p class="mt-1">Servicios no disponibles: {failedLoads.map((result) => result.label).join(', ')}. No se muestran datos parciales.</p>
+      </div>
+    )}
+
+    {!hasLoadError && !cuatrimestreId && (
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">No hay cuatrimestres disponibles para consultar.</div>
+    )}
+
+    {!hasLoadError && cuatrimestreId && (
+      <div class="space-y-4">
+        {coordinatorRows.map((coordinator) => (
+          <section class="overflow-hidden rounded-2xl bg-white shadow-tarjeta">
+            <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
+              <div class="flex items-center gap-4">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-hero-tup font-bold text-white">{coordinator.label.charAt(0) || 'C'}</div>
+                <div>
+                  <p class="font-medium text-slate-800">{coordinator.label || 'COORDINADOR'}</p>
+                  <p class="text-xs text-slate-500">{coordinator.email}</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <p class="text-lg font-bold text-tup">{coordinator.assignedTeachers.length}</p>
+                <p class="text-[10px] text-slate-500">Docentes asignados</p>
               </div>
             </div>
-            <div class="flex items-center gap-6">
-              <div class="text-center"><p class="text-lg font-bold text-tup">{f.maestrosEvaluados}</p><p class="text-[10px] ">Evaluados</p></div>
-              <div class="flex gap-2">
-                <span class="w-2 h-2 rounded-full bg-red-500" title="Crítico"></span>
-                <span class="w-2 h-2 rounded-full bg-amber-500" title="Proceso"></span>
-                <span class="w-2 h-2 rounded-full bg-emerald-500" title="Eficaz"></span>
-              </div>
-              <button class="btn-ver px-3 py-1.5 rounded-lg bg-tup/10 text-tup text-xs font-medium hover:bg-tup/20" data-id={f.id}>Ver docentes ▾</button>
+            <div class="border-t border-slate-100 bg-slate-50/50 p-4">
+              {coordinator.assignedTeachers.length > 0 ? (
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-100 text-xs uppercase text-slate-500"><tr><th class="px-3 py-2">Docente</th><th class="px-3 py-2">Correo electrónico</th><th class="px-3 py-2">Origen</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100">
+                      {coordinator.assignedTeachers.map(({ assignment, teacher }) => (
+                        <tr>
+                          <td class="px-3 py-2 font-medium text-slate-700">{teacher ? formatPersonName([teacher.nombre, teacher.apellidos].filter(Boolean).join(' ')) || 'SIN NOMBRE' : `DOCENTE #${assignment.docente_id}`}</td>
+                          <td class="px-3 py-2 text-slate-500">{teacher?.email || 'No disponible'}</td>
+                          <td class="px-3 py-2 text-slate-500">{assignment.source}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p class="py-3 text-center text-sm text-slate-400">No tiene docentes asignados en este cuatrimestre.</p>}
             </div>
-          </div>
-          <div id={`docs-${f.id}`} class="hidden border-t border-slate-100 bg-slate-50/50 p-4">
-            <p class="text-xs text-slate-400 mb-3">Cargando docentes evaluados...</p>
-          </div>
-        </div>
-      ))}
-      {items.length === 0 && <div class="text-center text-slate-400 py-12">No se encontraron coordinadores.</div>}
-    </div>
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-6 py-3 rounded-xl text-sm font-medium shadow-modal"></div>
+          </section>
+        ))}
+        {coordinatorRows.length === 0 && <div class="rounded-2xl bg-white py-12 text-center text-sm text-slate-400 shadow-tarjeta">No se encontraron coordinadores que coincidan con la búsqueda.</div>}
+      </div>
+    )}
   </div>
 </LayoutAdmin>
-
-<script is:inline define:vars={{ supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL, supabaseKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY }}>
-  var loaded = {};
-  async function toggleDocentes(btn, coordId) {
-    var container = document.getElementById('docs-' + coordId);
-    var isHidden = container.classList.contains('hidden');
-    if (!isHidden) { container.classList.add('hidden'); btn.textContent = 'Ver docentes ▾'; return; }
-    container.classList.remove('hidden'); btn.textContent = 'Ocultar ▴';
-    if (loaded[coordId]) return;
-    loaded[coordId] = true;
-
-    try {
-      var res = await fetch('/api/admin/docentes-evaluados?coordinador=' + coordId);
-      var docentes = await res.json();
-      if (!docentes || docentes.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No ha evaluado docentes todavía.</p>'; return; }
-      container.innerHTML = '<table class="w-full text-xs"><thead><tr class="bg-slate-100"><th class="text-left px-3 py-2 font-medium text-slate-600">Docente</th><th class="text-left px-3 py-2 font-medium text-slate-600">Email</th><th class="text-center px-3 py-2 font-medium text-slate-600">Acciones</th></tr></thead><tbody class="divide-y">' +
-        docentes.map(function(d){ return '<tr><td class="px-3 py-2 font-medium">'+(d.nombre+' '+d.apellidos).toLocaleUpperCase('es-MX')+'</td><td class="px-3 py-2 text-slate-500">'+d.email+'</td><td class="px-3 py-2 text-center"><a href="/admin/docentes?q='+encodeURIComponent(d.nombre+' '+d.apellidos)+'" class="px-2 py-1 rounded-lg bg-tup/10 text-tup text-[10px] hover:bg-tup/20 mr-1">Ver desempeño</a></td></tr>' }).join('') +
-        '</tbody></table>';
-    } catch(err) { container.innerHTML = '<p class="text-xs text-red-500 text-center py-4">Error al cargar docentes</p>'; }
-  }
-
-  document.querySelectorAll('.btn-ver').forEach(function(btn) {
-    btn.addEventListener('click', function() { toggleDocentes(this, this.dataset.id); });
-  });
-</script>

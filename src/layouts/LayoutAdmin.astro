@@ -20,9 +20,19 @@ const secciones = [
     icono: '📊',
     items: [
       { href: '/admin/dashboard', label: 'Dashboard', icon: '📊', cycleScoped: true },
+      { href: '/admin/cumplimiento-docente', label: 'Cumplimiento docente', icon: '✓', cycleScoped: true },
+      { href: '/admin/seguimiento-observaciones', label: 'Seguimiento de observaciones', icon: '👁️', cycleScoped: true },
       { href: '/admin/resultados-docentes', label: 'Docentes 360', icon: '🧑‍🏫', cycleScoped: true },
       { href: '/admin/evaluaciones-estudiantes', label: 'Entregas estudiantiles', icon: '✓', cycleScoped: true },
       { href: '/admin/reporte-anual', label: 'Reporte Anual', icon: '📈', cycleScoped: true },
+    ],
+  },
+  {
+    nombre: 'Seguimiento de instrumentos',
+    icono: '📋',
+    items: [
+      { href: '/admin/instrumentos/seguimiento-observaciones', label: 'Resultados de observaciones', icon: '👁️', cycleScoped: true },
+      { href: '/admin/instrumentos/seguimiento-estudiantes', label: 'Comentarios estudiantiles', icon: '💬', cycleScoped: true },
     ],
   },
   {
@@ -30,7 +40,7 @@ const secciones = [
     icono: '👥',
     items: [
       { href: '/admin/docentes', label: 'Docentes', icon: '👨‍🏫', cycleScoped: true },
-      { href: '/admin/coordinadores', label: 'Coordinadores', icon: '📊', cycleScoped: false },
+      { href: '/admin/coordinadores', label: 'Coordinadores', icon: '📊', cycleScoped: true },
       { href: '/admin/asignaciones', label: 'Asignaciones', icon: '🔗', cycleScoped: true },
       { href: '/admin/evaluar-docentes', label: 'Evaluar Docentes', icon: '⭐', cycleScoped: true },
     ],
@@ -53,6 +63,7 @@ const secciones = [
     icono: '⚙️',
     items: [
       { href: '/admin/instrumentos', label: 'Instrumentos', icon: '📋', cycleScoped: false },
+      { href: '/admin/instrumentos/acceso', label: 'Acceso a instrumentos', icon: '🔒', cycleScoped: true },
       { href: '/admin/planeaciones/acceso', label: 'Acceso a planeaciones', icon: '🔒', cycleScoped: true },
       { href: '/admin/roles', label: 'Roles', icon: '🔑', cycleScoped: false },
       { href: '/admin/usuarios', label: 'Usuarios', icon: '👥', cycleScoped: false },

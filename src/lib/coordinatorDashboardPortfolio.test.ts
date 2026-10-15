@@ -6,9 +6,24 @@ import {
   observationPortfolioLinks,
 } from "./coordinatorDashboardPortfolio";
 
-const coordinatedTeacher = { id: 1, nombre: "Ana", apellidos: "Coordinada", modalidad: "Escolarizado" };
-const observationTeacher = { id: 2, nombre: "Beto", apellidos: "Observado", modalidad: "Virtual" };
-const sharedTeacher = { id: 3, nombre: "Carla", apellidos: "Ambos", modalidad: null };
+const coordinatedTeacher = {
+  id: 1,
+  nombre: "Ana",
+  apellidos: "Coordinada",
+  modalidad: "Escolarizado",
+};
+const observationTeacher = {
+  id: 2,
+  nombre: "Beto",
+  apellidos: "Observado",
+  modalidad: "Virtual",
+};
+const sharedTeacher = {
+  id: 3,
+  nombre: "Carla",
+  apellidos: "Ambos",
+  modalidad: null,
+};
 
 describe("coordinator dashboard portfolios", () => {
   it("keeps coordination and observation portfolios independent, including empty portfolios", () => {
@@ -24,6 +39,7 @@ describe("coordinator dashboard portfolios", () => {
     const observation = buildObservationPortfolio(
       [observationTeacher, sharedTeacher],
       new Set([2]),
+      new Map([[2, 91.92]]),
     );
 
     expect(coordinated.map((row) => row.teacher.id)).toEqual([1, 3]);
@@ -35,18 +51,28 @@ describe("coordinator dashboard portfolios", () => {
       planningReviewed: 1,
       resultsAvailable: true,
     });
+    expect(observation[0]).toMatchObject({
+      observationCompleted: true,
+      observationScore: 91.92,
+    });
+    expect(observation[1]).toMatchObject({
+      observationCompleted: false,
+      observationScore: null,
+    });
     expect(buildCoordinatedPortfolio([], new Set(), [], new Set())).toEqual([]);
     expect(buildObservationPortfolio([], new Set())).toEqual([]);
   });
 
   it("exposes actions only for their portfolio purpose", () => {
     expect(coordinatedPortfolioLinks(12, 1)).toEqual({
-      coordination: "/coordinador/captura/coordinacion?cuatrimestre=12&docente_id=1",
+      coordination:
+        "/coordinador/captura/coordinacion?cuatrimestre=12&docente_id=1",
       planning: "/coordinador/planeaciones?cuatrimestre=12&docente_id=1",
       results: "/coordinador/reportes?cuatrimestre=12&docente_id=1",
     });
     expect(observationPortfolioLinks(12, 2)).toEqual({
-      observation: "/coordinador/captura/observacion?cuatrimestre=12&docente_id=2",
+      observation:
+        "/coordinador/captura/observacion?cuatrimestre=12&docente_id=2",
     });
   });
 });

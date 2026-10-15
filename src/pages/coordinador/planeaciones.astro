@@ -4,17 +4,23 @@ import { db } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { getMyAssignedTeacherIds } from '../../lib/teacherAssignments';
 import { formatPersonName } from '../../lib/personName';
+import { resolveCoordinatorCycle } from '../../lib/coordinatorCycle';
 
 const cliente = db();
 const cuatrimestreActivo = await obtenerCuatrimestreActivo();
 const cuatrimestres = await obtenerCuatrimestres();
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+const cuatrimestreId = resolveCoordinatorCycle({
+  query: cuatrimestreIdParam,
+  cookie: cuatrimestreIdCookie,
+  active: cuatrimestreActivo?.id,
+  catalog: cuatrimestres,
+});
 const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
 const docenteIdParam = parseInt(Astro.url.searchParams.get('docente_id') || '');
 const docenteIdSolicitado = Number.isSafeInteger(docenteIdParam) && docenteIdParam > 0 ? docenteIdParam : null;
-if (Astro.url.searchParams.has('cuatrimestre')) {
+if (cuatrimestreId > 0) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
 const cuatrimestreSel = cuatrimestres.find(c=>c.id===cuatrimestreId);
@@ -69,7 +75,7 @@ const evaluadas = items.filter(i => i.estado !== 'Pendiente');
 <LayoutCoordinador titulo="Planeaciones — Coordinación">
   <div class="animate-flotar-entrada max-w-5xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-      <div><h1 class="text-3xl font-bold text-tup">Evaluación de Planeaciones</h1>{docenteIdSolicitado && <p class="mt-1 text-sm text-slate-500">Mostrando sólo las planeaciones del docente seleccionado.</p>}</div>
+      <div><h1 class="text-3xl font-bold text-tup">Planeaciones del ciclo</h1>{docenteIdSolicitado && <p class="mt-1 text-sm text-slate-500">Mostrando sólo las planeaciones del docente seleccionado.</p>}</div>
       <form method="GET" class="flex items-center gap-2">
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
           {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
@@ -80,8 +86,8 @@ const evaluadas = items.filter(i => i.estado !== 'Pendiente');
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden mb-8">
       <div class="px-6 py-4 border-b bg-amber-50"><h2 class="font-semibold text-amber-800">Pendientes de Evaluar ({pendientes.length})</h2></div>
       {pendientes.length === 0 ? (<div class="p-8 text-center text-slate-400">No hay planeaciones pendientes.</div>) : (
-        <table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-left px-3 py-3 text-xs uppercase">Docente</th><th class="text-left px-3 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-3 py-3 text-xs uppercase">Grupo</th><th class="text-center px-3 py-3 text-xs uppercase">Cuatri</th><th class="text-left px-3 py-3 text-xs uppercase">PDF</th><th class="text-right px-3 py-3 text-xs uppercase">Acción</th></tr></thead>
-        <tbody class="divide-y">{pendientes.map(p => (<tr class="hover:bg-slate-50"><td class="px-3 py-3"><p class="font-medium text-xs">{p.docente}</p><p class="text-[10px] text-slate-400">{p.email}</p></td><td class="px-3 py-3 text-xs">{p.asignatura}</td><td class="px-3 py-3 text-xs">{p.grupo}</td><td class="px-3 py-3 text-center"><span class="text-xs bg-slate-100 px-2 py-0.5 rounded">{p.cuatrimestre}</span></td><td class="px-3 py-3"><a href={p.url} target="_blank" class="text-tup text-xs hover:underline">Ver PDF</a></td><td class="px-3 py-3 text-right"><a href={`/coordinador/planeaciones/evaluar/${p.id}${qs}`} class="px-3 py-1.5 rounded-lg bg-tup text-white text-xs font-medium">Evaluar</a></td></tr>))}</tbody></table>
+        <table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b"><th class="text-left px-3 py-3 text-xs uppercase">Docente</th><th class="text-left px-3 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-3 py-3 text-xs uppercase">Grupo</th><th class="text-center px-3 py-3 text-xs uppercase">Cuatri</th><th class="text-left px-3 py-3 text-xs uppercase">PDF</th></tr></thead>
+        <tbody class="divide-y">{pendientes.map(p => (<tr class="hover:bg-slate-50"><td class="px-3 py-3"><p class="font-medium text-xs">{p.docente}</p><p class="text-[10px] text-slate-400">{p.email}</p></td><td class="px-3 py-3 text-xs">{p.asignatura}</td><td class="px-3 py-3 text-xs">{p.grupo}</td><td class="px-3 py-3 text-center"><span class="text-xs bg-slate-100 px-2 py-0.5 rounded">{p.cuatrimestre}</span></td><td class="px-3 py-3"><a href={p.url} target="_blank" class="text-tup text-xs hover:underline">Ver PDF</a></td></tr>))}</tbody></table>
       )}
     </div>
 

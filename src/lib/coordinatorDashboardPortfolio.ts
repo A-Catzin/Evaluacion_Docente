@@ -22,6 +22,7 @@ export type CoordinatedPortfolioRow = {
 export type ObservationPortfolioRow = {
   teacher: PortfolioTeacher;
   observationCompleted: boolean;
+  observationScore: number | null;
 };
 
 export function buildCoordinatedPortfolio(
@@ -31,8 +32,12 @@ export function buildCoordinatedPortfolio(
   teacherIdsWithResults: Set<number>,
 ): CoordinatedPortfolioRow[] {
   return teachers.map((teacher) => {
-    const plans = planningRecords.filter((plan) => plan.docenteId === teacher.id);
-    const planningPending = plans.filter((plan) => plan.estado === "Pendiente").length;
+    const plans = planningRecords.filter(
+      (plan) => plan.docenteId === teacher.id,
+    );
+    const planningPending = plans.filter(
+      (plan) => plan.estado === "Pendiente",
+    ).length;
 
     return {
       teacher,
@@ -48,10 +53,12 @@ export function buildCoordinatedPortfolio(
 export function buildObservationPortfolio(
   teachers: PortfolioTeacher[],
   completedObservationTeacherIds: Set<number>,
+  observationScores: Map<number, number> = new Map(),
 ): ObservationPortfolioRow[] {
   return teachers.map((teacher) => ({
     teacher,
     observationCompleted: completedObservationTeacherIds.has(teacher.id),
+    observationScore: observationScores.get(teacher.id) ?? null,
   }));
 }
 
@@ -65,7 +72,11 @@ function withCycle(path: string, cycleId: number, teacherId?: number): string {
 
 export function coordinatedPortfolioLinks(cycleId: number, teacherId: number) {
   return {
-    coordination: withCycle("/coordinador/captura/coordinacion", cycleId, teacherId),
+    coordination: withCycle(
+      "/coordinador/captura/coordinacion",
+      cycleId,
+      teacherId,
+    ),
     planning: withCycle("/coordinador/planeaciones", cycleId, teacherId),
     results: withCycle("/coordinador/reportes", cycleId, teacherId),
   };
@@ -73,6 +84,10 @@ export function coordinatedPortfolioLinks(cycleId: number, teacherId: number) {
 
 export function observationPortfolioLinks(cycleId: number, teacherId: number) {
   return {
-    observation: withCycle("/coordinador/captura/observacion", cycleId, teacherId),
+    observation: withCycle(
+      "/coordinador/captura/observacion",
+      cycleId,
+      teacherId,
+    ),
   };
 }

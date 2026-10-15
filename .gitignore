@@ -75,8 +75,21 @@ supabase/migrations/055_fix_cycle_teacher_candidate_eligibility.sql
 !supabase/migrations/086_assignment_import_audit_trigger_fast_path.sql
 !supabase/migrations/087_assignment_import_groups_without_enrollment_copy.sql
 !supabase/migrations/088_horarios_grupo.sql
+!supabase/migrations/094_admin_teacher_responsibility_completion.sql
+!supabase/migrations/095_admin_teacher_responsibility_completion_v2.sql
+!supabase/migrations/096_new_observation_instrument_catalog.sql
+!supabase/migrations/097_new_observation_revision_schema.sql
+!supabase/migrations/098_observation_reevaluation_rpc.sql
+!supabase/migrations/099_observation_revision_drafts.sql
+!supabase/migrations/100_observation_score_ordering.sql
+!supabase/migrations/101_activate_new_observation_instruments.sql
+!supabase/migrations/104_cd07_response_storage.sql
+!supabase/migrations/105_cd07_real_assignment_manifest.sql
+!supabase/migrations/106_cd07_fixture_authorization.sql
+!supabase/migrations/107_cd07_assignment_origin.sql
+!supabase/migrations/108_cd07_progress_fixture_guard.sql
+!supabase/migrations/109_cd07_native_score_fixture_guard.sql
 
-openspec/
 src/supabase/
 .atl/
 schema.sql

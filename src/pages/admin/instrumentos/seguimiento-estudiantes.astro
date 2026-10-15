@@ -1,0 +1,159 @@
+---
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../../lib/auth';
+import { dbAdmin } from '../../../lib/db';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
+
+await requireRole(Astro.cookies, ['superadmin']);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+const client = dbAdmin();
+let cycles: Awaited<ReturnType<typeof obtenerCuatrimestres>> = [];
+let active: Awaited<ReturnType<typeof obtenerCuatrimestreActivo>> = null;
+let catalogError = false;
+try {
+  [active, cycles] = await Promise.all([obtenerCuatrimestreActivo(client), obtenerCuatrimestres(client)]);
+} catch {
+  catalogError = true;
+}
+const cycleIds = cycles.map(c => c.id);
+const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Astro.cookies.get('cuatrimestre_sel')?.value), active?.id, cycles[0]?.id]
+  .find(id => typeof id === 'number' && cycleIds.includes(id)) || 0;
+---
+<LayoutAdmin titulo="Comentarios estudiantiles — Seguimiento de instrumentos">
+  <section class="max-w-6xl mx-auto space-y-6">
+    <header>
+      <h1 class="text-3xl font-bold text-tup">Comentarios estudiantiles</h1>
+      <p class="text-slate-600">Consulta exclusiva para superadmin. El texto original puede identificar a quien lo escribió aunque no se muestren identificadores. Trátalo como información confidencial.</p>
+    </header>
+    {catalogError && <p role="alert">No se pudieron cargar los ciclos. Intenta nuevamente.</p>}
+    <form id="comment-filters" method="POST" action="/api/admin/instrumentos/comentarios-estudiantiles" autocomplete="off" class="bg-white rounded-2xl p-5 grid gap-3 sm:grid-cols-2">
+      <label>Ciclo<select name="cuatrimestreId" required class="block w-full border rounded-xl p-2">
+        {cycles.map(c => <option value={c.id} selected={c.id === selected}>{c.clave} {c.nombre}</option>)}
+      </select></label>
+      <label>Buscar texto original (mínimo 2 caracteres)<input name="keyword" maxlength="100" class="block w-full border rounded-xl p-2" /></label>
+      <label>Docente<input name="docente" maxlength="100" class="block w-full border rounded-xl p-2" /></label>
+      <label>Grupo<input name="grupo" maxlength="100" class="block w-full border rounded-xl p-2" /></label>
+      <button type="submit" disabled={catalogError || !selected} class="rounded-xl bg-tup text-white px-4 py-2">Buscar</button>
+    </form>
+    <noscript><p role="alert">Esta consulta requiere JavaScript para enviar filtros en JSON por POST. No envíes comentarios por la dirección URL.</p></noscript>
+    <p id="comment-status" role="status" aria-live="polite">Preparando consulta…</p>
+    <div id="comment-results" class="space-y-4"></div>
+    <nav aria-label="Paginación de comentarios" class="flex gap-4">
+      <button id="comment-prev" type="button" disabled class="rounded-xl border p-2 disabled:opacity-50">← Anterior</button>
+      <button id="comment-next" type="button" disabled class="rounded-xl border p-2 disabled:opacity-50">Siguiente →</button>
+    </nav>
+  </section>
+</LayoutAdmin>
+<script>
+  import { groupComments, type StudentComment } from '../../../lib/adminStudentCommentView';
+
+  const form = document.querySelector<HTMLFormElement>('#comment-filters')!;
+  const results = document.querySelector<HTMLElement>('#comment-results')!;
+  const status = document.querySelector<HTMLElement>('#comment-status')!;
+  const prev = document.querySelector<HTMLButtonElement>('#comment-prev')!;
+  const next = document.querySelector<HTMLButtonElement>('#comment-next')!;
+  let page = 1;
+  let total = 0;
+  let sequence = 0;
+  let controller: AbortController | undefined;
+  let filters: { cuatrimestreId: number; keyword: string; docente: string; grupo: string } | undefined;
+
+  function details(label: string, className: string): { outer: HTMLDetailsElement; body: HTMLDivElement } {
+    const outer = document.createElement('details');
+    outer.className = className;
+    const summary = document.createElement('summary');
+    summary.className = 'cursor-pointer font-semibold p-4';
+    summary.textContent = label;
+    const body = document.createElement('div');
+    body.className = 'space-y-3 p-4 border-t';
+    outer.append(summary, body);
+    return { outer, body };
+  }
+
+  function render(rows: StudentComment[], current: number, count: number): void {
+    results.replaceChildren();
+    for (const teacher of groupComments(rows)) {
+      const teacherNode = details(teacher.docente, 'bg-white rounded-2xl shadow-tarjeta');
+      for (const group of teacher.groups) {
+        const groupNode = details(group.grupo, 'bg-slate-50 rounded-xl');
+        for (const comment of group.comments) {
+          const card = details('Comentario sin identificador', 'bg-white rounded-xl border');
+          const text = document.createElement('p');
+          text.className = 'whitespace-pre-wrap break-words';
+          text.textContent = comment;
+          card.body.append(text);
+          groupNode.body.append(card.outer);
+        }
+        teacherNode.body.append(groupNode.outer);
+      }
+      results.append(teacherNode.outer);
+    }
+    status.textContent = rows.length
+      ? `${rows.length} comentario(s) en esta página · Página ${current} de ${Math.max(1, Math.ceil(count / 20))}.`
+      : `No hay comentarios en esta página. Página ${current} de ${Math.max(1, Math.ceil(count / 20))}.`;
+    prev.disabled = current <= 1;
+    next.disabled = current * 20 >= count || current >= 10000;
+  }
+
+  async function load(requestedPage: number): Promise<void> {
+    if (!filters) return;
+    controller?.abort();
+    controller = new AbortController();
+    const requestId = ++sequence;
+    prev.disabled = next.disabled = true;
+    results.replaceChildren();
+    status.textContent = 'Cargando comentarios…';
+    try {
+      const response = await fetch('/api/admin/instrumentos/comentarios-estudiantiles', {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...filters, page: requestedPage }), signal: controller.signal,
+      });
+      if (!response.ok) throw new Error('request');
+      const data: unknown = await response.json();
+      if (!data || typeof data !== 'object') throw new Error('response');
+      const result = data as { comentarios?: unknown; total?: unknown; page?: unknown };
+      if (!Array.isArray(result.comentarios) || typeof result.total !== 'number' || result.page !== requestedPage ||
+          !Number.isSafeInteger(result.total) || result.total < 0 || result.comentarios.length > 20 ||
+          !result.comentarios.every((row: unknown) => {
+            if (!row || typeof row !== 'object') return false;
+            const c = row as Record<string, unknown>;
+            return Number.isSafeInteger(c.docenteId) && Number.isSafeInteger(c.grupoId) &&
+              typeof c.docente === 'string' && typeof c.grupo === 'string' && typeof c.comentario === 'string';
+          })) throw new Error('response');
+      if (requestId !== sequence) return;
+      page = requestedPage;
+      total = result.total;
+      render(result.comentarios as StudentComment[], page, total);
+    } catch {
+      if (requestId !== sequence) return;
+      status.textContent = 'No se pudieron cargar los comentarios. Intenta nuevamente.';
+      prev.disabled = next.disabled = true;
+    }
+  }
+
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const keyword = String(data.get('keyword') || '').trim();
+    if (keyword.length === 1) {
+      controller?.abort();
+      ++sequence;
+      filters = undefined;
+      page = 1;
+      total = 0;
+      results.replaceChildren();
+      prev.disabled = next.disabled = true;
+      status.textContent = 'Escribe al menos 2 caracteres para buscar texto.';
+      return;
+    }
+    filters = { cuatrimestreId: Number(data.get('cuatrimestreId')), keyword,
+      docente: String(data.get('docente') || '').trim(), grupo: String(data.get('grupo') || '').trim() };
+    void load(1);
+  });
+  prev.addEventListener('click', () => { if (page > 1) void load(page - 1); });
+  next.addEventListener('click', () => { if (page * 20 < total && page < 10000) void load(page + 1); });
+  if (form.querySelector('select')?.value) form.requestSubmit();
+  else status.textContent = 'No hay ciclos disponibles para consultar.';
+</script>

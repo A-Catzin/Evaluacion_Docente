@@ -3,17 +3,22 @@
  */
 import { db } from "../lib/db";
 import { formatPersonName } from "../lib/personName";
-import type { Usuario, RolUsuario } from "../types/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { RolUsuario, Usuario } from "../types/supabase";
 
-export interface UsuarioConNombre extends Usuario {
+export interface UsuarioConNombre
+  extends Pick<Usuario, "id" | "email" | "rol" | "entidad_id"> {
   nombre_completo: string;
   matricula_o_empleado: string;
 }
 
 export async function obtenerUsuarios(
+  cliente: SupabaseClient,
   rol?: RolUsuario,
 ): Promise<UsuarioConNombre[]> {
-  let query = db().from("usuarios").select("*");
+  let query = cliente
+    .from("usuarios")
+    .select("id,email,rol,entidad_id");
 
   if (rol) query = query.eq("rol", rol);
 
@@ -21,35 +26,45 @@ export async function obtenerUsuarios(
 
   if (error) throw new Error("Error al obtener usuarios");
 
-  // Enriquecer con nombres desde docentes/estudiantes
-  const resultado: UsuarioConNombre[] = [];
+  const docenteIds = [
+    ...new Set(
+      (usuarios || [])
+        .filter((usuario) => usuario.rol === "docente" && usuario.entidad_id)
+        .map((usuario) => Number(usuario.entidad_id)),
+    ),
+  ];
+  const docentesPorId = new Map<
+    number,
+    { nombre: string; apellidos: string; num_empleado: string | null }
+  >();
 
-  for (const u of usuarios || []) {
-    let nombre = u.email.split("@")[0].replace(/[._]/g, " ");
-    let matricula = "—";
+  if (docenteIds.length) {
+    const { data: docentes, error: docentesError } = await cliente
+      .from("docentes")
+      .select("id,nombre,apellidos,num_empleado")
+      .in("id", docenteIds);
 
-    if (u.entidad_id) {
-      if (u.rol === "docente") {
-        const { data: doc } = await db()
-          .from("docentes")
-          .select("nombre,apellidos,num_empleado")
-          .eq("id", u.entidad_id)
-          .maybeSingle();
-        if (doc) {
-          nombre = `${doc.nombre} ${doc.apellidos}`;
-          matricula = doc.num_empleado || "—";
-        }
-      }
+    if (docentesError) throw new Error("Error al obtener docentes");
+
+    for (const docente of docentes || []) {
+      docentesPorId.set(docente.id, docente);
     }
-
-    resultado.push({
-      ...(u as Usuario),
-      nombre_completo: formatPersonName(nombre),
-      matricula_o_empleado: matricula,
-    });
   }
 
-  return resultado;
+  return (usuarios || []).map((usuario) => {
+    const docente = usuario.entidad_id
+      ? docentesPorId.get(Number(usuario.entidad_id))
+      : undefined;
+    const nombre = docente
+      ? `${docente.nombre} ${docente.apellidos}`
+      : usuario.email.split("@")[0].replace(/[._]/g, " ");
+
+    return {
+      ...usuario,
+      nombre_completo: formatPersonName(nombre),
+      matricula_o_empleado: docente?.num_empleado || "—",
+    };
+  });
 }
 
 export async function cambiarRolUsuario(
@@ -66,7 +81,7 @@ export async function cambiarRolUsuario(
 export async function buscarUsuarios(
   termino: string,
 ): Promise<UsuarioConNombre[]> {
-  const todos = await obtenerUsuarios();
+  const todos = await obtenerUsuarios(db());
   const t = termino.toLowerCase();
   return todos.filter(
     (u) =>

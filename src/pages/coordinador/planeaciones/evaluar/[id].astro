@@ -1,37 +1,7 @@
 ---
-import LayoutCoordinador from '../../../../layouts/LayoutCoordinador.astro';
-import VersionedInstrumentCapture from '../../../../components/VersionedInstrumentCapture.astro';
-import { db } from '../../../../lib/db';
-import { obtenerUrlFirmadaDesdeUrlAlmacenada } from '../../../../lib/storage';
-import { canManageCoordinatedTeacher } from '../../../../lib/teacherAssignments';
-import { getActiveInstrumentDefinition } from '../../../../lib/versionedInstruments';
-import { formatPersonName } from '../../../../lib/personName';
-
-const id = Number.parseInt(Astro.params.id || '0', 10);
-const backSearch = Astro.url.search || '';
-const client = db();
-const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-if (token && refresh) await client.auth.setSession({ access_token: token, refresh_token: refresh });
-const { data: plan } = await client.from('planeaciones').select('id,docente_id,cuatrimestre_id,asignatura_id,grupo,url_pdf').eq('id', id).maybeSingle();
-if (!plan || !await canManageCoordinatedTeacher(client, Number(plan.docente_id), Number(plan.cuatrimestre_id))) return Astro.redirect(`/coordinador/planeaciones${backSearch}`);
-const { data: teacher } = await client.from('docentes').select('id,nombre,apellidos').eq('id', plan.docente_id).maybeSingle();
-const { data: subject } = await client.from('asignaturas').select('nombre').eq('id', plan.asignatura_id).maybeSingle();
-let pdfUrl = plan.url_pdf;
-try { pdfUrl = await obtenerUrlFirmadaDesdeUrlAlmacenada(plan.url_pdf, 3600); } catch {}
-const definition = await getActiveInstrumentDefinition(client, 'planning');
-const displayTeacher = teacher && {
-  ...teacher,
-  nombre: formatPersonName(teacher.nombre),
-  apellidos: formatPersonName(teacher.apellidos),
-};
+const cuatrimestre = Astro.url.searchParams.get('cuatrimestre');
+const destino = cuatrimestre
+  ? `/coordinador/dashboard?cuatrimestre=${encodeURIComponent(cuatrimestre)}`
+  : '/coordinador/dashboard';
+return Astro.redirect(destino);
 ---
-<LayoutCoordinador titulo="Evaluar Planeación">
-  <div class="animate-flotar-entrada max-w-4xl mx-auto">
-    <a href={`/coordinador/planeaciones${backSearch}`} class="mb-4 inline-block text-sm text-tup hover:underline">← Volver</a>
-    <h1 class="text-3xl font-bold text-tup mb-2">Evaluar planeación didáctica</h1>
-    <p class="text-slate-500 mb-2">{formatPersonName(`${teacher?.nombre || ''} ${teacher?.apellidos || ''}`.trim())} · {subject?.nombre} · Grupo {plan.grupo}</p>
-    <a href={pdfUrl} target="_blank" class="mb-6 inline-block text-sm text-tup hover:underline">Ver PDF de la planeación</a>
-    {definition && displayTeacher ? <VersionedInstrumentCapture definition={definition} cuatrimestreId={plan.cuatrimestre_id} teachers={[displayTeacher]} selectedTeacherId={displayTeacher.id} sourceRecordId={plan.id} returnUrl={`/coordinador/planeaciones${backSearch}`} /> : <div class="rounded-2xl bg-amber-50 p-6 text-amber-900">No hay una versión vigente del instrumento.</div>}
-  </div>
-</LayoutCoordinador>

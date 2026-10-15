@@ -11,8 +11,8 @@ import {
  type ResultadoModeracion,
 } from "../features/moderacion/blacklist";
 
-/** Longitud máxima por defecto para comentarios cortos de texto libre. */
-export const MAX_COMENTARIO_LONGITUD = 500;
+/** Maximum length for free-text comments submitted with evaluations and observations. */
+export const MAX_COMENTARIO_LONGITUD = 2000;
 
 /** Longitud máxima recomendada para notas de sección en observaciones. */
 export const MAX_NOTA_SECCION_LONGITUD = 1000;

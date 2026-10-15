@@ -1,0 +1,36 @@
+schema: spec-driven
+strict_tdd: true
+context: |
+  SED-360 es una aplicación Astro SSR con TypeScript, Tailwind CSS, Zod y
+  Supabase PostgreSQL; usa autenticación por roles y almacenamiento R2.
+  package.json declara Node 22.x, Astro 5.x y Vitest 4.x. Parte de la
+  documentación existente describe versiones anteriores; verificar las
+  dependencias actuales antes de cambiar infraestructura.
+  La lógica de negocio está en src/services/, las rutas y API en src/pages/,
+  los componentes en src/components/ y las migraciones en supabase/migrations/.
+  Documentación: README.md, docs/contexto.md y runbooks en docs/.
+  Los cambios de evaluación y observación deben preservar controles de acceso,
+  procedencia del autor original y atribución al actor autenticado en auditoría.
+  No incorporar datos personales, respuestas reales, secretos ni URLs de
+  producción a los artefactos SDD.
+  Runner: npm run test:run (Vitest, ejecución única); tests dirigidos:
+  npm run test:run -- <ruta-al-test>; build: npm run build; comprobación de tipos:
+  npx astro check. npm run test activa el modo watch.
+  Baseline informado para esta sesión (no verificado en init): pruebas globales
+  con 8 fallos y astro check con 32 errores; pruebas dirigidas y build pueden
+  pasar. No declarar limpio el baseline sin comprobarlo.
+rules:
+  proposal:
+    - Delimitar objetivo, riesgos de autorización/auditoría y alcance; mantener datos de casos reales fuera de los artefactos.
+  specs:
+    - Definir escenarios verificables para permisos, autoría autenticada, procedencia y fallos sin efectos parciales.
+  design:
+    - Describir límites de confianza, persistencia y recuperación antes de editar código o datos.
+  tasks:
+    - Dividir cambios en unidades revisables; planear pruebas de regresión antes de implementar.
+  apply:
+    - Aplicar TDD estricto: escribir una prueba que falla, implementar el mínimo cambio y refactorizar con pruebas pasando.
+    - No usar cambios directos en datos de producción como sustituto de un flujo autorizado y auditable.
+  verify:
+    - Ejecutar tests dirigidos, npm run test:run, npm run build y npx astro check según alcance; distinguir regresiones de fallos preexistentes.
+    - Registrar resultados reales y bloqueos; no afirmar éxito de comandos no ejecutados.

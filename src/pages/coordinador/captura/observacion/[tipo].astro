@@ -1,0 +1,49 @@
+---
+import LayoutCoordinador from '../../../../layouts/LayoutCoordinador.astro';
+import VersionedInstrumentCapture from '../../../../components/VersionedInstrumentCapture.astro';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../../services/catalogos';
+import { db } from '../../../../lib/db';
+import { crearClienteConSesion } from '../../../../lib/supabaseClient';
+import { getMyAssignedTeacherIds } from '../../../../lib/teacherAssignments';
+import { getActiveInstrumentDefinition } from '../../../../lib/versionedInstruments';
+import { getInstrumentSubmissionWindow, instrumentSubmissionMessage } from '../../../../lib/instrumentSubmissionWindow';
+import { resolveCoordinatorCycle } from '../../../../lib/coordinatorCycle';
+import { getNewObservationFormat } from '../../../../lib/newObservationFormats';
+
+const format = getNewObservationFormat(Astro.params.tipo);
+if (!format) Astro.response.status = 404;
+
+// Do not query the catalog or render a capture form for any unrecognized URL.
+const capture = format ? await (async () => {
+  const token = Astro.cookies.get('sb-access-token')?.value;
+  const client = token ? crearClienteConSesion(token) : db();
+  const [activeCycle, cycles] = await Promise.all([
+    obtenerCuatrimestreActivo(client),
+    obtenerCuatrimestres(client),
+  ]);
+  const cycleId = resolveCoordinatorCycle({
+    query: Astro.url.searchParams.get('cuatrimestre'),
+    cookie: Astro.cookies.get('cuatrimestre_sel')?.value,
+    active: activeCycle?.id,
+    catalog: cycles,
+  });
+  if (cycleId > 0) {
+    Astro.cookies.set('cuatrimestre_sel', String(cycleId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+  }
+  const window = await getInstrumentSubmissionWindow(client, cycleId, 'observation');
+  const assignedIds = window.state === 'open' ? await getMyAssignedTeacherIds(client, 'observation', cycleId) : new Set<number>();
+  const { data: teachers } = assignedIds.size ? await client.from('docentes').select('id,nombre,apellidos,campus').in('id', [...assignedIds]).eq('activo', true).order('apellidos') : { data: [] };
+  const { data: groups } = assignedIds.size ? await client.from('grupos').select('clave,docente_id,asignatura_id').in('docente_id', [...assignedIds]).eq('cuatrimestre_id', cycleId) : { data: [] };
+  const { data: subjects } = window.state === 'open' ? await client.from('asignaturas').select('id,nombre').order('nombre') : { data: [] };
+  const definition = window.state === 'open' ? await getActiveInstrumentDefinition(client, format.code) : null;
+  const selectedTeacherId = Number.parseInt(Astro.url.searchParams.get('docente_id') || '', 10) || undefined;
+  return { cycleId, window, teachers, groups, subjects, definition, selectedTeacherId };
+})() : null;
+---
+{format && capture ? <LayoutCoordinador titulo={format.title}>
+  <div class="animate-flotar-entrada max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-tup mb-2">{format.title}</h1>
+    <p class="text-slate-500 mb-6">Observación de clase</p>
+    {capture.window.state !== 'open' ? <div class="rounded-2xl bg-amber-50 p-6 text-amber-900" role="status">{instrumentSubmissionMessage('observation', capture.window)}</div> : capture.definition ? <VersionedInstrumentCapture definition={capture.definition} cuatrimestreId={capture.cycleId} teachers={capture.teachers || []} groups={capture.groups || []} subjects={capture.subjects || []} selectedTeacherId={capture.selectedTeacherId} allowReevaluation={true} returnUrl={`/coordinador/dashboard?cuatrimestre=${capture.cycleId}`} /> : <div class="rounded-2xl bg-amber-50 p-6 text-amber-900" role="status">No hay una versión vigente del instrumento.</div>}
+  </div>
+</LayoutCoordinador> : <p>Ruta no disponible.</p>}

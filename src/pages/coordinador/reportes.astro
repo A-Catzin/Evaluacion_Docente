@@ -1,30 +1,64 @@
 ---
 import LayoutCoordinador from '../../layouts/LayoutCoordinador.astro';
-import { db } from '../../lib/db';
+import { db, dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 import { formatScore, roundTo2 } from '../../services/scoring';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
-import { getMyAssignedTeacherIds } from '../../lib/teacherAssignments';
+import { resolveCoordinatorCycle } from '../../lib/coordinatorCycle';
+import { crearClienteConSesion } from '../../lib/supabaseClient';
 
-const cliente = db();
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestres = await obtenerCuatrimestres();
+const token = Astro.cookies.get('sb-access-token')?.value;
+const refresh = Astro.cookies.get('sb-refresh-token')?.value;
+const cliente = token ? crearClienteConSesion(token) : db();
+let userId = '';
+if (token && refresh) {
+  const { data: s } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
+  if (s.user) userId = s.user.id;
+}
+const cuatrimestreActivo = await obtenerCuatrimestreActivo(cliente);
+const cuatrimestres = await obtenerCuatrimestres(cliente);
 const cuatrimestreIdCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
 
 const modo = (Astro.url.searchParams.get('modo') || 'individual') as 'individual' | 'general';
 
 const cuatrimestreIdParam = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreId = parseInt(cuatrimestreIdParam || '') || cuatrimestreActivo?.id || parseInt(cuatrimestreIdCookie || '') || 0;
+const cuatrimestreId = resolveCoordinatorCycle({
+  query: cuatrimestreIdParam,
+  cookie: cuatrimestreIdCookie,
+  active: cuatrimestreActivo?.id,
+  catalog: cuatrimestres,
+});
+if (cuatrimestreId > 0) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+}
 const cuatrimestreSel = cuatrimestres.find(c => c.id === cuatrimestreId);
 const docenteIdParam = parseInt(Astro.url.searchParams.get('docente_id') || '');
 const docenteIdSolicitado = Number.isSafeInteger(docenteIdParam) && docenteIdParam > 0 ? docenteIdParam : null;
 
-const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-let userId = '';
-if (token && refresh) {
-  const { data: s } = await cliente.auth.setSession({ access_token: token, refresh_token: refresh });
-  if (s.user) userId = s.user.id;
+async function getCoordinatedTeacherIds(cycleId: number): Promise<Set<number>> {
+  if (!userId || !Number.isSafeInteger(cycleId) || cycleId <= 0) return new Set();
+  try {
+    const { data, error } = await dbAdmin()
+      .from('coordinated_teacher_assignments')
+      .select('docente_id')
+      .eq('coordinador_id', userId)
+      .eq('cuatrimestre_id', cycleId)
+      .is('revoked_at', null);
+    if (error) return new Set();
+    return new Set((data || []).map((row) => Number(row.docente_id)).filter(Number.isSafeInteger));
+  } catch (error) {
+    console.warn('No se pudieron cargar las asignaciones de coordinación para reportes', error);
+    return new Set();
+  }
+}
+
+async function getCycleScores(cycleId: number) {
+  try {
+    return await obtenerCalificacionesPorCuatrimestre(dbAdmin(), cycleId, { incluirFallbackInline: false });
+  } catch (error) {
+    console.warn('No se pudieron cargar las calificaciones del ciclo para reportes', { cycleId, error });
+    return [];
+  }
 }
 
 function fmt(n: any) { return formatScore(n) }
@@ -32,22 +66,18 @@ function colorN(n: any) { return !n ? 'text-slate-400' : n >= 80 ? 'text-emerald
 
 let individualData: any = null;
 if (modo === 'individual') {
-  const asigIds = userId
-    ? await getMyAssignedTeacherIds(cliente, 'coordinated', cuatrimestreId)
-    : new Set<number>();
+  const asigIds = await getCoordinatedTeacherIds(cuatrimestreId);
   const ids = [...asigIds];
 
   // Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
   const todasLasCalificaciones = ids.length
-    ? await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId)
+    ? await getCycleScores(cuatrimestreId)
     : [];
 
   const anualMap = new Map<number, { sum: number; count: number }>();
   for (const c of cuatrimestres) {
-    const idsForCycle = userId
-      ? await getMyAssignedTeacherIds(cliente, 'coordinated', c.id)
-      : new Set<number>();
-    const cals = await obtenerCalificacionesPorCuatrimestre(cliente, c.id);
+    const idsForCycle = await getCoordinatedTeacherIds(c.id);
+    const cals = await getCycleScores(c.id);
     for (const row of cals) {
       if (idsForCycle.has(row.docente_id) && row.num_instrumentos_completados > 0) {
         const acc = anualMap.get(row.docente_id) || { sum: 0, count: 0 };
@@ -83,21 +113,20 @@ if (modo === 'individual') {
 
 let generalData: any = null;
 if (modo === 'general') {
-  const cicloIdsParam = Astro.url.searchParams.get('ciclos') || '';
-  const cicloIds = cicloIdsParam
-    .split(',')
+  const cicloValues = Astro.url.searchParams.getAll('ciclos');
+  const cicloIds = (cicloValues.length ? cicloValues : [String(cuatrimestreId)])
+    .flatMap((value: string) => value.split(','))
     .map((id: string) => parseInt(id.trim()))
     .filter((id: number) => !isNaN(id) && id > 0)
+    .filter((id: number, index: number, ids: number[]) => ids.indexOf(id) === index)
     .slice(0, 3);
 
   if (cicloIds.length) {
     // Scores: preferimos filas precalculadas y caemos de vuelta a cálculo inline.
     const docenteMap = new Map<number, any>();
     for (const cid of cicloIds) {
-      const idsForCycle = userId
-        ? await getMyAssignedTeacherIds(cliente, 'coordinated', cid)
-        : new Set<number>();
-      const cals = await obtenerCalificacionesPorCuatrimestre(cliente, cid);
+      const idsForCycle = await getCoordinatedTeacherIds(cid);
+      const cals = await getCycleScores(cid);
       for (const row of cals) {
         if (!idsForCycle.has(row.docente_id)) continue;
         if (!docenteMap.has(row.docente_id)) {

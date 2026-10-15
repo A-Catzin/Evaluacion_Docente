@@ -1,0 +1,133 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../lib/auth';
+import { dbAdmin } from '../../lib/db';
+import { formatPersonName } from '../../lib/personName';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
+
+await requireRole(Astro.cookies, ['superadmin']);
+const clienteAdmin = dbAdmin();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo(clienteAdmin);
+const cuatrimestres = await obtenerCuatrimestres(clienteAdmin);
+const queryId = Number(Astro.url.searchParams.get('cuatrimestre'));
+const cookieId = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+const cuatrimestreId = (cuatrimestres.find(c => c.id === queryId)
+  || cuatrimestres.find(c => c.id === cookieId)
+  || cuatrimestres.find(c => c.id === cuatrimestreActivo?.id)
+  || cuatrimestres[0])?.id || 0;
+if (Astro.url.searchParams.has('cuatrimestre') || cuatrimestreActivo?.id) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+}
+
+type Assignment = { evaluator_id: string; docente_id: number };
+type Coordination = { coordinador_id: string; docente_id: number };
+type Teacher = { id: number; nombre: string | null; apellidos: string | null; email: string | null };
+type User = { id: string; email: string | null };
+const excludedEmails = new Set(['tup7433@tecplayacar.edu.mx', 'proyectos-tup@tecplayacar.edu.mx']);
+const assignmentsResult = cuatrimestreId
+  ? await clienteAdmin.from('observation_teacher_assignments').select('evaluator_id,docente_id')
+      .eq('cuatrimestre_id', cuatrimestreId).is('revoked_at', null)
+  : { data: [], error: null };
+const assignments = (assignmentsResult.data || []) as Assignment[];
+const teacherIds = [...new Set(assignments.map(row => row.docente_id))];
+const evaluatorIds = [...new Set(assignments.map(row => row.evaluator_id))];
+const [teachersResult, evaluatorsResult, coordinationsResult, submissionsResult] = await Promise.all([
+  teacherIds.length ? clienteAdmin.from('docentes').select('id,nombre,apellidos,email').in('id', teacherIds) : Promise.resolve({ data: [], error: null }),
+  evaluatorIds.length ? clienteAdmin.from('usuarios').select('id,email').in('id', evaluatorIds) : Promise.resolve({ data: [], error: null }),
+  teacherIds.length ? clienteAdmin.from('coordinated_teacher_assignments').select('coordinador_id,docente_id')
+    .eq('cuatrimestre_id', cuatrimestreId).is('revoked_at', null).in('docente_id', teacherIds) : Promise.resolve({ data: [], error: null }),
+  teacherIds.length ? clienteAdmin.from('instrument_submissions').select('docente_id')
+    .eq('cuatrimestre_id', cuatrimestreId).eq('purpose', 'observation').eq('validity_status', 'valid').in('docente_id', teacherIds) : Promise.resolve({ data: [], error: null }),
+]);
+const coordinations = (coordinationsResult.data || []) as Coordination[];
+const coordinatorIds = [...new Set(coordinations.map(row => row.coordinador_id))];
+const coordinatorsResult = coordinatorIds.length
+  ? await clienteAdmin.from('usuarios').select('id,email').in('id', coordinatorIds)
+  : { data: [], error: null };
+const errors = [assignmentsResult.error, teachersResult.error, evaluatorsResult.error, coordinationsResult.error, submissionsResult.error, coordinatorsResult.error].filter(Boolean);
+const teachers = new Map(((teachersResult.data || []) as Teacher[]).map(row => [row.id, row]));
+const users = new Map([...(evaluatorsResult.data || []), ...(coordinatorsResult.data || [])].map(row => [(row as User).id, (row as User).email]));
+const completed = new Set((submissionsResult.data || []).map(row => row.docente_id));
+const personLabel = (email: string | null | undefined) => {
+  if (!email) return 'Usuario no disponible';
+  const name = formatPersonName(email.split('@')[0].replace(/[._-]+/g, ' '));
+  return name && name.toLowerCase() !== email.toLowerCase() ? `${name} (${email})` : email;
+};
+const rows = assignments
+  .filter(row => !excludedEmails.has((users.get(row.evaluator_id) || '').toLowerCase()))
+  .map(row => {
+    const teacher = teachers.get(row.docente_id);
+    const coordinatorEmails = [...new Set(coordinations.filter(item => item.docente_id === row.docente_id).map(item => item.coordinador_id))];
+    return {
+      evaluator: personLabel(users.get(row.evaluator_id)),
+      teacher: teacher ? formatPersonName([teacher.nombre, teacher.apellidos].filter(Boolean).join(' ')) || teacher.email || `Docente #${row.docente_id}` : `Docente #${row.docente_id}`,
+      coordinators: coordinatorEmails.length ? coordinatorEmails.map(id => personLabel(users.get(id))).join(', ') : 'Sin coordinación asignada',
+      done: completed.has(row.docente_id),
+    };
+  });
+const realizadas = rows.filter(row => row.done).length;
+const csvRows = rows.map(row => [row.evaluator, row.teacher, row.coordinators, row.done ? 'Realizada' : 'Pendiente']);
+---
+<LayoutAdmin titulo="Seguimiento de observaciones — Admin">
+  <div class="animate-flotar-entrada max-w-7xl mx-auto">
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <div>
+        <h1 class="text-3xl font-bold text-tup mb-2">Seguimiento de observaciones</h1>
+        <p class="text-slate-500">Avance de las observaciones asignadas en el ciclo seleccionado.</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <form method="GET" class="flex items-center gap-2 bg-white rounded-2xl border border-slate-200 px-3 py-2 shadow-sm">
+        <label for="cuatrimestre" class="text-xs uppercase text-slate-400 font-semibold">Ciclo</label>
+        <select id="cuatrimestre" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cuatrimestres.map(c => <option value={c.id} selected={c.id === cuatrimestreId}>{c.clave} {c.nombre || ''}</option>)}
+        </select>
+        </form>
+        <button id="download-observations-csv" type="button" disabled={rows.length === 0} class="inline-flex items-center gap-2 rounded-2xl bg-tup px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-tup/90 disabled:cursor-not-allowed disabled:opacity-50">
+          <span aria-hidden="true">⇩</span> Descargar CSV
+        </button>
+      </div>
+    </div>
+    {errors.length ? (
+      <div role="alert" class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">No se pudo cargar el seguimiento. Intenta nuevamente o informa a soporte.</div>
+    ) : (
+      <>
+        <div class="grid gap-4 sm:grid-cols-3 mb-6">
+          {[
+            { label: 'Asignadas', count: rows.length },
+            { label: 'Realizadas', count: realizadas },
+            { label: 'Pendientes', count: rows.length - realizadas },
+          ].map(card => <div class="rounded-2xl bg-white p-5 shadow-tarjeta"><p class="text-sm text-slate-500">{card.label}</p><p class="mt-2 text-3xl font-bold text-tup">{card.count}</p></div>)}
+        </div>
+        {rows.length ? (
+          <div class="overflow-x-auto rounded-2xl bg-white shadow-tarjeta">
+            <table class="w-full min-w-[720px] text-left text-sm">
+              <thead class="bg-slate-50 text-slate-600"><tr><th scope="col" class="p-4">Evaluador</th><th scope="col" class="p-4">Docente a evaluar</th><th scope="col" class="p-4">Coordinador</th><th scope="col" class="p-4">Estatus</th></tr></thead>
+              <tbody class="divide-y divide-slate-100">
+                {rows.map(row => <tr><td class="p-4 text-slate-700">{row.evaluator}</td><td class="p-4 font-medium text-slate-800">{row.teacher}</td><td class="p-4 text-slate-600">{row.coordinators}</td><td class="p-4"><span class:list={['inline-flex rounded-full px-3 py-1 text-xs font-semibold', row.done ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800']}>{row.done ? 'Realizada' : 'Pendiente'}</span></td></tr>)}
+              </tbody>
+            </table>
+          </div>
+        ) : <div class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-tarjeta">No hay observaciones asignadas para este ciclo.</div>}
+      </>
+    )}
+  </div>
+</LayoutAdmin>
+
+<script is:inline define:vars={{ csvRows, cuatrimestreId }}>
+  const downloadButton = document.getElementById('download-observations-csv');
+  if (downloadButton) {
+    const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    downloadButton.addEventListener('click', () => {
+      const header = ['Evaluador', 'Docente a evaluar', 'Coordinador', 'Estatus'];
+      const csv = '\uFEFF' + [header, ...csvRows].map((row) => row.map(escapeCsvValue).join(',')).join('\r\n') + '\r\n';
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `seguimiento-observaciones-ciclo-${cuatrimestreId || 'actual'}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    });
+  }
+</script>

@@ -15,6 +15,8 @@ import {
   aggregateNativeScoresByTeacher,
   aggregateNativeScoresByTeacherAndSubject,
   calculateSubjectAwareFinal,
+  fetchBatchScoresPorDocente,
+  fetchCuatrimestreScores,
   fetchSubjectAwareCuatrimestreScores,
 } from "./scoring";
 
@@ -23,6 +25,7 @@ function resolvedQuery(data: unknown) {
     select: () => query,
     eq: () => query,
     order: () => query,
+    in: () => query,
     limit: () => query,
     then: (
       onFulfilled?: (value: unknown) => unknown,
@@ -32,7 +35,24 @@ function resolvedQuery(data: unknown) {
   return query;
 }
 
-function createSubjectScopedScoresClient(): SupabaseClient {
+function createSubjectScopedScoresClient(
+  observationCaptures: Array<{
+    docente_id: number;
+    purpose: "observation";
+    validity_status: string;
+    normalized_score: number | null;
+    submitted_at: string;
+    version_id?: string;
+  }> = [
+    {
+      docente_id: 1,
+      purpose: "observation",
+      validity_status: "valid",
+      normalized_score: 65,
+      submitted_at: "2025-01-02T00:00:00Z",
+    },
+  ],
+): SupabaseClient {
   const assignments = [
     {
       id: 1,
@@ -116,13 +136,7 @@ function createSubjectScopedScoresClient(): SupabaseClient {
                   normalized_score: 75,
                   submitted_at: "2025-01-02T00:00:00Z",
                 },
-                {
-                  docente_id: 1,
-                  purpose: "observation",
-                  validity_status: "valid",
-                  normalized_score: 65,
-                  submitted_at: "2025-01-02T00:00:00Z",
-                },
+                ...observationCaptures,
               ],
               error: null,
             },
@@ -276,7 +290,7 @@ describe("scoring", () => {
   describe("subject-aware planning NP scores", () => {
     const base = { ee: 90, coord: 90, obs: 90, auto: 90, invalidPurposes: [] };
 
-    it("uses subject-specific coordination and observation scores before global versioned fallbacks", async () => {
+    it("uses latest versioned observation across codes once for every subject and aggregate", async () => {
       const result = await fetchSubjectAwareCuatrimestreScores(
         createSubjectScopedScoresClient(),
         1,
@@ -289,12 +303,12 @@ describe("scoring", () => {
 
       expect(byKey.get("algebra")).toMatchObject({
         coord: 70,
-        obs: 100,
+        obs: 65,
         planningStatus: "approved",
       });
       expect(byKey.get("fisica")).toMatchObject({
         coord: 90,
-        obs: 60,
+        obs: 65,
         planningStatus: "np",
       });
       expect(byKey.get("quimica")).toMatchObject({
@@ -302,6 +316,49 @@ describe("scoring", () => {
         obs: 65,
         planningStatus: "np",
       });
+      expect(result.aggregate.obs).toBe(65);
+      expect(result.final.final).toBe(79.75);
+    });
+
+    it("uses the later capture across observation codes, not an average or scoped legacy", async () => {
+      const client = createSubjectScopedScoresClient([
+        { docente_id: 1, purpose: "observation", version_id: "clinical", validity_status: "valid", normalized_score: 92, submitted_at: "2025-01-01T00:00:00Z" },
+        { docente_id: 1, purpose: "observation", version_id: "simulation", validity_status: "valid", normalized_score: 65, submitted_at: "2025-01-03T00:00:00Z" },
+      ]);
+      const [subjectAware, scalar, batch] = await Promise.all([
+        fetchSubjectAwareCuatrimestreScores(client, 1, 1, "Escolarizado"),
+        fetchCuatrimestreScores(client, 1, 1),
+        fetchBatchScoresPorDocente(client, [1], 1),
+      ]);
+      expect(subjectAware.subjects.map((subject) => subject.obs)).toEqual([65, 65, 65]);
+      expect(subjectAware.aggregate.obs).toBe(65);
+      expect(subjectAware.final.final).toBe(79.75);
+      expect(scalar.obs).toBe(65);
+      expect(batch.get(1)?.obs).toBe(65);
+    });
+
+    it("suppresses older valid and legacy observation when latest capture is invalid", async () => {
+      const client = createSubjectScopedScoresClient([
+        { docente_id: 1, purpose: "observation", version_id: "clinical", validity_status: "valid", normalized_score: 92, submitted_at: "2025-01-01T00:00:00Z" },
+        { docente_id: 1, purpose: "observation", version_id: "simulation", validity_status: "invalid_excessive_na", normalized_score: null, submitted_at: "2025-01-03T00:00:00Z" },
+      ]);
+      const [subjectAware, scalar, batch] = await Promise.all([
+        fetchSubjectAwareCuatrimestreScores(client, 1, 1, "Escolarizado"),
+        fetchCuatrimestreScores(client, 1, 1),
+        fetchBatchScoresPorDocente(client, [1], 1),
+      ]);
+      expect(subjectAware.subjects.map((subject) => subject.obs)).toEqual([undefined, undefined, undefined]);
+      expect(subjectAware.aggregate.obs).toBeUndefined();
+      expect(subjectAware.final).toMatchObject({ final: 63.5, category: "Parcial con instrumento inválido" });
+      expect(scalar.obs).toBeUndefined();
+      expect(batch.get(1)?.obs).toBeUndefined();
+    });
+
+    it("preserves subject-scoped legacy observation only when no versioned capture exists", async () => {
+      const result = await fetchSubjectAwareCuatrimestreScores(
+        createSubjectScopedScoresClient([]), 1, 1, "Escolarizado",
+      );
+      expect(result.subjects.map((subject) => subject.obs)).toEqual([100, 60, undefined]);
     });
 
     it("keeps an approved Escolarizado subject on normal weights despite a mixed teacher snapshot", async () => {
@@ -315,7 +372,7 @@ describe("scoring", () => {
         (subject) => subject.key === "algebra",
       );
       expect(algebra?.final).toMatchObject({
-        final: 87.5,
+        final: 78.75,
         expectedInstrumentCount: 5,
       });
     });
@@ -447,6 +504,138 @@ describe("scoring", () => {
       });
     });
 
+    it("averages a scored plan with a missing non-NP plan as zero", () => {
+      const result = calculateSubjectAwareFinal([
+        {
+          key: "algebra",
+          nombre: "Álgebra",
+          grupos: ["1A"],
+          planningStatus: "approved",
+          plan: 79,
+        },
+        {
+          key: "fisica",
+          nombre: "Física",
+          grupos: ["1B"],
+          planningStatus: "pending",
+        },
+      ]);
+
+      expect(result.aggregate.plan).toBe(39.5);
+    });
+
+    it("excludes NP subjects while counting missing non-NP planning as zero", () => {
+      const result = calculateSubjectAwareFinal([
+        {
+          key: "algebra",
+          nombre: "Álgebra",
+          grupos: ["1A"],
+          planningStatus: "approved",
+          plan: 96,
+        },
+        {
+          key: "fisica",
+          nombre: "Física",
+          grupos: ["1B"],
+          planningStatus: "pending",
+        },
+        ...["Química", "Biología", "Historia"].map((nombre, index) => ({
+          key: `np-${index}`,
+          nombre,
+          grupos: [`1${index + 2}`],
+          planningStatus: "np" as const,
+        })),
+      ]);
+
+      expect(result.aggregate.plan).toBe(48);
+    });
+
+    it("averages multiple approved plans without diluting them with NP", () => {
+      const result = calculateSubjectAwareFinal([
+        ...["Álgebra", "Física"].map((nombre, index) => ({
+          key: `approved-${index}`,
+          nombre,
+          grupos: [`1${index}`],
+          planningStatus: "approved" as const,
+          plan: 96,
+        })),
+        ...["Química", "Biología", "Historia"].map((nombre, index) => ({
+          key: `np-${index}`,
+          nombre,
+          grupos: [`2${index}`],
+          planningStatus: "np" as const,
+        })),
+      ]);
+
+      expect(result.aggregate.plan).toBe(96);
+    });
+
+    it("leaves the planning aggregate undefined when every subject is NP", () => {
+      const result = calculateSubjectAwareFinal(
+        ["Física", "Química"].map((nombre, index) => ({
+          key: `np-${index}`,
+          nombre,
+          grupos: [`1${index}`],
+          planningStatus: "np" as const,
+        })),
+      );
+
+      expect(result.aggregate.plan).toBeUndefined();
+    });
+
+    it("does not treat a pending executive plan score as an approved normal plan", () => {
+      const result = calculateSubjectAwareFinal(
+        [
+          {
+            ee: 80,
+            coord: 90,
+            obs: 85,
+            auto: 100,
+            key: "fisica",
+            nombre: "Física",
+            grupos: ["1A"],
+            modalidad: "Ejecutivo",
+            planningStatus: "pending",
+          },
+        ],
+        "Escolarizado",
+      );
+
+      expect(result.aggregate.plan).toBe(0);
+      expect(result.final).toMatchObject({
+        final: 85,
+        instrumentCount: 4,
+        expectedInstrumentCount: 4,
+      });
+    });
+
+    it("uses normal weights when pending planning coexists with an NP subject", () => {
+      const result = calculateSubjectAwareFinal([
+        {
+          ee: 80,
+          key: "fisica",
+          nombre: "Física",
+          grupos: ["1A"],
+          modalidad: "Escolarizado",
+          planningStatus: "pending",
+        },
+        {
+          key: "historia",
+          nombre: "Historia",
+          grupos: ["1B"],
+          modalidad: "Ejecutivo",
+          planningStatus: "np",
+        },
+      ]);
+
+      expect(result.aggregate.plan).toBe(0);
+      expect(result.final).toMatchObject({
+        final: 28,
+        instrumentCount: 1,
+        expectedInstrumentCount: 5,
+      });
+    });
+
     it("retains two decimal places in the teacher-cycle final", () => {
       const result = calculateSubjectAwareFinal([
         {
@@ -521,8 +710,13 @@ describe("scoring", () => {
           plan: undefined,
         },
       ]);
-      expect(result.final.category).toBe("Parcial");
-      expect(result.final.expectedInstrumentCount).toBe(5);
+      expect(result.aggregate.plan).toBe(0);
+      expect(result.final).toMatchObject({
+        final: 76.5,
+        category: "Parcial",
+        instrumentCount: 4,
+        expectedInstrumentCount: 5,
+      });
     });
 
     it("does not let a mixed teacher snapshot override a pending Escolarizado assignment", () => {

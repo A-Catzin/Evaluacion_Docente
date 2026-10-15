@@ -7,17 +7,29 @@ import {
   MAX_COMENTARIO_LONGITUD,
   MAX_NOTA_SECCION_LONGITUD,
 } from "../moderation";
+import { MAX_INSTRUMENT_TEXT_LENGTH } from "./instrumentLimits";
 
 const REACTIVOS_ESTUDIANTE_COUNT = 19;
 
 export const EstudianteEvaluacionSchema = z.object({
   grupo_id: z.number().int().positive("grupo_id debe ser un entero positivo"),
-  respuestas: z.array(z.number().int().min(1).max(5)).length(
-    REACTIVOS_ESTUDIANTE_COUNT,
-    "respuestas debe tener 19 enteros entre 1 y 5",
-  ),
+  respuestas: z
+    .array(z.number().int().min(1).max(5))
+    .length(
+      REACTIVOS_ESTUDIANTE_COUNT,
+      "respuestas debe tener 19 enteros entre 1 y 5",
+    ),
   comentario: z.string().max(MAX_COMENTARIO_LONGITUD).optional().nullable(),
 });
+
+// Detached CD-07 contract: not connected to the student submission route.
+export const Cd07EvaluacionSchema = z.object({
+  grupo_id: z.number().int().positive(),
+  instrument_code: z.literal("SED-360-INST-EST-CD-07-V1.1"),
+  assignment_revision: z.string().max(120).refine((value) => value.trim().length > 0),
+  respuestas: z.array(z.number().int().min(1).max(5)).length(20),
+  comentario: z.string().max(2000).nullable().optional(),
+}).strict();
 
 const COORDINACION_REACTIVOS = [
   "a1",
@@ -79,27 +91,95 @@ export const VersionedInstrumentSubmissionSchema = z.object({
   asignatura_id: z.number().int().positive().nullable().optional(),
   grupo: z.string().max(120).nullable().optional(),
   source_record_id: z.number().int().positive().nullable().optional(),
+  answers: z
+    .array(
+      z.object({
+        item_id: z.string().uuid(),
+        value: z.union([z.number().int(), z.literal("na")]),
+        na_reason: z
+          .string()
+          .max(MAX_INSTRUMENT_TEXT_LENGTH)
+          .nullable()
+          .optional(),
+      }),
+    )
+    .min(1),
+  evidence: z.array(
+    z.object({
+      section_id: z.string().uuid(),
+      evidence: z.string().min(1).max(MAX_INSTRUMENT_TEXT_LENGTH),
+    }),
+  ),
+  checks: z
+    .array(
+      z.object({
+        check_id: z.string().uuid(),
+        value: z.enum(["complies", "does_not_comply", "na"]),
+        na_reason: z
+          .string()
+          .max(MAX_INSTRUMENT_TEXT_LENGTH)
+          .nullable()
+          .optional(),
+      }),
+    )
+    .default([]),
+  metadata: z
+    .object({
+      strengths: z
+        .string()
+        .max(MAX_INSTRUMENT_TEXT_LENGTH)
+        .nullable()
+        .optional(),
+      priority_area: z
+        .string()
+        .max(MAX_INSTRUMENT_TEXT_LENGTH)
+        .nullable()
+        .optional(),
+      recommendation: z
+        .string()
+        .max(MAX_INSTRUMENT_TEXT_LENGTH)
+        .nullable()
+        .optional(),
+      general_observations: z
+        .string()
+        .max(MAX_INSTRUMENT_TEXT_LENGTH)
+        .nullable()
+        .optional(),
+    })
+    .strict()
+    .default({}),
+});
+
+// Separate from legacy submissions: revisions cannot carry a checklist or source record.
+export const ObservationReevaluationSchema = z.object({
+  version_id: z.string().uuid(),
+  docente_id: z.number().int().positive().safe(),
+  cuatrimestre_id: z.number().int().positive().safe(),
+  asignatura_id: z.number().int().positive().safe(),
+  grupo: z.string().min(1).max(120).refine((value) => value.trim().length > 0),
+  supersedes_submission_id: z.string().uuid(),
+  operation_id: z.string().uuid(),
   answers: z.array(z.object({
     item_id: z.string().uuid(),
-    value: z.union([z.number().int(), z.literal("na")]),
+    value: z.union([z.number().int().min(1).max(3), z.literal("na")]),
     na_reason: z.string().max(MAX_NOTA_SECCION_LONGITUD).nullable().optional(),
-  })).min(1),
+  }).strict().superRefine((answer, ctx) => {
+    if (answer.value === "na" && !answer.na_reason?.trim())
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["na_reason"], message: "El motivo N/A es obligatorio" });
+    if (answer.value !== "na" && answer.na_reason?.trim())
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["na_reason"], message: "Un valor numérico no admite motivo N/A" });
+  })).min(1).max(100),
   evidence: z.array(z.object({
     section_id: z.string().uuid(),
-    evidence: z.string().min(1).max(MAX_NOTA_SECCION_LONGITUD),
-  })),
-  checks: z.array(z.object({
-    check_id: z.string().uuid(),
-    value: z.enum(["complies", "does_not_comply", "na"]),
-    na_reason: z.string().max(MAX_NOTA_SECCION_LONGITUD).nullable().optional(),
-  })).default([]),
+    evidence: z.string().min(1).max(MAX_NOTA_SECCION_LONGITUD).refine((value) => value.trim().length > 0),
+  }).strict()).min(1).max(20),
   metadata: z.object({
     strengths: z.string().max(MAX_COMENTARIO_LONGITUD).nullable().optional(),
     priority_area: z.string().max(MAX_COMENTARIO_LONGITUD).nullable().optional(),
     recommendation: z.string().max(MAX_COMENTARIO_LONGITUD).nullable().optional(),
     general_observations: z.string().max(MAX_COMENTARIO_LONGITUD).nullable().optional(),
-  }).strict().default({}),
-});
+  }).strict().optional(),
+}).strict();
 
 export const RunIdQuerySchema = z.object({
   run_id: z.coerce.number().int().positive(),

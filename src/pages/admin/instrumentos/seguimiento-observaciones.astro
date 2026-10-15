@@ -1,0 +1,166 @@
+---
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../../lib/auth';
+import { dbAdmin } from '../../../lib/db';
+import { formatPersonName } from '../../../lib/personName';
+import { buildVersionedObservationFeedback } from '../../../lib/versionedObservationFeedback';
+import { literalLike, loadCatalog, mapCurrentObservers, matchingIds, parseTrackingQuery } from '../../../lib/adminObservationTracking';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
+
+await requireRole(Astro.cookies, ['superadmin']);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+const client = dbAdmin();
+const [active, cycles] = await Promise.all([obtenerCuatrimestreActivo(client), obtenerCuatrimestres(client)]);
+const fallback = [Number(Astro.cookies.get('cuatrimestre_sel')?.value), active?.id, cycles[0]?.id]
+  .find(id => cycles.some(c => c.id === id)) || 0;
+const filters = parseTrackingQuery(Astro.url.searchParams, cycles.map(c => c.id), fallback);
+if (filters.cycleId) Astro.cookies.set('cuatrimestre_sel', String(filters.cycleId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+const errors: unknown[] = [];
+type Teacher = { id: number; nombre: string | null; apellidos: string | null; email: string | null };
+type User = { id: string; email: string | null };
+type Submission = {
+  id: string; docente_id: number; submitted_by: string; submitted_at: string; grupo: string | null;
+  normalized_score: number | null; validity_status: string; na_count: number; applicable_item_count: number;
+  definition_snapshot: { title?: string; definition_code?: string; version?: string; scale?: { labels?: Record<string, string> }; sections?: { id: string; title?: string; code?: string; items?: { id: string; code?: string; label?: string }[] }[] } | null;
+  metadata: Record<string, unknown> | null; revision_kind: string; supersedes_submission_id: string | null;
+};
+let teachers: Teacher[] = [];
+let assignments: { docente_id: number; evaluator_id: string }[] = [];
+let evaluatorUsers: User[] = [];
+let definitions: { id: string; code: string; title: string }[] = [];
+try {
+  if (filters.cycleId) {
+    [teachers, assignments, definitions] = await Promise.all([
+      loadCatalog((start, end) => client.from('docentes').select('id,nombre,apellidos,email').order('id').range(start, end)),
+      loadCatalog((start, end) => client.from('observation_teacher_assignments').select('docente_id,evaluator_id').eq('cuatrimestre_id', filters.cycleId).is('revoked_at', null).order('docente_id').order('evaluator_id').range(start, end)),
+      loadCatalog((start, end) => client.from('instrument_definitions').select('id,code,title').eq('purpose', 'observation').order('id').range(start, end)),
+    ]);
+    const evaluatorIds = [...new Set(assignments.map(a => a.evaluator_id))];
+    for (let start = 0; start < evaluatorIds.length; start += 100) {
+      const response = await client.from('usuarios').select('id,email').in('id', evaluatorIds.slice(start, start + 100));
+      if (response.error || !response.data || response.data.length < Math.min(100, evaluatorIds.length - start)) throw new Error('Consulta de usuarios incompleta');
+      evaluatorUsers.push(...response.data);
+    }
+  }
+} catch (error) {
+  errors.push(error);
+}
+const currentObservers = mapCurrentObservers(assignments, evaluatorUsers);
+const teacherName = (teacher: Teacher) => formatPersonName([teacher.nombre, teacher.apellidos].filter(Boolean).join(' ')) || teacher.email || `Docente #${teacher.id}`;
+const teacherLabels = new Map(teachers.map(t => [t.id, teacherName(t)]));
+const matchingDefinitions = definitions.filter(d => `${d.title} ${d.code}`.toLocaleLowerCase('es').includes(filters.instrument.toLocaleLowerCase('es')));
+const definitionIds = matchingDefinitions.map(d => d.id);
+let versionIds: string[] = [];
+try {
+  if (filters.instrument && definitionIds.length) {
+    if (definitionIds.length > 100) throw new Error('Filtro de instrumentos demasiado amplio');
+    const versions = await loadCatalog((start, end) => client.from('instrument_versions')
+      .select('id').in('definition_id', definitionIds).order('id').range(start, end));
+    versionIds = versions.map(v => v.id);
+    if (versionIds.length > 100) throw new Error('Filtro de versiones demasiado amplio');
+  }
+} catch (error) {
+  errors.push(error);
+}
+let query = client.from('instrument_submissions')
+  .select('id,docente_id,submitted_by,submitted_at,grupo,normalized_score,validity_status,na_count,applicable_item_count,definition_snapshot,metadata,revision_kind,supersedes_submission_id', { count: 'exact' })
+  .eq('cuatrimestre_id', filters.cycleId).eq('purpose', 'observation');
+const teacherIds = filters.teacher ? matchingIds(teachers.map(t => ({ id: t.id, label: `${teacherName(t)} ${t.email || ''}` })), filters.teacher) : [];
+const observerIds = filters.observer ? [...currentObservers.entries()]
+  .filter(([, names]) => names.some(name => name.toLocaleLowerCase('es').includes(filters.observer.toLocaleLowerCase('es'))))
+  .map(([id]) => id) : [];
+if (teacherIds.length > 100 || observerIds.length > 100) errors.push(new Error('Filtro demasiado amplio'));
+if (filters.teacher && teacherIds.length && teacherIds.length <= 100) query = query.in('docente_id', teacherIds);
+if (filters.observer && observerIds.length && observerIds.length <= 100) query = query.in('docente_id', observerIds);
+if (filters.instrument && versionIds.length) query = query.in('version_id', versionIds);
+if (filters.group) query = query.ilike('grupo', literalLike(filters.group));
+if (filters.status) query = query.eq('validity_status', filters.status);
+const impossible = !filters.cycleId || (filters.teacher && !teacherIds.length) || (filters.observer && !observerIds.length)
+  || (filters.instrument && (!definitionIds.length || !versionIds.length));
+const offset = (filters.page - 1) * 10;
+const result = !impossible && !errors.some(Boolean)
+  ? await query.order('submitted_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 9)
+  : { data: [], count: 0, error: null };
+errors.push(result.error);
+const submissions = (result.data || []) as Submission[];
+const ids = submissions.map(s => s.id);
+const actorIds = [...new Set(submissions.map(s => s.submitted_by))];
+let actors: Map<string, string> = new Map();
+let entries: ReturnType<typeof buildVersionedObservationFeedback> = [];
+if (ids.length && !errors.some(Boolean)) {
+  try {
+    const [actorsResult, answers, evidence] = await Promise.all([
+      client.from('usuarios').select('id,email').in('id', actorIds),
+      loadCatalog((start, end) => client.from('instrument_answers')
+        .select('submission_id,item_id,numeric_value,is_na,na_reason').in('submission_id', ids)
+        .order('submission_id').order('item_id').range(start, end)),
+      loadCatalog((start, end) => client.from('instrument_evidence')
+        .select('submission_id,section_id,evidence').in('submission_id', ids)
+        .order('submission_id').order('section_id').range(start, end)),
+    ]);
+    if (actorsResult.error || !actorsResult.data || actorsResult.data.length !== actorIds.length) throw new Error('Consulta de autores incompleta');
+    actors = new Map((actorsResult.data as User[]).map(user => [user.id, user.email || 'Usuario no disponible']));
+    entries = buildVersionedObservationFeedback(submissions, answers, evidence);
+  } catch (error) {
+    errors.push(error);
+  }
+}
+const total = result.count || 0;
+const pages = Math.ceil(total / 10);
+const href = (page: number) => {
+  const params = new URLSearchParams(Astro.url.searchParams);
+  params.set('cuatrimestre', String(filters.cycleId));
+  params.set('page', String(page));
+  return `?${params.toString()}`;
+};
+const date = (value: string) => new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+const statusLabel = (status: string) => status === 'valid' ? 'Válida' : status === 'invalid_excessive_na' ? 'Inválida por exceso de N/A' : status;
+---
+<LayoutAdmin titulo="Seguimiento de instrumentos — Observaciones">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <header><h1 class="text-3xl font-bold text-tup">Seguimiento de instrumentos</h1><p class="text-slate-500">Resultados de observaciones · Todas las capturas y revisiones del ciclo seleccionado.</p></header>
+    <form method="GET" class="bg-white rounded-2xl shadow-tarjeta p-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <label class="text-sm text-slate-600">Ciclo<select name="cuatrimestre" class="block w-full rounded-xl border p-2"><option value="">Selecciona ciclo</option>{cycles.map(c => <option value={c.id} selected={c.id === filters.cycleId}>{c.clave} {c.nombre}</option>)}</select></label>
+      <label class="text-sm text-slate-600">Docente<input name="docente" value={filters.teacher} class="block w-full rounded-xl border p-2" /></label>
+      <label class="text-sm text-slate-600">Observador asignado (actual)<input name="observador" value={filters.observer} class="block w-full rounded-xl border p-2" /></label>
+      <label class="text-sm text-slate-600">Instrumento<input name="instrumento" value={filters.instrument} class="block w-full rounded-xl border p-2" /></label>
+      <label class="text-sm text-slate-600">Grupo<input name="grupo" value={filters.group} class="block w-full rounded-xl border p-2" /></label>
+      <label class="text-sm text-slate-600">Validez<select name="estado" class="block w-full rounded-xl border p-2"><option value="">Todas</option><option value="valid" selected={filters.status === 'valid'}>Válida</option><option value="invalid_excessive_na" selected={filters.status === 'invalid_excessive_na'}>Inválida por exceso de N/A</option></select></label>
+      <button type="submit" class="self-end rounded-xl bg-tup text-white px-4 py-2">Filtrar</button>
+    </form>
+    {errors.some(Boolean) ? <p role="alert" class="rounded-2xl bg-red-50 border border-red-200 p-5 text-red-800">No se pudieron cargar los resultados completos. Intenta nuevamente o informa a soporte.</p> : <>
+      <p class="text-sm text-slate-500">{total} captura(s) · Página {filters.page} de {Math.max(1, pages)}</p>
+      {entries.length === 0 && <p class="rounded-2xl bg-white p-6 text-slate-500">No hay resultados para estos filtros{total ? ' en esta página' : ''}.</p>}
+      <div class="space-y-4">{entries.map((entry, index) => {
+        const s = entry.submission as Submission;
+        const snapshot = s.definition_snapshot || {};
+        const metadata = s.metadata || {};
+        const comments = [ ['Fortalezas', metadata.strengths], ['Área prioritaria de mejora', metadata.priority_area], ['Recomendación', metadata.recommendation], ['Observaciones generales', metadata.general_observations] ].filter(([, value]) => typeof value === 'string' && value.trim());
+        return <details class="bg-white rounded-2xl shadow-tarjeta overflow-hidden" open={index === 0}>
+          <summary class="cursor-pointer p-5 text-tup font-semibold"><span class="block">Docente: {teacherLabels.get(s.docente_id) || `Docente #${s.docente_id}`} · {snapshot.title || 'Instrumento no disponible'}</span><span class="block text-sm font-normal text-slate-500">Observador asignado (actual): {(currentObservers.get(s.docente_id) || []).join(', ') || 'Sin observador asignado'}</span><span class="block text-sm font-normal text-slate-500">Calificación: {s.normalized_score == null ? 'Sin puntaje normalizado' : `${s.normalized_score}%`} · {statusLabel(s.validity_status)} · {date(s.submitted_at)} · {s.revision_kind === 'revision' ? 'Revisión' : 'Captura inicial'}</span></summary>
+          <div class="border-t p-5 space-y-4 text-sm text-slate-700">
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 bg-slate-50 p-4 rounded-xl">
+              <p><strong>Docente:</strong> {teacherLabels.get(s.docente_id) || `Docente #${s.docente_id}`}</p>
+              <p><strong>Observador asignado (actual):</strong> {(currentObservers.get(s.docente_id) || []).join(', ') || 'Sin observador asignado'}</p>
+              <p><strong>Capturó:</strong> {actors.get(s.submitted_by) || 'Usuario no disponible'}</p>
+              <p><strong>Instrumento:</strong> {snapshot.definition_code || '—'}</p><p><strong>Grupo:</strong> {s.grupo || '—'}</p>
+              <p><strong>Versión:</strong> {snapshot.version || '—'}</p><p><strong>Fecha de envío:</strong> {date(s.submitted_at)}</p>
+              <p><strong>Reactivos:</strong> {s.applicable_item_count ?? '—'} · <strong>N/A:</strong> {s.na_count ?? '—'}</p>
+              <p><strong>Validez:</strong> {statusLabel(s.validity_status)}</p>
+            </div>
+            {(snapshot.sections || []).map(section => {
+              const items = (section.items || []).filter(item => entry.answersByItem[item.id]);
+              const evidence = entry.evidenceBySection[section.id];
+              return (items.length || evidence) && <section class="bg-slate-50 rounded-xl p-4 space-y-2"><h2 class="font-semibold">{section.title || section.code || 'Sección'}</h2>
+                {items.map(item => { const answer = entry.answersByItem[item.id]; const labels = snapshot.scale?.labels || {}; return <div class="bg-white rounded-lg p-3 flex justify-between gap-3"><span>{item.code ? `${item.code}. ` : ''}{item.label || 'Reactivo sin texto'}</span><span class="font-medium">{answer.is_na ? `N/A${answer.na_reason ? `: ${answer.na_reason}` : ''}` : answer.numeric_value == null ? '—' : `${answer.numeric_value}${labels[String(answer.numeric_value)] ? ` — ${labels[String(answer.numeric_value)]}` : ''}`}</span></div>; })}
+                {evidence && <p class="whitespace-pre-line"><strong>Evidencia / comentario de sección:</strong> {evidence}</p>}
+              </section>;
+            })}
+            {comments.map(([label, value]) => <div class="bg-slate-50 rounded-xl p-4"><h2 class="font-semibold">{label}</h2><p class="whitespace-pre-line">{value as string}</p></div>)}
+          </div>
+        </details>;
+      })}</div>
+      <nav aria-label="Paginación" class="flex gap-4 text-tup">{filters.page > 1 && <a href={href(filters.page - 1)}>← Anterior</a>}{filters.page < pages && <a href={href(filters.page + 1)}>Siguiente →</a>}</nav>
+    </>}
+  </div>
+</LayoutAdmin>

@@ -1,17 +1,18 @@
 ---
 import BaseLayout from './BaseLayout.astro';
 import NotificationBell from '../components/NotificationBell.astro';
-import { obtenerCuatrimestreActivo } from '../services/catalogos';
+import { resolveCoordinatorCycle } from '../lib/coordinatorCycle';
 export interface Props { titulo?: string; }
 const { titulo = 'Coordinador — SED-360' } = Astro.props;
-const cuatrimestreQuery = Astro.url.searchParams.get('cuatrimestre');
-const cuatrimestreCookie = Astro.cookies.get('cuatrimestre_sel')?.value;
-const cuatrimestreActivo = await obtenerCuatrimestreActivo();
-const cuatrimestreSel = cuatrimestreQuery || (cuatrimestreActivo?.id ? String(cuatrimestreActivo.id) : cuatrimestreCookie || '');
-if (!Astro.url.searchParams.has('cuatrimestre') && cuatrimestreActivo?.id && cuatrimestreCookie !== String(cuatrimestreActivo.id)) {
-  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreActivo.id), { path: '/', maxAge: 60*60*24*30 });
-}
-const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
+const cuatrimestreId = resolveCoordinatorCycle({
+  query: Astro.url.searchParams.get('cuatrimestre'),
+  cookie: Astro.cookies.get('cuatrimestre_sel')?.value,
+});
+const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
+const reportParams = new URLSearchParams();
+if (cuatrimestreId > 0) reportParams.set('cuatrimestre', String(cuatrimestreId));
+if (Astro.url.searchParams.get('modo') === 'general') reportParams.set('modo', 'general');
+const reportQs = reportParams.toString() ? `?${reportParams.toString()}` : '';
 ---
 <BaseLayout titulo={titulo}>
   <div class="min-h-screen">
@@ -25,10 +26,9 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
           <a href={`/coordinador/dashboard${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Portafolios</a>
           <a href={`/coordinador/captura/coordinacion${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Coordinación</a>
           <a href={`/coordinador/captura/observacion${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Observación</a>
-          <a href={`/coordinador/planeaciones${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Planeaciones</a>
-          <a href={`/coordinador/reportes${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Reportes</a>
+          <a href={`/coordinador/reportes${reportQs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Reportes</a>
             <a href={`/avisos${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Avisos</a>
-            <a href="/coordinador/mi-actividad" class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mi actividad</a>
+            <a href={`/coordinador/mi-actividad${qs}`} class="px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-tup/5">Mi actividad</a>
           </nav>
         </div>
         <div class="flex items-center gap-3">
@@ -41,10 +41,9 @@ const qs = cuatrimestreSel ? `?cuatrimestre=${cuatrimestreSel}` : '';
       <a href={`/coordinador/dashboard${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Portafolios</a>
       <a href={`/coordinador/captura/coordinacion${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Evaluación de coordinación</a>
       <a href={`/coordinador/captura/observacion${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Observación de clase</a>
-      <a href={`/coordinador/planeaciones${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Planeaciones</a>
-      <a href={`/coordinador/reportes${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Reportes de desempeño</a>
+      <a href={`/coordinador/reportes${reportQs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Reportes de desempeño</a>
       <a href={`/avisos${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Avisos</a>
-      <a href="/coordinador/mi-actividad" class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Mi actividad</a>
+      <a href={`/coordinador/mi-actividad${qs}`} class="block px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Mi actividad</a>
     </nav>
     <main class="p-4 sm:p-6 max-w-7xl mx-auto"><slot /></main>
   </div>

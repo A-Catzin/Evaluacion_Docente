@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "astro dev",
@@ -16,14 +16,14 @@
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",
-    "@astrojs/node": "^8.3.4",
+    "@astrojs/node": "^9.5.5",
     "@astrojs/tailwind": "^5.1.4",
-    "@astrojs/vercel": "^7.4.0",
+    "@astrojs/vercel": "^8.2.11",
     "@aws-sdk/client-s3": "^3.1091.0",
     "@aws-sdk/s3-request-presigner": "^3.1091.0",
     "@floating-ui/dom": "^1.8.0",
     "@supabase/supabase-js": "^2.105.3",
-    "astro": "^4.16.18",
+    "astro": "^5.18.2",
     "chart.js": "^4.5.1",
     "pdfmake": "^0.3.11",
     "tailwindcss": "^3.4.17",

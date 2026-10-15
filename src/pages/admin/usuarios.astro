@@ -20,6 +20,8 @@ const cuatrimestreQuery = parseInt(Astro.url.searchParams.get('cuatrimestre') ||
 const cuatrimestreCookie = parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '') || 0;
 const cuatrimestreId = cuatrimestreQuery || cuatrimestreActivo?.id || cuatrimestreCookie || 0;
 const cycleQuery = cuatrimestreId ? `&cuatrimestre=${cuatrimestreId}` : '';
+const page = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1') || 1);
+const limit = 20;
 
 interface FilaUsuario {
   id: string; email: string; rol: string;
@@ -35,6 +37,7 @@ interface FilaUsuario {
 }
 
 let filas: FilaUsuario[] = [];
+let totalFilasServidor: number | null = null;
 let errorMsg = '';
 
 try {
@@ -59,53 +62,86 @@ try {
       });
     }
   } else if (rolFiltro === 'estudiante') {
-    const pageSize = 500;
-    const estudiantes: Array<{ id: number; nombre: string; apellidos: string; email: string }> = [];
+    let query = cliente
+      .from('estudiantes')
+      .select('id,nombre,apellidos,email', { count: 'exact' })
+      .eq('activo', true);
 
-    for (let offset = 0; ; offset += pageSize) {
-      const { data, error } = await cliente
-        .from('estudiantes')
-        .select('id,nombre,apellidos,email,matricula')
-        .eq('activo', true)
-        .order('apellidos')
-        .order('id')
-        .range(offset, offset + pageSize - 1);
-      if (error) throw error;
-      estudiantes.push(...(data || []));
-      if (!data || data.length < pageSize) break;
-    }
+        if (busqueda.trim()) {
+          const termino = busqueda
+            .trim()
+            .replace(/[\\%,()]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          const filtrosBusqueda = [
+            `nombre.ilike.%${termino}%`,
+            `apellidos.ilike.%${termino}%`,
+            `email.ilike.%${termino}%`,
+          ];
 
-    const studentIds = new Set(estudiantes.map((student) => student.id));
-    const inscripciones: Array<{ estudiante_id: number; grupo_id: number }> = [];
+          // Preserve plan search without loading every student: resolve only the
+          // students enrolled in matching plans, then combine with identity search.
+          if (cuatrimestreId && termino) {
+            const { data: gruposCoincidentes, error: gruposBusquedaError } = await cliente
+              .from('grupos')
+              .select('id')
+              .ilike('plan_normalizado', `%${termino}%`)
+              .limit(1000);
+            if (gruposBusquedaError) throw gruposBusquedaError;
 
-    if (cuatrimestreId && studentIds.size) {
-      for (let offset = 0; ; offset += pageSize) {
-        const { data, error } = await cliente
-          .from('inscripciones')
-          .select('estudiante_id,grupo_id')
-          .eq('cuatrimestre_id', cuatrimestreId)
-          .order('id')
-          .range(offset, offset + pageSize - 1);
-        if (error) throw error;
-        for (const inscripcion of data || []) {
-          if (studentIds.has(inscripcion.estudiante_id)) inscripciones.push(inscripcion);
+            const groupIdsForSearch = (gruposCoincidentes || []).map((grupo) => grupo.id);
+            if (groupIdsForSearch.length) {
+              const { data: inscripcionesCoincidentes, error: inscripcionesBusquedaError } = await cliente
+                .from('inscripciones')
+                .select('estudiante_id')
+                .eq('cuatrimestre_id', cuatrimestreId)
+                .in('grupo_id', groupIdsForSearch);
+              if (inscripcionesBusquedaError) throw inscripcionesBusquedaError;
+
+              const studentIdsForSearch = [
+                ...new Set((inscripcionesCoincidentes || []).map((inscripcion) => inscripcion.estudiante_id)),
+              ];
+              if (studentIdsForSearch.length) {
+                filtrosBusqueda.push(`id.in.(${studentIdsForSearch.join(',')})`);
+              }
+            }
+          }
+
+          query = query.or(filtrosBusqueda.join(','));
         }
-        if (!data || data.length < pageSize) break;
-      }
+
+    const { data: estudiantes, error, count } = await query
+      .order('apellidos')
+      .order('id')
+      .range((page - 1) * limit, page * limit - 1);
+    if (error) throw error;
+    totalFilasServidor = count || 0;
+
+    const studentIds = (estudiantes || []).map((student) => student.id);
+    let inscripciones: Array<{ estudiante_id: number; grupo_id: number }> = [];
+
+    if (cuatrimestreId && studentIds.length) {
+      const { data, error: inscripcionesError } = await cliente
+        .from('inscripciones')
+        .select('estudiante_id,grupo_id')
+        .eq('cuatrimestre_id', cuatrimestreId)
+        .in('estudiante_id', studentIds);
+      if (inscripcionesError) throw inscripcionesError;
+      inscripciones = data || [];
     }
 
     const groupIds = [...new Set(inscripciones.map((inscripcion) => inscripcion.grupo_id))];
-    const grupos: Array<{ id: number; plan_normalizado: string | null }> = [];
+    let grupos: Array<{ id: number; plan_normalizado: string | null }> = [];
 
-    for (let offset = 0; offset < groupIds.length; offset += pageSize) {
-      const { data, error } = await cliente
+    if (groupIds.length) {
+      const { data, error: gruposError } = await cliente
         .from('grupos')
         .select('id,plan_normalizado')
-        .in('id', groupIds.slice(offset, offset + pageSize))
-        .order('id');
-      if (error) throw error;
-      grupos.push(...(data || []));
+        .in('id', groupIds);
+      if (gruposError) throw gruposError;
+      grupos = data || [];
     }
+
     const planPorEstudiante = new Map<number, Set<string>>();
     const gruposPorId = new Map(grupos.map((grupo) => [grupo.id, grupo]));
 
@@ -116,7 +152,7 @@ try {
       planPorEstudiante.get(inscripcion.estudiante_id)!.add(plan);
     }
 
-    for (const estudiante of estudiantes) {
+    for (const estudiante of estudiantes || []) {
       filas.push({
         id: String(estudiante.id), email: estudiante.email, rol: 'estudiante',
         nombre: estudiante.nombre, apellidos: estudiante.apellidos,
@@ -129,26 +165,40 @@ try {
         const { data: usuarios, error } = await query.order('email');
         if (error) throw error;
 
-            // Precargar calificaciones finales de docentes para evitar N+1.
-            const docenteEntidadIds = (usuarios || [])
-              .filter((u: any) => u.rol === 'docente' && u.entidad_id)
-              .map((u: any) => Number(u.entidad_id));
-            const entidadIdSet = new Set(docenteEntidadIds);
-            const calData = cuatrimestreId
-              ? await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId)
-              : [];
-            const calMap = new Map<number, any>();
-            for (const row of calData) {
-              if (entidadIdSet.has(row.docente_id)) {
-                calMap.set(row.docente_id, row);
-              }
-            }
-    
-        for (const u of (usuarios || [])) {
+    // Precargar calificaciones y perfiles de docentes para evitar N+1.
+    const docenteEntidadIds = [
+      ...new Set(
+        (usuarios || [])
+          .filter((u: any) => u.rol === 'docente' && u.entidad_id)
+          .map((u: any) => Number(u.entidad_id)),
+      ),
+    ];
+    const entidadIdSet = new Set(docenteEntidadIds);
+    const calData = cuatrimestreId
+      ? await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestreId)
+      : [];
+    const calMap = new Map<number, any>();
+    for (const row of calData) {
+      if (entidadIdSet.has(row.docente_id)) {
+        calMap.set(row.docente_id, row);
+      }
+    }
+
+    const docentesPorId = new Map<number, any>();
+    if (docenteEntidadIds.length) {
+      const { data: docentes, error: docentesError } = await cliente
+        .from('docentes')
+        .select('id,nombre,apellidos,campus,turno,oferta_academica,modalidad')
+        .in('id', docenteEntidadIds);
+      if (docentesError) throw docentesError;
+      for (const docente of docentes || []) docentesPorId.set(docente.id, docente);
+    }
+
+    for (const u of (usuarios || [])) {
       const fila: FilaUsuario = { id: u.id, email: u.email, rol: u.rol, nombre: '', apellidos: '', rol_solicitado: u.rol_solicitado };
 
       if (u.entidad_id && u.rol === 'docente') {
-        const { data: doc } = await cliente.from('docentes').select('nombre,apellidos,campus,turno,oferta_academica,num_empleado,modalidad').eq('id', u.entidad_id).maybeSingle();
+        const doc = docentesPorId.get(Number(u.entidad_id));
         if (doc) {
           fila.nombre = doc.nombre;
           fila.apellidos = doc.apellidos;
@@ -185,7 +235,7 @@ try {
     }
   }
 
-  if (busqueda) {
+  if (busqueda && rolFiltro !== 'estudiante') {
     const t = busqueda.toLowerCase();
     filas = filas.filter(f => `${f.nombre} ${f.apellidos} ${f.email} ${f.plan || ''}`.toLowerCase().includes(t));
   }
@@ -232,11 +282,11 @@ const { count: totalEstudiantes } = await cliente.from('estudiantes').select('*'
 const conteos: Record<string, number> = { superadmin: totalAdmin || 0, coordinador: totalCoord || 0, docente: totalDocs || 0, estudiante: totalEstudiantes || 0, observador: totalObs || 0, pendiente: totalPend || 0 };
 
 // Paginación
-const page = parseInt(Astro.url.searchParams.get('page')||'1');
-const limit = 20;
-const totalFilas = filas.length;
+const totalFilas = totalFilasServidor ?? filas.length;
 const totalPages = Math.ceil(totalFilas / limit);
-const filasPag = filas.slice((page - 1) * limit, page * limit);
+const filasPag = rolFiltro === 'estudiante'
+  ? filas
+  : filas.slice((page - 1) * limit, page * limit);
 function buildPageUrl(p:number) {
   const params = new URLSearchParams(Astro.url.searchParams.toString());
   params.set('page', String(p));

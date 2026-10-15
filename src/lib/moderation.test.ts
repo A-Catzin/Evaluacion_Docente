@@ -8,6 +8,12 @@ import {
 } from "./moderation";
 
 describe("moderation", () => {
+  it("allows comments up to 2000 characters by default", () => {
+    expect(MAX_COMENTARIO_LONGITUD).toBe(2000);
+    expect(validarComentarioOpcional("a".repeat(2000)).valido).toBe(true);
+    expect(validarComentarioOpcional("a".repeat(2001)).valido).toBe(false);
+  });
+
   describe("validarComentarioOpcional", () => {
     it("acepta null, undefined y cadenas vacías", () => {
       expect(validarComentarioOpcional(null)).toEqual({

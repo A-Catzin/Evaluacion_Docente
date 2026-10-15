@@ -1,22 +1,36 @@
 ---
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
 import VersionedInstrumentCapture from '../../../components/VersionedInstrumentCapture.astro';
-import { obtenerCuatrimestreActivo } from '../../../services/catalogos';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 import { db } from '../../../lib/db';
+import { crearClienteConSesion } from '../../../lib/supabaseClient';
 import { getMyAssignedTeacherIds } from '../../../lib/teacherAssignments';
 import { getActiveInstrumentDefinition } from '../../../lib/versionedInstruments';
+import { getInstrumentSubmissionWindow, instrumentSubmissionMessage } from '../../../lib/instrumentSubmissionWindow';
+import { resolveCoordinatorCycle } from '../../../lib/coordinatorCycle';
 
-const client = db();
-const activeCycle = await obtenerCuatrimestreActivo();
-const selectedCycleId = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10) || activeCycle?.id || 0;
 const token = Astro.cookies.get('sb-access-token')?.value;
-const refresh = Astro.cookies.get('sb-refresh-token')?.value;
-if (token && refresh) await client.auth.setSession({ access_token: token, refresh_token: refresh });
+const client = token ? crearClienteConSesion(token) : db();
+const [activeCycle, cycles] = await Promise.all([
+  obtenerCuatrimestreActivo(client),
+  obtenerCuatrimestres(client),
+]);
+const cycleQuery = Astro.url.searchParams.get('cuatrimestre');
+const selectedCycleId = resolveCoordinatorCycle({
+  query: cycleQuery,
+  cookie: Astro.cookies.get('cuatrimestre_sel')?.value,
+  active: activeCycle?.id,
+  catalog: cycles,
+});
+if (selectedCycleId > 0) {
+  Astro.cookies.set('cuatrimestre_sel', String(selectedCycleId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+}
 const assignedIds = await getMyAssignedTeacherIds(client, 'coordinated', selectedCycleId);
 const { data: teacherRows } = assignedIds.size
   ? await client.from('docentes').select('id,nombre,apellidos,campus').in('id', [...assignedIds]).eq('activo', true).order('apellidos')
   : { data: [] };
 const definition = await getActiveInstrumentDefinition(client, 'coordination');
+const window = await getInstrumentSubmissionWindow(client, selectedCycleId, 'coordination');
 const selectedTeacherId = Number.parseInt(Astro.url.searchParams.get('docente_id') || '', 10) || undefined;
 ---
 
@@ -24,7 +38,9 @@ const selectedTeacherId = Number.parseInt(Astro.url.searchParams.get('docente_id
   <div class="animate-flotar-entrada max-w-4xl mx-auto">
     <h1 class="text-3xl font-bold text-tup mb-2">Evaluación por Coordinación Académica</h1>
     <p class="text-slate-500 mb-6">Instrumento versionado V2. El checklist administrativo no modifica el puntaje.</p>
-    {definition ? (
+    {window.state !== 'open' ? (
+      <div class="rounded-2xl bg-amber-50 p-6 text-amber-900" role="status">{instrumentSubmissionMessage('coordination', window)}</div>
+    ) : definition ? (
       <VersionedInstrumentCapture definition={definition} cuatrimestreId={selectedCycleId} teachers={teacherRows || []} selectedTeacherId={selectedTeacherId} returnUrl={`/coordinador/dashboard?cuatrimestre=${selectedCycleId}`} />
     ) : (
       <div class="rounded-2xl bg-amber-50 p-6 text-amber-900">No hay una versión vigente del instrumento para este ciclo.</div>

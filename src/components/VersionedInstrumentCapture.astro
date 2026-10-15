@@ -1,5 +1,6 @@
 ---
 import { instrumentOptions, type VersionedInstrumentDefinition } from "../lib/versionedInstruments";
+import { MAX_INSTRUMENT_TEXT_LENGTH } from "../lib/validation/instrumentLimits";
 
 type Teacher = { id: number; nombre: string; apellidos: string; campus?: string | null };
 type Group = { clave?: string | null; docente_id: number; asignatura_id: number };
@@ -13,21 +14,34 @@ interface Props {
   subjects?: Subject[];
   selectedTeacherId?: number;
   sourceRecordId?: number;
+  allowReevaluation?: boolean;
   returnUrl: string;
 }
 
-const { definition, cuatrimestreId, teachers, groups = [], subjects = [], selectedTeacherId, sourceRecordId, returnUrl } = Astro.props;
+const { definition, cuatrimestreId, teachers, groups = [], subjects = [], selectedTeacherId, sourceRecordId, allowReevaluation = false, returnUrl } = Astro.props;
 const options = instrumentOptions(definition);
 const isObservation = definition.purpose === "observation";
 const isPlanning = definition.purpose === "planning";
 const isCoordination = definition.purpose === "coordination";
 ---
 
-<form id="versioned-instrument-form" class="space-y-6" data-purpose={definition.purpose}>
+{allowReevaluation && <section class="bg-white rounded-2xl p-6 shadow-tarjeta space-y-3">
+  <label class="block text-sm font-medium text-slate-700">Docente
+    <select id="revision-docente" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+      <option value="">Seleccionar...</option>
+      {teachers.map((teacher) => <option value={teacher.id} selected={selectedTeacherId === teacher.id}>{teacher.nombre.toUpperCase()} {teacher.apellidos.toUpperCase()}</option>)}
+    </select>
+  </label>
+  <p id="revision-status" role="status" aria-live="polite">Selecciona un docente para consultar su observación.</p>
+  <button id="revision-start" type="button" disabled class="rounded-xl bg-tup px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Reevaluar</button>
+  <button id="revision-retry" type="button" hidden class="rounded-xl bg-tup px-5 py-3 font-semibold text-white">Reintentar envío</button>
+  <button id="revision-reload" type="button" hidden class="rounded-xl border border-tup px-5 py-3 font-semibold text-tup">Resolver / recargar</button>
+</section>}
+<form id="versioned-instrument-form" class="space-y-6" data-purpose={definition.purpose} hidden={allowReevaluation}>
   <section class="bg-white rounded-2xl p-6 shadow-tarjeta">
     <h2 class="text-lg font-bold text-tup mb-4">Datos de identificación</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <label class="block text-sm font-medium text-slate-700">Docente
+      <label class:list={["block text-sm font-medium text-slate-700", { hidden: allowReevaluation }]}>Docente
         <select id="instrument-docente" required disabled={isPlanning} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm disabled:bg-slate-50">
           <option value="">Seleccionar...</option>
           {teachers.map((teacher) => <option value={teacher.id} selected={selectedTeacherId === teacher.id}>{teacher.nombre.toUpperCase()} {teacher.apellidos.toUpperCase()}</option>)}
@@ -50,19 +64,19 @@ const isCoordination = definition.purpose === "coordination";
       <h2 class="text-lg font-bold text-tup">{section.title}</h2>
       {section.items.map((item) => (
         <div class="rounded-xl bg-slate-50 p-4" data-item={item.id}>
-          <p class="text-sm font-medium text-slate-800 mb-3">{item.code}. {item.label}</p>
+          <p class="text-sm font-medium text-slate-800 mb-3">{allowReevaluation ? item.label : item.code + '. ' + item.label}</p>
           {item.guidance && <p class="text-xs text-slate-500 mb-3">{item.guidance}</p>}
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {options.map((option) => <label class="selection-card cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-center text-xs"><input class="mr-1" type="radio" name={`item-${item.id}`} value={option.value} required />{option.label}</label>)}
             {item.na_eligible && <label class="selection-card selection-card--na cursor-pointer rounded-lg border border-amber-300 px-3 py-2 text-center text-xs text-amber-800"><input class="mr-1" type="radio" name={`item-${item.id}`} value="na" />N/A</label>}
           </div>
-          {item.na_eligible && <label class="mt-3 hidden text-xs text-slate-600" data-na-reason={item.id}>Motivo de N/A
-            <textarea class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" rows="2" maxlength="2000"></textarea>
+              {item.na_eligible && <label class="mt-3 hidden text-xs text-slate-600" data-na-reason={item.id}>Motivo de N/A
+                <textarea class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" rows="2" maxlength={MAX_INSTRUMENT_TEXT_LENGTH}></textarea>
           </label>}
         </div>
       ))}
       <label class="block text-sm font-medium text-slate-700">Evidencias, observaciones y acuerdos de seguimiento
-        <textarea data-evidence={section.id} required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"></textarea>
+        <textarea data-evidence={section.id} required rows="3" maxlength={MAX_INSTRUMENT_TEXT_LENGTH} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"></textarea>
       </label>
     </section>
   ))}
@@ -77,8 +91,8 @@ const isCoordination = definition.purpose === "coordination";
         <label class="selection-card inline-flex cursor-pointer items-center rounded-lg border border-slate-200 px-3 py-2"><input type="radio" name={`check-${check.id}`} value="does_not_comply" /> <span class="ml-1">No cumple</span></label>
         {check.na_eligible && <label class="selection-card selection-card--na inline-flex cursor-pointer items-center rounded-lg border border-amber-300 px-3 py-2 text-amber-800"><input type="radio" name={`check-${check.id}`} value="na" /> <span class="ml-1">N/A</span></label>}
       </div>
-      {check.na_eligible && <label class="mt-2 hidden text-xs text-slate-600" data-check-na-reason={check.id}>Motivo de N/A
-        <textarea class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" rows="2" maxlength="2000"></textarea>
+          {check.na_eligible && <label class="mt-2 hidden text-xs text-slate-600" data-check-na-reason={check.id}>Motivo de N/A
+            <textarea class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" rows="2" maxlength={MAX_INSTRUMENT_TEXT_LENGTH}></textarea>
       </label>}
     </div>)}
   </section>}
@@ -86,18 +100,19 @@ const isCoordination = definition.purpose === "coordination";
   <section class="bg-white rounded-2xl p-6 shadow-tarjeta space-y-4">
     <div id="na-summary" class="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900" aria-live="polite">N/A: 0 de 0 criterios.</div>
     {isObservation && <>
-      <label class="block text-sm font-medium text-slate-700">Fortalezas observadas<textarea id="metadata-strengths" required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
-      <label class="block text-sm font-medium text-slate-700">Área prioritaria de mejora<textarea id="metadata-priority" required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
-      <label class="block text-sm font-medium text-slate-700">Recomendación pedagógica<textarea id="metadata-recommendation" required rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+          <label class="block text-sm font-medium text-slate-700">Fortalezas observadas<textarea id="metadata-strengths" required rows="3" maxlength={MAX_INSTRUMENT_TEXT_LENGTH} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+      <label class="block text-sm font-medium text-slate-700">Área prioritaria de mejora<textarea id="metadata-priority" required rows="3" maxlength={MAX_INSTRUMENT_TEXT_LENGTH} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+      <label class="block text-sm font-medium text-slate-700">Recomendación pedagógica<textarea id="metadata-recommendation" required rows="3" maxlength={MAX_INSTRUMENT_TEXT_LENGTH} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
     </>}
-    <label class="block text-sm font-medium text-slate-700">{isPlanning ? 'Motivo de corrección / observaciones generales' : 'Observaciones generales'}<textarea id="metadata-general" rows="3" maxlength="500" aria-describedby="correction-reason-hint" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+    <label class="block text-sm font-medium text-slate-700">{isPlanning ? 'Motivo de corrección / observaciones generales' : 'Observaciones generales'}<textarea id="metadata-general" rows="3" maxlength={MAX_INSTRUMENT_TEXT_LENGTH} aria-describedby="correction-reason-hint" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
     {isPlanning && <p id="correction-reason-hint" class="text-xs text-slate-500">Obligatorio si el exceso de respuestas N/A envía la planeación a corrección.</p>}
     <button type="submit" class="w-full rounded-xl bg-tup py-4 font-semibold text-white hover:bg-tup/90">Enviar instrumento</button>
+    {isObservation && <p id="instrument-draft-status" class="text-sm text-slate-500" aria-live="polite"></p>}
     <p id="instrument-message" class="text-sm" aria-live="polite"></p>
   </section>
 </form>
 
-<script is:inline define:vars={{ definitionJson: JSON.stringify(definition), cuatrimestreId, groupsJson: JSON.stringify(groups), subjectsJson: JSON.stringify(subjects), sourceRecordId: sourceRecordId ?? null, returnUrl }}>
+<script is:inline define:vars={{ definitionJson: JSON.stringify(definition), cuatrimestreId, groupsJson: JSON.stringify(groups), subjectsJson: JSON.stringify(subjects), sourceRecordId: sourceRecordId ?? null, allowReevaluation, returnUrl }}>
   // @ts-ignore Astro injects this serialized prop through define:vars.
   const definition = JSON.parse(definitionJson);
   const groups = JSON.parse(groupsJson);
@@ -107,8 +122,67 @@ const isCoordination = definition.purpose === "coordination";
   const teacher = document.getElementById("instrument-docente");
   const subject = document.getElementById("instrument-asignatura");
   const group = document.getElementById("instrument-grupo");
-  const message = document.getElementById("instrument-message");
+  const revisionTeacher = document.getElementById("revision-docente");
+  const revisionStatus = document.getElementById("revision-status");
+  const revisionStart = document.getElementById("revision-start");
+  const revisionRetry = document.getElementById("revision-retry");
+  const revisionReload = document.getElementById("revision-reload");
+      const message = document.getElementById("instrument-message");
+      const draftStatus = document.getElementById("instrument-draft-status");
+      function formatApiError(result, fallback) {
+        const details = result && result.detalles;
+        if (details && typeof details === "object") {
+          const messages = Object.entries(details).flatMap(function(entry) {
+            const field = entry[0];
+            const values = entry[1];
+            return Array.isArray(values) ? values.filter(Boolean).map(function(value) { return field + ": " + value; }) : [];
+          });
+          if (messages.length) return (result.error || fallback) + " — " + messages.join("; ");
+        }
+        return result?.error || fallback;
+      }
   const answerInputs = Array.from(form.querySelectorAll("[data-item]"));
+  const isObservation = definition.purpose === "observation";
+  let draftTimer;
+  let savingDraft = false;
+  let draftDirty = false;
+  let draftLoadSequence = 0;
+  let draftRetryAfterFailure = false;
+  let finalSubmissionSucceeded = false;
+  let revisionHead = null;
+  let revisionDraft = null;
+  let revisionIntent = null;
+  let revisionReady = false;
+  let revisionBody = null;
+  let revisionSending = false;
+  let revisionLocked = false;
+
+  function revisionNotice(text, action) {
+    if (!allowReevaluation) return;
+    form.hidden = action !== "edit";
+    revisionStatus.textContent = text;
+    revisionStart.hidden = false;
+    revisionStart.disabled = action !== "start";
+    revisionRetry.hidden = action !== "retry";
+    revisionReload.hidden = action !== "reload";
+    if (revisionLocked) revisionTeacher.disabled = true;
+  }
+  if (revisionReload) revisionReload.addEventListener("click", function() { location.reload(); });
+  if (revisionTeacher) revisionTeacher.addEventListener("change", function() {
+    teacher.value = revisionTeacher.value;
+    teacher.dispatchEvent(new Event("change"));
+  });
+  if (revisionStart) revisionStart.addEventListener("click", function() {
+    const context = observationDraftContext();
+    if (!context || !revisionHead?.id || revisionLocked || revisionBody) return;
+    revisionIntent = revisionDraft?.supersedes_submission_id === revisionHead.id && revisionDraft?.operation_id
+      ? { operation_id: revisionDraft.operation_id, supersedes_submission_id: revisionHead.id }
+      : { operation_id: crypto.randomUUID(), supersedes_submission_id: revisionHead.id };
+    clearObservationDraftState();
+    if (revisionDraft?.operation_id === revisionIntent.operation_id) hydrateObservationDraft(revisionDraft.draft);
+    revisionReady = true;
+    revisionNotice("Reevaluación en curso. Se guardará un borrador al editar.", "edit");
+  });
 
   function setOptions(select, entries, label) {
     if (!select) return;
@@ -125,9 +199,12 @@ const isCoordination = definition.purpose === "coordination";
     if (!group || !teacher || !subject) return;
     setOptions(group, groups.filter(function(entry) { return entry.docente_id === Number(teacher.value) && entry.asignatura_id === Number(subject.value); }), function(entry) { return entry.clave || "Grupo"; });
   }
-  if (teacher && !teacher.disabled) teacher.addEventListener("change", refreshSubjects);
-  if (subject) subject.addEventListener("change", refreshGroups);
-  if (teacher && teacher.value && subject) refreshSubjects();
+      if (teacher && !teacher.disabled) teacher.addEventListener("change", function() {
+        refreshSubjects();
+        if (isObservation) loadObservationDraft();
+      });
+      if (subject) subject.addEventListener("change", refreshGroups);
+      if (teacher && teacher.value && subject) refreshSubjects();
 
   function updateNaSummary() {
     const values = answerInputs.map(function(entry) { return entry.querySelector("input[type=radio]:checked")?.value; }).filter(Boolean);
@@ -139,19 +216,284 @@ const isCoordination = definition.purpose === "coordination";
     summary.textContent = "N/A: " + naCount + " de " + total + " criterios (" + percentage.toFixed(1) + "%). " + (invalid ? (definition.purpose === "planning" ? "La planeación será enviada a corrección; captura el motivo de corrección." : "La captura será inválida por exceso de N/A y no aportará puntaje oficial.") : "Límite máximo válido: 20%.");
     summary.className = "rounded-xl px-4 py-3 text-sm " + (invalid ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-900");
   }
+  function normalizeNaReason(value, reason) {
+    return value === "na" && typeof reason === "string" ? reason.trim() || null : null;
+  }
   form.addEventListener("change", function(event) {
     const input = event.target;
     if (!input.matches("input[type=radio]")) return;
     const item = input.closest("[data-item]");
-    if (item) { const reason = item.querySelector("[data-na-reason]"); if (reason) reason.classList.toggle("hidden", input.value !== "na"); }
+    if (item) {
+      const reason = item.querySelector("[data-na-reason]");
+      if (reason) {
+        reason.classList.toggle("hidden", input.value !== "na");
+        const reasonField = reason.querySelector("textarea");
+        if (reasonField && input.value !== "na") reasonField.value = normalizeNaReason(input.value, reasonField.value) || "";
+      }
+    }
     const check = input.closest("[data-check]");
     if (check) { const reason = check.querySelector("[data-check-na-reason]"); if (reason) reason.classList.toggle("hidden", input.value !== "na"); }
     updateNaSummary();
   });
-  updateNaSummary();
+      updateNaSummary();
 
-  form.addEventListener("submit", async function(event) {
+      function observationDraftContext() {
+        if (!isObservation || finalSubmissionSucceeded) return null;
+        const docenteId = Number(teacher?.value);
+        if (!Number.isSafeInteger(docenteId) || docenteId <= 0) return null;
+        return {
+          docente_id: docenteId,
+          cuatrimestre_id: cuatrimestreId,
+          version_id: definition.version_id,
+          key: docenteId + ":" + cuatrimestreId + ":" + definition.version_id
+        };
+      }
+      function setDraftStatus(context, text, className) {
+        if (!draftStatus || (context && observationDraftContext()?.key !== context.key)) return;
+        draftStatus.textContent = text;
+        draftStatus.className = "text-sm " + className;
+      }
+      function clearObservationDraftState() {
+        answerInputs.forEach(function(entry) {
+          entry.querySelectorAll("input[type=radio]").forEach(function(input) { input.checked = false; });
+          const reason = entry.querySelector("[data-na-reason]");
+          if (reason) reason.classList.add("hidden");
+        });
+        form.querySelectorAll("[data-check-na-reason]").forEach(function(reason) { reason.classList.add("hidden"); });
+        form.querySelectorAll("textarea").forEach(function(field) { field.value = ""; });
+        updateNaSummary();
+      }
+      function collectObservationDraft() {
+        return {
+          asignatura_id: subject && Number(subject.value) > 0 ? Number(subject.value) : null,
+          grupo: group?.value || null,
+          answers: answerInputs.map(function(entry) {
+            const selected = entry.querySelector("input[type=radio]:checked");
+            if (!selected) return null;
+            return {
+              item_id: entry.dataset.item,
+              value: selected.value === "na" ? "na" : Number(selected.value),
+              na_reason: normalizeNaReason(selected.value, entry.querySelector("[data-na-reason] textarea")?.value)
+            };
+          }).filter(Boolean),
+          evidence: definition.sections.map(function(section) {
+            return { section_id: section.id, evidence: form.querySelector("[data-evidence='" + section.id + "']")?.value || "" };
+          }),
+          metadata: {
+            strengths: document.getElementById("metadata-strengths")?.value || null,
+            priority_area: document.getElementById("metadata-priority")?.value || null,
+            recommendation: document.getElementById("metadata-recommendation")?.value || null,
+            general_observations: document.getElementById("metadata-general")?.value || null
+          }
+        };
+      }
+      function hydrateObservationDraft(draft) {
+        clearObservationDraftState();
+        if (subject && Number(draft?.asignatura_id) > 0) {
+          subject.value = String(draft.asignatura_id);
+          refreshGroups();
+        }
+        if (group && typeof draft?.grupo === "string") group.value = draft.grupo;
+        (Array.isArray(draft?.answers) ? draft.answers : []).forEach(function(answer) {
+          const entry = answerInputs.find(function(item) { return item.dataset.item === answer.item_id; });
+          const selected = entry?.querySelector("input[type=radio][value='" + answer.value + "']");
+          if (selected) {
+            selected.checked = true;
+            const reason = entry.querySelector("[data-na-reason]");
+            if (reason) reason.classList.toggle("hidden", answer.value !== "na");
+            const reasonField = entry.querySelector("[data-na-reason] textarea");
+            if (reasonField) reasonField.value = normalizeNaReason(answer.value, answer.na_reason) || "";
+          }
+        });
+        (Array.isArray(draft?.evidence) ? draft.evidence : []).forEach(function(entry) {
+          const field = form.querySelector("[data-evidence='" + entry.section_id + "']");
+          if (field && typeof entry.evidence === "string") field.value = entry.evidence;
+        });
+        const metadata = draft?.metadata || {};
+        [["metadata-strengths", metadata.strengths], ["metadata-priority", metadata.priority_area], ["metadata-recommendation", metadata.recommendation], ["metadata-general", metadata.general_observations]].forEach(function(entry) {
+          const field = document.getElementById(entry[0]);
+          if (field && typeof entry[1] === "string") field.value = entry[1];
+        });
+        updateNaSummary();
+      }
+      async function loadObservationDraft() {
+        clearTimeout(draftTimer);
+        draftDirty = false;
+        const sequence = ++draftLoadSequence;
+        if (allowReevaluation) {
+          revisionReady = false;
+          revisionHead = null;
+          revisionDraft = null;
+          revisionIntent = null;
+          revisionNotice("Consultando la última observación…", "wait");
+        }
+        clearObservationDraftState();
+        const context = observationDraftContext();
+        if (!context) {
+          if (allowReevaluation) revisionNotice("Selecciona un docente para consultar su observación.", "wait");
+          return;
+        }
+        setDraftStatus(context, "Cargando borrador…", "text-slate-500");
+        try {
+          const params = new URLSearchParams({ docente_id: String(context.docente_id), cuatrimestre_id: String(context.cuatrimestre_id), version_id: context.version_id });
+          if (allowReevaluation) {
+            const stateResponse = await fetch("/api/instrumentos/revision-draft?" + params.toString());
+            const stateResult = await stateResponse.json();
+            if (!stateResponse.ok) throw new Error(formatApiError(stateResult, "No fue posible consultar la observación."));
+            if (sequence !== draftLoadSequence || observationDraftContext()?.key !== context.key) return;
+            const state = stateResult.state;
+            if (!state || (state.head !== null && typeof state.head?.id !== "string")) throw new Error("Estado de observación no disponible.");
+            if (state.head) {
+              revisionHead = state.head;
+              revisionDraft = state.revision_draft?.supersedes_submission_id === revisionHead.id && typeof state.revision_draft.operation_id === "string" ? state.revision_draft : null;
+              setDraftStatus(context, "", "text-slate-500");
+              revisionStart.textContent = revisionDraft ? "Continuar reevaluación" : "Reevaluar";
+              revisionNotice("Existe una observación enviada (" + (revisionHead.validity_status === "valid" ? "válida" : "inválida") + "). La reevaluación requiere una acción explícita; no se editará la anterior.", "start");
+              return;
+            }
+          }
+          const response = await fetch("/api/instrumentos/draft?" + params.toString());
+          const result = await response.json();
+          if (!response.ok) throw new Error(formatApiError(result, "No fue posible cargar el borrador."));
+          if (sequence !== draftLoadSequence || observationDraftContext()?.key !== context.key) return;
+          if (allowReevaluation && revisionHead) return;
+          if (result.draft?.draft) {
+            hydrateObservationDraft(result.draft.draft);
+            setDraftStatus(context, "Borrador recuperado.", "text-emerald-700");
+          } else {
+            setDraftStatus(context, "Sin borrador guardado.", "text-slate-500");
+          }
+          if (allowReevaluation) { revisionReady = true; revisionNotice("No hay observación enviada. Captura inicial disponible.", "edit"); }
+        } catch (error) {
+          if (sequence === draftLoadSequence && observationDraftContext()?.key === context.key) {
+            setDraftStatus(context, error.message || "No fue posible cargar el borrador.", "text-red-700");
+            if (allowReevaluation) revisionNotice((error.message || "Error al consultar la observación.") + " Recarga para resolver; no se permite enviar hasta verificar su estado.", "reload");
+          }
+        }
+      }
+      function scheduleObservationDraftSave(delay) {
+        const context = observationDraftContext();
+        if (!context || (allowReevaluation && (!revisionReady || revisionLocked || revisionBody))) return;
+        draftDirty = true;
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(saveObservationDraft, delay ?? 700);
+      }
+      async function saveObservationDraft() {
+        const context = observationDraftContext();
+        if (!context || savingDraft || !draftDirty || (allowReevaluation && (!revisionReady || revisionLocked || revisionBody))) return;
+        draftDirty = false;
+        savingDraft = true;
+        const sequence = draftLoadSequence;
+        const intent = revisionIntent;
+        const current = function() { return sequence === draftLoadSequence && observationDraftContext()?.key === context.key && revisionIntent === intent; };
+        setDraftStatus(context, "Guardando borrador…", "text-slate-500");
+        try {
+          const revision = allowReevaluation && intent;
+          const draft = collectObservationDraft();
+          if (revision) draft.answers.forEach(function(answer) { if (answer.value !== "na") answer.na_reason = null; });
+          const response = await fetch(revision ? "/api/instrumentos/revision-draft" : "/api/instrumentos/draft", {
+            method: "PUT", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ docente_id: context.docente_id, cuatrimestre_id: context.cuatrimestre_id, version_id: context.version_id,
+              ...(revision ? { operation_id: intent.operation_id, supersedes_submission_id: intent.supersedes_submission_id } : {}), draft })
+          });
+          const result = await response.json();
+          if (!current() || revisionLocked || revisionBody) return;
+          if (!response.ok) {
+            if (revision && [400, 403, 409].includes(response.status)) {
+              revisionLocked = true;
+              revisionNotice(formatApiError(result, "Conflicto de borrador.") + " Recarga para resolver sin cambiar de operación.", "reload");
+              return;
+            }
+            throw new Error(formatApiError(result, "No fue posible guardar el borrador."));
+          }
+          if (result.completed) {
+            if (allowReevaluation) {
+              revisionLocked = true;
+              revisionNotice("La observación ya fue enviada. Recarga para consultar su estado.", "reload");
+            } else {
+              setDraftStatus(context, "La observación ya fue enviada.", "text-emerald-700");
+              finalSubmissionSucceeded = true;
+              clearTimeout(draftTimer);
+              draftDirty = false;
+            }
+            return;
+          }
+          setDraftStatus(context, "Borrador guardado.", "text-emerald-700");
+        } catch (error) {
+          if (current() && !revisionLocked && !revisionBody) {
+            draftDirty = true;
+            draftRetryAfterFailure = true;
+            setDraftStatus(context, error.message || "No fue posible guardar el borrador.", "text-red-700");
+          }
+        } finally {
+          savingDraft = false;
+          if (draftDirty && !finalSubmissionSucceeded && !revisionLocked && !revisionBody && current()) {
+            scheduleObservationDraftSave(draftRetryAfterFailure ? 5000 : 0);
+            draftRetryAfterFailure = false;
+          }
+        }
+      }
+      if (isObservation) {
+        form.addEventListener("input", function() { scheduleObservationDraftSave(); });
+        form.addEventListener("change", function(event) {
+          if (event.target === teacher) return;
+          scheduleObservationDraftSave();
+        });
+        if (teacher?.value) loadObservationDraft();
+        window.addEventListener("online", function() {
+          if (draftDirty && !finalSubmissionSucceeded) scheduleObservationDraftSave(0);
+        });
+      }
+
+      async function sendRevision() {
+        if (!revisionBody || revisionSending || !revisionIntent || revisionLocked) return;
+        revisionSending = true;
+        revisionTeacher.disabled = true;
+        revisionNotice("Enviando reevaluación. No cambies de docente mientras se confirma el resultado.", "wait");
+        try {
+          const response = await fetch("/api/instrumentos/reevaluacion", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: revisionBody
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            if ([400, 403, 409].includes(response.status)) {
+              revisionLocked = true;
+              revisionNotice(formatApiError(result, "No se pudo enviar la reevaluación.") + " Resuelve el conflicto recargando; no se cambiará el predecesor automáticamente.", "reload");
+            } else {
+              revisionNotice("No se pudo confirmar el envío. Reintenta exactamente la misma operación; no captures otra reevaluación.", "retry");
+            }
+            return;
+          }
+          if (result?.success !== true || typeof result.id !== "string") {
+            revisionNotice("Respuesta de envío no confirmada. Reintenta la misma operación.", "retry");
+            return;
+          }
+          const context = observationDraftContext();
+          finalSubmissionSucceeded = true;
+          clearTimeout(draftTimer);
+          draftDirty = false;
+          revisionLocked = true;
+          revisionNotice(result.validity_status === "invalid_excessive_na" ? "Reevaluación guardada como inválida por exceso de N/A." : "Reevaluación guardada como válida.", "wait");
+          if (context) {
+            try {
+              await fetch("/api/instrumentos/revision-draft", {
+                method: "DELETE", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ docente_id: context.docente_id, cuatrimestre_id: context.cuatrimestre_id,
+                  version_id: context.version_id, operation_id: revisionIntent.operation_id,
+                  supersedes_submission_id: revisionIntent.supersedes_submission_id })
+              });
+            } catch { /* The committed revision is authoritative if draft cleanup is interrupted. */ }
+          }
+          setTimeout(function() { location.href = returnUrl; }, 1500);
+        } catch {
+          revisionNotice("No se pudo confirmar el envío. Reintenta exactamente la misma operación; no captures otra reevaluación.", "retry");
+        } finally { revisionSending = false; }
+      }
+      if (revisionRetry) revisionRetry.addEventListener("click", sendRevision);
+
+      form.addEventListener("submit", async function(event) {
     event.preventDefault();
+    if (allowReevaluation && (!revisionReady || revisionLocked || revisionBody || (revisionHead && !revisionIntent))) return;
     const answers = [];
     let missingReason = false;
     answerInputs.forEach(function(entry) {
@@ -159,7 +501,7 @@ const isCoordination = definition.purpose === "coordination";
       const selected = entry.querySelector("input[type=radio]:checked");
       const reason = entry.querySelector("[data-na-reason] textarea")?.value.trim() || null;
       if (selected?.value === "na" && !reason) missingReason = true;
-      answers.push({ item_id: itemId, value: selected?.value === "na" ? "na" : Number(selected?.value), na_reason: reason });
+      answers.push({ item_id: itemId, value: selected?.value === "na" ? "na" : Number(selected?.value), na_reason: normalizeNaReason(selected?.value, reason) });
     });
     const checks = Array.from(form.querySelectorAll("[data-check]")).map(function(entry) {
       const checkId = entry.dataset.check;
@@ -180,12 +522,58 @@ const isCoordination = definition.purpose === "coordination";
       checks: checks,
       metadata: { strengths: document.getElementById("metadata-strengths")?.value.trim() || null, priority_area: document.getElementById("metadata-priority")?.value.trim() || null, recommendation: document.getElementById("metadata-recommendation")?.value.trim() || null, general_observations: generalObservations }
     };
-    const submit = form.querySelector("button[type=submit]"); submit.disabled = true;
-    const response = await fetch("/api/instrumentos/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const result = await response.json();
-    if (!response.ok) { message.textContent = result.error || "No fue posible guardar el instrumento."; message.className = "text-sm text-red-700"; submit.disabled = false; return; }
-    message.textContent = result.validity_status === "invalid_excessive_na" ? "Instrumento guardado como inválido por exceso de N/A; no aporta puntaje oficial." : "Instrumento guardado como válido.";
-    message.className = result.validity_status === "invalid_excessive_na" ? "text-sm text-amber-800" : "text-sm text-emerald-700";
-    setTimeout(function() { location.href = returnUrl; }, 1500);
+        const submit = form.querySelector("button[type=submit]"); submit.disabled = true;
+        if (allowReevaluation) revisionTeacher.disabled = true;
+        if (allowReevaluation && revisionIntent) {
+          const revisionPayload = { ...payload, operation_id: revisionIntent.operation_id,
+            supersedes_submission_id: revisionIntent.supersedes_submission_id };
+          delete revisionPayload.source_record_id;
+          delete revisionPayload.checks;
+          revisionBody = JSON.stringify(revisionPayload);
+          clearTimeout(draftTimer);
+          draftDirty = false;
+          await sendRevision();
+          return;
+        }
+        let response;
+        let result;
+        try {
+          response = await fetch("/api/instrumentos/submit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          result = await response.json();
+        } catch {
+          message.textContent = "Se perdió la conexión. Tu progreso queda guardado; intenta enviar nuevamente cuando vuelva la conexión.";
+          message.className = "text-sm text-red-700";
+          submit.disabled = false;
+          if (allowReevaluation) revisionTeacher.disabled = false;
+          if (isObservation) scheduleObservationDraftSave(0);
+          return;
+        }
+        if (!response.ok) {
+          if (allowReevaluation && [400, 403, 409].includes(response.status)) {
+            revisionLocked = true;
+            revisionNotice(formatApiError(result, "No fue posible guardar el instrumento.") + " Recarga para consultar la última observación.", "reload");
+            return;
+          }
+          message.textContent = formatApiError(result, "No fue posible guardar el instrumento."); message.className = "text-sm text-red-700"; submit.disabled = false;
+          if (allowReevaluation) revisionTeacher.disabled = false;
+          return;
+        }
+        const completedDraftContext = observationDraftContext();
+        finalSubmissionSucceeded = true;
+        clearTimeout(draftTimer);
+        draftDirty = false;
+        if (completedDraftContext) {
+          try {
+            await fetch("/api/instrumentos/draft", {
+              method: "DELETE", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ docente_id: completedDraftContext.docente_id, cuatrimestre_id: completedDraftContext.cuatrimestre_id, version_id: completedDraftContext.version_id })
+            });
+          } catch {
+            // The completed submission remains authoritative if draft cleanup is interrupted.
+          }
+        }
+        message.textContent = result.validity_status === "invalid_excessive_na" ? "Instrumento guardado como inválido por exceso de N/A; no aporta puntaje oficial." : "Instrumento guardado como válido.";
+        message.className = result.validity_status === "invalid_excessive_na" ? "text-sm text-amber-800" : "text-sm text-emerald-700";
+        setTimeout(function() { location.href = returnUrl; }, 1500);
   });
 </script>

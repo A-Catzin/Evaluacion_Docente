@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
-import { validarComentarioOpcional } from "../../../lib/moderation";
+import {
+  MAX_COMENTARIO_LONGITUD,
+  validarComentarioOpcional,
+} from "../../../lib/moderation";
 import { requireTeacherAutodiagnosticoSubmissionOpen } from "../../../lib/autodiagnosticoSubmissionWindow";
 import { AutodiagnosticoSchema } from "../../../lib/validation/apiSchemas";
 import { formatZodFieldErrors } from "../../../lib/validation/errors";
@@ -241,12 +244,16 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return accessResponse;
     }
 
-    const moderacion = validarComentarioOpcional(comentarios, 500);
+    const moderacion = validarComentarioOpcional(
+      comentarios,
+      MAX_COMENTARIO_LONGITUD,
+    );
     if (!moderacion.valido) {
       logError("comment_moderation", new Error("Comment rejected"), {
         responseStatus: 400,
         reasonCategory:
-          typeof comentarios === "string" && comentarios.length > 500
+          typeof comentarios === "string" &&
+          comentarios.length > MAX_COMENTARIO_LONGITUD
             ? "max_length"
             : "blacklist",
         comment: {

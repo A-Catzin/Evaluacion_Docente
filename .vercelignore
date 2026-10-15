@@ -1,0 +1,6 @@
+# Deployment-only exclusions: never upload local secrets or private documents.
+.env*
+docs-privados/
+.git/
+node_modules/
+dist/

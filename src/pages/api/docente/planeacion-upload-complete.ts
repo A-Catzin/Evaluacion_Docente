@@ -1,6 +1,9 @@
 import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
-import { validarComentarioOpcional } from "../../../lib/moderation";
+import {
+  MAX_COMENTARIO_LONGITUD,
+  validarComentarioOpcional,
+} from "../../../lib/moderation";
 import { normalizePlanningSubjectName } from "../../../lib/planningSubjectScope";
 import { isPlanningSubjectMarkedNp } from "../../../lib/planningSubjectStatus";
 import {
@@ -345,7 +348,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const moderation = validarComentarioOpcional(
       typeof body.comentario === "string" ? body.comentario : null,
-      500,
+      MAX_COMENTARIO_LONGITUD,
     );
     if (!moderation.valido)
       return json({ error: moderation.error, code: "comment_rejected" }, 400);

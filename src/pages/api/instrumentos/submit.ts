@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
+import { dbAdmin } from "../../../lib/db";
 import {
   validarCamposDeTextoLibreConLimites,
   MAX_COMENTARIO_LONGITUD,
@@ -14,6 +15,24 @@ import {
 import { notificarDocente } from "../../../services/notificaciones";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
+const OBSERVATION_DUPLICATE_CONSTRAINT =
+  "instrument_submissions_one_observation_capture";
+
+type RpcError = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
+function isObservationSubmitRetry(error: RpcError) {
+  return (
+    error.code === "23505" &&
+    [error.message, error.details, error.hint].some((value) =>
+      value?.includes(OBSERVATION_DUPLICATE_CONSTRAINT),
+    )
+  );
+}
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   let client;
@@ -108,15 +127,40 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       p_checks: submission.checks,
       p_metadata: submission.metadata,
     });
-    if (error)
+    if (error) {
+      if (isObservationSubmitRetry(error)) {
+        const { data: existing, error: lookupError } = await client.rpc(
+          "get_own_observation_instrument_submission",
+          {
+            p_docente_id: submission.docente_id,
+            p_cuatrimestre_id: submission.cuatrimestre_id,
+            p_version_id: submission.version_id,
+          },
+        );
+        if (!lookupError && existing) {
+          return new Response(
+            JSON.stringify({ success: true, idempotent: true, ...(existing as object) }),
+            { status: 200, headers: JSON_HEADERS },
+          );
+        }
+        if (lookupError)
+          return new Response(JSON.stringify({ error: lookupError.message }), {
+            status: lookupError.code === "42501" ? 403 : 400,
+            headers: JSON_HEADERS,
+          });
+      }
       return new Response(JSON.stringify({ error: error.message }), {
         status: error.code === "42501" ? 403 : 400,
         headers: JSON_HEADERS,
       });
+    }
 
     try {
+      // Recalculation must use the service-role read path: observers are allowed
+      // to submit observations, but the versioned-results RPC intentionally hides
+      // those rows from an observer-scoped client.
       await recalcularCalificacionDocente(
-        client,
+        dbAdmin(),
         submission.docente_id,
         submission.cuatrimestre_id,
       );

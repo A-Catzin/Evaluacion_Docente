@@ -1,6 +1,9 @@
 import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
-import { validarComentarioOpcional } from "../../../lib/moderation";
+import {
+  MAX_COMENTARIO_LONGITUD,
+  validarComentarioOpcional,
+} from "../../../lib/moderation";
 import {
   checkRequestBodySize,
   MAX_EVALUACION_BODY_BYTES,
@@ -76,7 +79,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const { grupo_id, respuestas, comentario } = parseResult.data;
 
-  const moderacion = validarComentarioOpcional(comentario, 500);
+  const moderacion = validarComentarioOpcional(
+    comentario,
+    MAX_COMENTARIO_LONGITUD,
+  );
   if (!moderacion.valido) {
     return json({ error: moderacion.error, code: "comment_rejected" }, 400);
   }

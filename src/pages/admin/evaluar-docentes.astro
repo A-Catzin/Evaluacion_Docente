@@ -1,9 +1,13 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../lib/auth';
 import { dbAdmin } from '../../lib/db';
+import { formatPersonName } from '../../lib/personName';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
-const cuatrimestreActivo = await obtenerCuatrimestreActivo(dbAdmin());
-const cuatrimestres = await obtenerCuatrimestres(dbAdmin());
+const auth = await requireRole(Astro.cookies, ['superadmin']);
+const clienteAdmin = dbAdmin();
+const cuatrimestreActivo = await obtenerCuatrimestreActivo(clienteAdmin);
+const cuatrimestres = await obtenerCuatrimestres(clienteAdmin);
 const cuatrimestreIdParam = Number(Astro.url.searchParams.get('cuatrimestre'));
 const cuatrimestreSel = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
 const cicloPorQuery = cuatrimestres.find(c => c.id === cuatrimestreIdParam);
@@ -14,9 +18,95 @@ if (Astro.url.searchParams.has('cuatrimestre') || cuatrimestreActivo?.id) {
   Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60*60*24*30 });
 }
 const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
----
+
+    type Teacher = { id: number; nombre: string | null; apellidos: string | null; email: string | null };
+    type GroupSchedule = { dia_semana: number; hora_inicio: string; hora_fin: string; aula: string | null; activo: boolean };
+    type GroupRow = {
+      id: number;
+      docente_id: number;
+      clave: string | null;
+      grupo_normalizado: string | null;
+      asignaturas: { nombre?: string | null } | { nombre?: string | null }[] | null;
+      horarios_grupo: GroupSchedule[] | null;
+    };
+    type PlanningRow = {
+      id: number;
+      docente_id: number;
+      grupo: string | null;
+      url_pdf: string | null;
+      pdfUrl: string | null;
+      estado: string | null;
+      asignaturas: { nombre?: string | null } | { nombre?: string | null }[] | null;
+    };
+
+    const assignmentResult = cuatrimestreId
+          ? await clienteAdmin
+            .from('observation_teacher_assignments')
+            .select('docente_id')
+            .eq('evaluator_id', auth.user.id)
+            .eq('cuatrimestre_id', cuatrimestreId)
+            .is('revoked_at', null)
+          : { data: [], error: null };
+            const assignedTeacherIds = new Set(
+              (assignmentResult.data || [])
+                .map((row) => Number((row as { docente_id?: unknown }).docente_id))
+                .filter(Number.isSafeInteger),
+            );
+        const assignedIds = [...assignedTeacherIds];
+    const [teachersResult, groupsResult, planningResult, observationsResult] = await Promise.all([
+      assignedIds.length
+        ? clienteAdmin.from('docentes').select('id,nombre,apellidos,email').in('id', assignedIds).eq('activo', true).order('apellidos').order('nombre')
+        : Promise.resolve({ data: [], error: null }),
+      assignedIds.length
+        ? clienteAdmin.from('grupos').select('id,docente_id,clave,grupo_normalizado,asignaturas(nombre),horarios_grupo(dia_semana,hora_inicio,hora_fin,aula,activo)').eq('cuatrimestre_id', cuatrimestreId).eq('activo', true).in('docente_id', assignedIds).order('grupo_normalizado')
+        : Promise.resolve({ data: [], error: null }),
+      assignedIds.length
+        ? clienteAdmin.from('planeaciones').select('id,docente_id,grupo,url_pdf,estado,asignaturas(nombre)').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', assignedIds).order('grupo')
+        : Promise.resolve({ data: [], error: null }),
+      assignedIds.length
+        ? clienteAdmin.from('instrument_submissions').select('docente_id').eq('cuatrimestre_id', cuatrimestreId).eq('purpose', 'observation').in('docente_id', assignedIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+        const teachers = (teachersResult.data || []) as Teacher[];
+        const groups = (groupsResult.data || []) as GroupRow[];
+            const planningRows = (planningResult.data || []) as Omit<PlanningRow, 'pdfUrl'>[];
+            const observationTeacherIds = new Set(
+              (observationsResult.data || [])
+                .map((row) => Number((row as { docente_id?: unknown }).docente_id))
+                .filter(Number.isSafeInteger),
+            );
+            const { obtenerUrlFirmadaDesdeUrlAlmacenada } = await import('../../lib/storage');
+        const plannings = await Promise.all(planningRows.map(async (planning) => {
+          let pdfUrl = planning.url_pdf;
+          try {
+            const signed = await obtenerUrlFirmadaDesdeUrlAlmacenada(planning.url_pdf || '', 3600);
+            if (signed) pdfUrl = signed;
+          } catch {}
+          return { ...planning, pdfUrl };
+        }));
+        const groupsByTeacher = new Map<number, GroupRow[]>();
+    const planningByTeacher = new Map<number, PlanningRow[]>();
+    for (const group of groups) groupsByTeacher.set(group.docente_id, [...(groupsByTeacher.get(group.docente_id) || []), group]);
+    for (const planning of plannings) planningByTeacher.set(planning.docente_id, [...(planningByTeacher.get(planning.docente_id) || []), planning]);
+
+    const relationName = (relation: GroupRow['asignaturas'] | PlanningRow['asignaturas']) => {
+      const value = Array.isArray(relation) ? relation[0] : relation;
+      return value?.nombre || '';
+    };
+    const diasSemana = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const formatTime = (value: string) => value?.slice(0, 5) || '';
+    const teacherRows = teachers.map((teacher) => ({
+      teacher,
+      teacherName: formatPersonName([teacher.nombre, teacher.apellidos].filter(Boolean).join(' ')) || `Docente #${teacher.id}`,
+      groups: groupsByTeacher.get(teacher.id) || [],
+      plannings: planningByTeacher.get(teacher.id) || [],
+      hasObservation: observationTeacherIds.has(teacher.id),
+    }));
+    const loadErrors = [assignmentResult.error, teachersResult.error, groupsResult.error, planningResult.error, observationsResult.error].filter(Boolean);
+    ---
 <LayoutAdmin titulo="Evaluar Docentes — Admin">
-  <div class="animate-flotar-entrada max-w-4xl mx-auto">
+  <div class="animate-flotar-entrada max-w-7xl mx-auto">
     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
       <div>
         <h1 class="text-3xl font-bold text-tup mb-2">Evaluar Docentes</h1>
@@ -30,7 +120,7 @@ const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
       </form>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <a href={`/admin/planeaciones${qs}`} class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center group">
         <div class="w-16 h-16 mx-auto rounded-2xl bg-blue-100 flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
           <span class="text-3xl">📄</span>
@@ -47,13 +137,102 @@ const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
         <p class="text-sm text-slate-500">15 reactivos en 5 categorías. Evaluación integral del desempeño académico.</p>
       </a>
 
-      <a href={`/admin/evaluar-docentes/observacion${qs}`} class="bg-white rounded-2xl p-6 shadow-tarjeta hover:shadow-tarjeta-hover hover:scale-105 transition-all text-center group">
-        <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-100 flex items-center justify-center mb-4 group-hover:bg-amber-200 transition-colors">
-          <span class="text-3xl">👁️</span>
         </div>
-        <h2 class="text-lg font-bold text-tup mb-2">Observación de Clase</h2>
-        <p class="text-sm text-slate-500">Escolarizado, virtual o ejecutivo. Evaluación directa de la práctica docente.</p>
-      </a>
-    </div>
-  </div>
-</LayoutAdmin>
+
+        <section class="mt-8" aria-labelledby="docentes-observar-title">
+          <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 id="docentes-observar-title" class="text-2xl font-bold text-tup">Docentes a observar</h2>
+              <p class="mt-1 text-sm text-slate-500">Docentes asignados a tu cuenta para el ciclo seleccionado, con sus grupos, horarios y planeaciones.</p>
+            </div>
+            {assignedTeacherIds.size > 0 && <span class="rounded-full bg-tup/10 px-3 py-1 text-sm font-semibold text-tup">{assignedTeacherIds.size} asignados</span>}
+          </div>
+
+          {loadErrors.length > 0 ? (
+            <div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">
+              No se pudo cargar la información de los docentes asignados. Intenta nuevamente o informa a soporte.
+            </div>
+          ) : assignedTeacherIds.size === 0 ? (
+            <div class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-tarjeta">
+              No tienes docentes asignados para observar en este ciclo.
+            </div>
+          ) : teacherRows.length === 0 ? (
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+              Las asignaciones existen, pero no se encontraron docentes activos para mostrarlas.
+            </div>
+          ) : (
+            <div class="space-y-4">
+              {teacherRows.map((row) => (
+                <article class="overflow-hidden rounded-2xl bg-white shadow-tarjeta">
+                  <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+                    <div>
+                      <h3 class="text-lg font-bold text-slate-800">{row.teacherName}</h3>
+                      {row.teacher.email && <p class="text-xs text-slate-500">{row.teacher.email}</p>}
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <span class="text-xs font-medium text-slate-500">{row.groups.length} {row.groups.length === 1 ? 'grupo' : 'grupos'}</span>
+                      <a href={`/admin/evaluar-docentes/observacion?cuatrimestre=${cuatrimestreId}&docente_id=${row.teacher.id}`} class:list={["rounded-lg px-3 py-1.5 text-xs font-medium text-white", row.hasObservation ? "bg-amber-600 hover:bg-amber-700" : "bg-sky-700 hover:bg-sky-800"]}>{row.hasObservation ? 'Reevaluar docente' : 'Evaluar docente'}</a>
+                    </div>
+                  </header>
+
+                      <div class="space-y-4 p-5">
+                        <div class="rounded-xl border border-tup/15 bg-tup/5 p-4">
+                          <p class="text-[11px] font-semibold uppercase tracking-wide text-tup">Planeaciones</p>
+                          {row.plannings.length > 0 ? (
+                            <ul class="mt-2 space-y-2">
+                              {row.plannings.map((planning) => {
+                                const subject = relationName(planning.asignaturas) || 'Materia no disponible';
+                                const groupName = planning.grupo || 'Grupo no disponible';
+                                return (
+                                  <li class="flex flex-wrap items-center justify-between gap-2 text-sm">
+                                    <span class="text-slate-700"><strong>Planeación de:</strong> {row.teacherName} / {subject} / {groupName}</span>
+                                    {planning.pdfUrl ? <a href={planning.pdfUrl} target="_blank" rel="noreferrer" class="whitespace-nowrap font-medium text-tup hover:underline">Ver PDF</a> : <span class="whitespace-nowrap text-slate-400">PDF no disponible</span>}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          ) : <p class="mt-2 text-sm text-slate-500">No hay planeaciones registradas para este docente en el ciclo.</p>}
+                        </div>
+
+                        {row.groups.length > 0 ? row.groups.map((group) => {
+                      const subject = relationName(group.asignaturas) || 'Materia no disponible';
+                      const groupName = group.grupo_normalizado || group.clave || `Grupo ${group.id}`;
+                      const schedules = (group.horarios_grupo || []).filter((schedule) => schedule.activo);
+                      return (
+                        <div class="rounded-xl border border-slate-200 p-4">
+                          <div class="grid gap-3 md:grid-cols-3">
+                            <div>
+                              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Materia</p>
+                              <p class="mt-1 text-sm font-medium text-slate-700">{subject}</p>
+                            </div>
+                            <div>
+                              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Grupo</p>
+                              <p class="mt-1 text-sm font-medium text-slate-700">{groupName}</p>
+                            </div>
+                            <div>
+                              <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Mtro.</p>
+                              <p class="mt-1 text-sm font-medium text-slate-700">{row.teacherName}</p>
+                            </div>
+                          </div>
+                          <div class="mt-4 border-t border-slate-100 pt-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Horario</p>
+                            {schedules.length > 0 ? (
+                              <ul class="mt-1 space-y-1 text-sm text-slate-600">
+                                {schedules.map((schedule) => (
+                                  <li>{diasSemana[schedule.dia_semana] || 'Día no disponible'} · {formatTime(schedule.hora_inicio)}–{formatTime(schedule.hora_fin)}{schedule.aula ? ` · Aula ${schedule.aula}` : ''}</li>
+                                ))}
+                              </ul>
+                            ) : <p class="mt-1 text-sm text-slate-400">Horario no disponible.</p>}
+                          </div>
+                        </div>
+                      );
+                    }) : <p class="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No hay grupos activos asociados en este ciclo.</p>}
+
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </LayoutAdmin>

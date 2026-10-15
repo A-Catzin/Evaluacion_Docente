@@ -3,7 +3,9 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerUsuarios, type UsuarioConNombre } from '../../services/usuarios';
 import type { RolUsuario } from '../../types/supabase';
 import { formatPersonName } from '../../lib/personName';
+import { requireRole } from '../../lib/auth';
 
+const auth = await requireRole(Astro.cookies, ['superadmin']);
 const rolFiltro = (Astro.url.searchParams.get('rol') as RolUsuario) || undefined;
 const busqueda = Astro.url.searchParams.get('q') || '';
 
@@ -11,7 +13,7 @@ let usuarios: UsuarioConNombre[] = [];
 let errorMsg = '';
 
 try {
-  usuarios = await obtenerUsuarios(rolFiltro);
+  usuarios = await obtenerUsuarios(auth.client, rolFiltro);
   if (busqueda) {
     const t = busqueda.toLowerCase();
     usuarios = usuarios.filter(u => u.nombre_completo.toLowerCase().includes(t) || u.email.toLowerCase().includes(t));

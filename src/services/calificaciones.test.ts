@@ -430,6 +430,46 @@ describe("calificaciones", () => {
       });
     });
 
+    it("persists missing non-NP planning as zero in the teacher-cycle average", async () => {
+      nextSubjectAssignments = [
+        {
+          id: 1,
+          clave: "1A",
+          asignatura_id: 100,
+          modalidad: "Escolarizado",
+          asignaturas: { nombre: "Álgebra" },
+        },
+        {
+          id: 2,
+          clave: "1B",
+          asignatura_id: 101,
+          modalidad: "Escolarizado",
+          asignaturas: { nombre: "Física" },
+        },
+      ];
+      nextSubjectPlans = [
+        {
+          asignatura_id: 100,
+          puntaje_promedio: 79,
+          estado: "Aprobado",
+          asignaturas: { nombre: "Álgebra" },
+        },
+      ];
+      nextNativeScores = [];
+      nextInstrumentos = {
+        evaluacion_coordinacion: [],
+        observaciones: [],
+        planeaciones: [],
+        autodiagnosticos: [],
+      };
+
+      await recalcularCalificacionDocente(createMockClient(), 1, 10);
+
+      expect(capturedUpsertPayload).toMatchObject({
+        score_planeacion: 39.5,
+      });
+    });
+
     it("usa el snapshot histórico cuando ya existe", async () => {
       nextSnapshot = {
         modalidad_snapshot: "Ejecutivo / Inglés",

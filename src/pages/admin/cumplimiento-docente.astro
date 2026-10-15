@@ -1,0 +1,188 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../lib/auth';
+import { formatPersonName } from '../../lib/personName';
+import {
+  filterTeacherResponsibilityRows,
+  mapTeacherResponsibilityCompletionRows,
+  paginateTeacherResponsibilityRows,
+  type CompletionFilter,
+  type GlobalFilter,
+  type PlanningFilter,
+} from '../../services/teacherResponsibilityCompletion';
+
+const auth = await requireRole(Astro.cookies, ["superadmin"]);
+const { data: cycleData, error: cycleError } = await auth.client
+  .from('cuatrimestres')
+  .select('id,clave,activo')
+  .order('id', { ascending: true });
+const cycles = cycleError ? [] : (cycleData || []);
+const requestedCycleId = Number(Astro.url.searchParams.get('cuatrimestre'));
+const cookieCycleId = Number(Astro.cookies.get('cuatrimestre_sel')?.value);
+const selectedCycle = cycles.find((cycle) => cycle.id === requestedCycleId)
+  || cycles.find((cycle) => cycle.id === cookieCycleId)
+  || cycles.find((cycle) => cycle.activo)
+  || cycles[0]
+  || null;
+const cuatrimestreId = selectedCycle?.id || 0;
+
+if (Astro.url.searchParams.has('cuatrimestre') && cuatrimestreId) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+}
+
+function selectedValue<T extends string>(value: string | null, values: readonly T[], fallback: T): T {
+  return values.includes(value as T) ? value as T : fallback;
+}
+
+const query = (Astro.url.searchParams.get('q') || '').trim();
+const autodiagnostico = selectedValue<CompletionFilter>(
+  Astro.url.searchParams.get('autodiagnostico'),
+  ['all', 'complete', 'none'],
+  'all',
+);
+const planning = selectedValue<PlanningFilter>(
+  Astro.url.searchParams.get('planning'),
+  ['all', 'complete', 'partial', 'none', 'np', 'not_applicable'],
+  'all',
+);
+const global = selectedValue<GlobalFilter>(
+  Astro.url.searchParams.get('global'),
+  ['all', 'both', 'one', 'none'],
+  'all',
+);
+
+let loadError = cycleError ? 'No fue posible cargar los ciclos disponibles.' : '';
+let allRows = [] as ReturnType<typeof mapTeacherResponsibilityCompletionRows>;
+if (!loadError && cuatrimestreId) {
+  const { data, error } = await auth.client.rpc("admin_teacher_responsibility_completion_v2", {
+    p_cuatrimestre_id: cuatrimestreId,
+  });
+  if (error) {
+    loadError = 'No fue posible cargar el cumplimiento docente. Intenta nuevamente.';
+  } else {
+    try {
+      allRows = mapTeacherResponsibilityCompletionRows(data);
+    } catch {
+      loadError = 'La respuesta de cumplimiento docente no es válida. No se muestran datos.';
+    }
+  }
+}
+if (!loadError && !cuatrimestreId) loadError = 'No hay un ciclo disponible para consultar.';
+
+const filteredRows = filterTeacherResponsibilityRows(allRows, { query, autodiagnostico, planning, global });
+const requestedPage = Number(Astro.url.searchParams.get('page'));
+const pagination = paginateTeacherResponsibilityRows(filteredRows, requestedPage, 25);
+const navigationParams = new URLSearchParams(Astro.url.searchParams);
+if (cuatrimestreId) navigationParams.set('cuatrimestre', String(cuatrimestreId));
+else navigationParams.delete('cuatrimestre');
+navigationParams.delete('page');
+const qs = navigationParams.size ? `?${navigationParams.toString()}` : '';
+function pageUrl(page: number) {
+  const params = new URLSearchParams(navigationParams);
+  if (page > 1) params.set('page', String(page));
+  return `/admin/cumplimiento-docente?${params.toString()}`;
+}
+function formatZonedDate(value: string | null): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Cancun' }).format(new Date(value));
+}
+// Autodiagnóstico timestamps have no timezone; UTC retains their stored wall clock.
+function formatNaiveDate(value: string | null): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(`${value.replace(' ', 'T')}Z`));
+}
+function badgeClass(status: string): string {
+  if (status === 'complete' || status === 'both') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'partial' || status === 'one') return 'bg-amber-100 text-amber-800';
+  if (status === 'np') return 'bg-violet-100 text-violet-700';
+  if (status === 'not_applicable') return 'bg-slate-100 text-slate-600';
+  return 'bg-rose-100 text-rose-700';
+}
+function planningLabel(status: string): string {
+  if (status === 'complete') return 'Entregada';
+  if (status === 'partial') return 'Parcial';
+  if (status === 'np') return 'No debe entregar planeación';
+  if (status === 'not_applicable') return 'No aplica';
+  return 'Pendiente';
+}
+---
+
+<LayoutAdmin titulo="Cumplimiento docente — Admin">
+  <div class="animate-flotar-entrada mx-auto max-w-7xl">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold text-tup">Cumplimiento docente</h1>
+        <p class="mt-1 text-sm text-slate-500">Seguimiento de entregas de autodiagnóstico y planeación didáctica. No incluye puntajes 360.</p>
+      </div>
+      <div class="rounded-2xl bg-white px-4 py-3 text-sm shadow-tarjeta">
+        <p class="text-xs uppercase tracking-wider text-slate-400">Docentes activos</p>
+        <p class="mt-1 text-2xl font-bold text-tup">{allRows.length}</p>
+      </div>
+    </div>
+
+    <form method="GET" class="mb-6 grid grid-cols-1 gap-3 rounded-2xl bg-white p-4 shadow-tarjeta sm:grid-cols-2 xl:grid-cols-5">
+      <label class="block">
+        <span class="mb-1 block text-xs font-semibold text-slate-500">Ciclo</span>
+        <select name="cuatrimestre" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cycles.map((cycle) => <option value={cycle.id} selected={cycle.id === cuatrimestreId}>{cycle.clave}</option>)}
+        </select>
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-xs font-semibold text-slate-500">Buscar</span>
+        <input name="q" value={query} placeholder="Nombre o correo" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-xs font-semibold text-slate-500">Autodiagnóstico</span>
+        <select name="autodiagnostico" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+          <option value="all" selected={autodiagnostico === 'all'}>Todos</option><option value="complete" selected={autodiagnostico === 'complete'}>Completado</option><option value="none" selected={autodiagnostico === 'none'}>Sin entrega</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-xs font-semibold text-slate-500">Planeación</span>
+        <select name="planning" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+          <option value="all" selected={planning === 'all'}>Todas</option><option value="complete" selected={planning === 'complete'}>Entregada</option><option value="partial" selected={planning === 'partial'}>Parcial</option><option value="none" selected={planning === 'none'}>Sin entrega</option><option value="np" selected={planning === 'np'}>No debe entregar planeación</option><option value="not_applicable" selected={planning === 'not_applicable'}>No aplica</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-xs font-semibold text-slate-500">Cumplimiento global</span>
+        <select name="global" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+          <option value="all" selected={global === 'all'}>Todos</option><option value="both" selected={global === 'both'}>Ambas cumplidas</option><option value="one" selected={global === 'one'}>Una cumplida</option><option value="none" selected={global === 'none'}>Ninguna cumplida</option>
+        </select>
+      </label>
+      <div class="flex items-end gap-2 sm:col-span-2 xl:col-span-5">
+        <button type="submit" class="rounded-xl bg-tup px-4 py-2 text-sm font-medium text-white">Filtrar</button>
+        <a href={`/admin/cumplimiento-docente${cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : ''}`} class="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600">Limpiar</a>
+      </div>
+    </form>
+
+    {loadError ? (
+      <div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800" role="alert">{loadError}</div>
+    ) : (
+      <section class="overflow-hidden rounded-2xl bg-white shadow-tarjeta">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
+          <div><h2 class="font-semibold text-tup">Entregas del ciclo {selectedCycle?.clave}</h2><p class="mt-1 text-xs text-slate-500">{pagination.total} docentes encontrados. NP exime administrativamente de entrega, sin contabilizarse como planeación enviada.</p></div>
+          <p class="text-sm text-slate-500">Página {pagination.currentPage} de {pagination.totalPages}</p>
+        </div>
+        {pagination.rows.length === 0 ? <p class="p-10 text-center text-slate-400">No se encontraron docentes con estos filtros.</p> : (
+          <div class="overflow-x-auto">
+            <table class="min-w-[980px] w-full text-sm">
+              <thead><tr class="border-b bg-slate-50 text-slate-500"><th class="px-4 py-3 text-left text-xs uppercase">Docente</th><th class="px-4 py-3 text-left text-xs uppercase">Coordinación</th><th class="px-4 py-3 text-center text-xs uppercase">Autodiagnóstico</th><th class="px-4 py-3 text-center text-xs uppercase">Planeación didáctica</th><th class="px-4 py-3 text-center text-xs uppercase">NP</th><th class="px-4 py-3 text-center text-xs uppercase">Global</th><th class="px-4 py-3 text-right text-xs uppercase">Acciones</th></tr></thead>
+              <tbody class="divide-y">{pagination.rows.map((row) => (
+                <tr class="align-top hover:bg-slate-50">
+                  <td class="px-4 py-4"><a href={`/admin/docentes/${row.docenteId}${qs}`} class="font-semibold text-slate-800 hover:text-tup">{formatPersonName(`${row.nombre} ${row.apellidos}`.trim()) || 'Sin nombre'}</a><p class="mt-1 text-xs text-slate-500">{row.email || 'Sin correo'}</p></td>
+                  <td class="px-4 py-4 text-left text-xs text-slate-600">{row.coordinators.length ? row.coordinators.join(', ') : 'Sin coordinación asignada'}</td>
+                  <td class="px-4 py-4 text-center"><span class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${row.autodiagnosticoCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{row.autodiagnosticoCompleted ? 'Completado' : 'Sin entrega'}</span><p class="mt-2 text-[11px] text-slate-500">{formatNaiveDate(row.autodiagnosticoCompletedAt)}</p></td>
+                  <td class="px-4 py-4 text-center"><span class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${badgeClass(row.planningStatus)}`}>{planningLabel(row.planningStatus)}</span><p class="mt-2 text-[11px] text-slate-500">{row.planningStatus === 'not_applicable' ? 'Sin asignaturas aplicables' : row.planningStatus === 'np' ? 'Exento por NP · sin planeación enviada' : `${row.planningSubmittedCount}/${row.planningSubjectCount} asignaturas · ${formatZonedDate(row.planningLastSubmittedAt)}`}</p></td>
+                  <td class="px-4 py-4 text-center text-xs text-slate-600"><p>{row.planningGroupCount === 0 ? 'Sin grupos aplicables' : `${row.planningNpGroupCount}/${row.planningGroupCount} grupos NP`}</p></td>
+                  <td class="px-4 py-4 text-center"><span class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${badgeClass(row.globalStatus)}`}>{row.globalStatus === 'both' ? 'Ambas cumplidas' : row.globalStatus === 'one' ? 'Una cumplida' : 'Ninguna cumplida'}</span></td>
+                  <td class="px-4 py-4 text-right"><div class="flex flex-col items-end gap-2"><a href={`/admin/docentes/${row.docenteId}${qs}`} class="text-xs font-medium text-tup hover:underline">Ver docente</a>{row.planningPlanId && <a href={`/admin/planeaciones/evaluar/${row.planningPlanId}?cuatrimestre=${cuatrimestreId}`} class="text-xs font-medium text-tup hover:underline">Ver planeación</a>}</div></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        {pagination.totalPages > 1 && <nav class="flex items-center justify-between border-t px-5 py-4 text-sm"><a href={pageUrl(pagination.currentPage - 1)} aria-disabled={pagination.currentPage === 1} class={`rounded-lg border px-3 py-1.5 ${pagination.currentPage === 1 ? 'pointer-events-none border-slate-100 text-slate-300' : 'border-slate-200 text-slate-600'}`}>← Anterior</a><span class="text-slate-500">{pagination.currentPage} / {pagination.totalPages}</span><a href={pageUrl(pagination.currentPage + 1)} aria-disabled={pagination.currentPage === pagination.totalPages} class={`rounded-lg border px-3 py-1.5 ${pagination.currentPage === pagination.totalPages ? 'pointer-events-none border-slate-100 text-slate-300' : 'border-slate-200 text-slate-600'}`}>Siguiente →</a></nav>}
+      </section>
+    )}
+  </div>
+</LayoutAdmin>

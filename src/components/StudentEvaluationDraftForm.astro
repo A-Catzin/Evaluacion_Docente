@@ -1,0 +1,49 @@
+---
+import type { StudentEvaluationDraftForm } from '../lib/studentEvaluationDraftForms';
+
+// Presentational only: the caller supplies one form and display-only student context.
+interface Props {
+  form: StudentEvaluationDraftForm;
+  context?: { carrera?: string; cuatrimestre?: string; asignatura?: string; docente?: string; fecha?: string };
+}
+const { form, context = {} } = Astro.props;
+---
+<section class="animate-flotar-entrada py-6 sm:py-10" aria-label={form.title}>
+  <div class="rounded-2xl bg-white p-5 shadow-tarjeta sm:p-7">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{form.code} · Versión 1.1</p>
+    <h2 class="mt-2 text-2xl font-bold text-slate-800">{form.title}</h2>
+    <dl class="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+      <div><dt class="font-semibold">Carrera</dt><dd>{context.carrera || '—'}</dd></div>
+      <div><dt class="font-semibold">Cuatrimestre</dt><dd>{context.cuatrimestre || '—'}</dd></div>
+      <div><dt class="font-semibold">Asignatura</dt><dd>{context.asignatura || '—'}</dd></div>
+      <div><dt class="font-semibold">Docente evaluado</dt><dd>{context.docente || '—'}</dd></div>
+      <div><dt class="font-semibold">Fecha</dt><dd>{context.fecha || '—'}</dd></div>
+    </dl>
+    <p class="mt-4 text-slate-600">{form.premise}</p>
+  </div>
+  <div class="mt-6 rounded-2xl border border-tup-100 bg-tup-50 p-5 text-sm text-tup-800">
+    <p class="font-semibold">Indicaciones de respuesta</p>
+    <p class="mt-1">Lee cada afirmación y selecciona una valoración del 1 al 5: 1 es la valoración más baja y 5 la más alta. El comentario es opcional.</p>
+  </div>
+  <div class="mt-6 space-y-5">
+    {form.questions.map((question, index) => (
+      <fieldset class="rounded-2xl bg-white p-5 shadow-tarjeta" aria-describedby={`${form.code}-help-${index}`}>
+        <legend class="font-semibold leading-6 text-slate-800"><span class="mr-2 text-tup">{index + 1}.</span>{question}</legend>
+        <p id={`${form.code}-help-${index}`} class="mt-2 text-xs text-slate-500">Selecciona una valoración del 1 al 5.</p>
+        <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-6">
+          {form.scale.map((answer) => (
+            <label class="selection-card flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium text-slate-700">
+              <input type="radio" name={`${form.code}-answer-${index}`} value={answer} class="h-4 w-4 accent-tup" />
+              <span>{answer}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    ))}
+    <div class="rounded-2xl bg-white p-5 shadow-tarjeta">
+      <label for={`${form.code}-comment`} class="font-semibold text-slate-800">21. Comentario adicional <span class="font-normal text-slate-500">(opcional)</span></label>
+      <textarea id={`${form.code}-comment`} maxlength="2000" rows="5" class="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 focus:border-tup focus:outline-none focus:ring-2 focus:ring-tup-100" aria-describedby={`${form.code}-comment-help`}></textarea>
+      <p id={`${form.code}-comment-help`} class="mt-2 text-xs text-slate-500">{form.comment.guidance} Máximo 2000 caracteres. Evita incluir datos personales.</p>
+    </div>
+  </div>
+</section>
