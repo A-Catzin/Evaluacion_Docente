@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   VersionedInstrumentSubmissionSchema,
   EstudianteEvaluacionSchema,
-  Cd07EvaluacionSchema,
+  InstrumentoEspecializadoSchema,
 } from "./apiSchemas";
 import { SaveDraftSchema } from "../../pages/api/instrumentos/draft";
 
@@ -32,41 +32,40 @@ describe("EstudianteEvaluacionSchema", () => {
   });
 });
 
-describe("detached CD-07 payload", () => {
+describe("specialized instrument payload", () => {
   const valid = {
     grupo_id: 1,
     instrument_code: "SED-360-INST-EST-CD-07-V1.1",
-    assignment_revision: "revision-1",
     respuestas: Array.from({ length: 20 }, () => 5),
   };
 
-  it("requires the exact instrument identity and a bounded nonblank opaque revision", () => {
-    expect(Cd07EvaluacionSchema.safeParse(valid).success).toBe(true);
+  it("requires the exact instrument identity", () => {
+    expect(InstrumentoEspecializadoSchema.safeParse(valid).success).toBe(true);
+    for (const code of ["PP-04", "SIM-05", "CC-06"]) {
+      expect(InstrumentoEspecializadoSchema.safeParse({ ...valid, instrument_code: `SED-360-INST-EST-${code}-V1.1` }).success).toBe(true);
+    }
     for (const payload of [
       { ...valid, instrument_code: undefined },
       { ...valid, instrument_code: "SED-360-INST-EST-CD-07-V1.0" },
+      { ...valid, instrument_code: "SED-360-INST-EST-EJE-02-V1.1" },
       { ...valid, instrument_code: "SED-360-INST-EST-CD-07-V1.1", instrument_version: "V1.1" },
-      { ...valid, assignment_revision: undefined },
-      { ...valid, assignment_revision: "  " },
-      { ...valid, assignment_revision: "x".repeat(121) },
-    ]) expect(Cd07EvaluacionSchema.safeParse(payload).success).toBe(false);
+      { ...valid, assignment_revision: "revision-1" },
+    ]) expect(InstrumentoEspecializadoSchema.safeParse(payload).success).toBe(false);
   });
 
-  it("accepts an opaque revision at its boundary without granting any extra identity field", () => {
-    expect(Cd07EvaluacionSchema.safeParse({ ...valid, assignment_revision: "x".repeat(120) }).success).toBe(true);
-    expect(Cd07EvaluacionSchema.safeParse({ ...valid, assignment_revision: "rev:opaque / 1" }).success).toBe(true);
-    expect(Cd07EvaluacionSchema.safeParse({ ...valid, cuatrimestre_id: 11 }).success).toBe(false);
-    expect(Cd07EvaluacionSchema.safeParse({ ...valid, respuestas: valid.respuestas.slice(1) }).success).toBe(false);
-    expect(Cd07EvaluacionSchema.safeParse({ ...valid, respuestas: ["N/A", ...valid.respuestas.slice(1)] }).success).toBe(false);
-    expect(Cd07EvaluacionSchema.safeParse({ ...valid, comentario: "x".repeat(2001) }).success).toBe(false);
+  it("rejects extra identity fields and incomplete answers", () => {
+    expect(InstrumentoEspecializadoSchema.safeParse({ ...valid, cuatrimestre_id: 11 }).success).toBe(false);
+    expect(InstrumentoEspecializadoSchema.safeParse({ ...valid, respuestas: valid.respuestas.slice(1) }).success).toBe(false);
+    expect(InstrumentoEspecializadoSchema.safeParse({ ...valid, respuestas: ["N/A", ...valid.respuestas.slice(1)] }).success).toBe(false);
+    expect(InstrumentoEspecializadoSchema.safeParse({ ...valid, comentario: "x".repeat(2001) }).success).toBe(false);
     expect(EstudianteEvaluacionSchema.safeParse({ grupo_id: 1, respuestas: valid.respuestas.slice(1) }).success).toBe(true);
   });
 
       it("accepts twenty numeric answers and an optional comment", () => {
-    expect(Cd07EvaluacionSchema.safeParse(valid).success).toBe(true);
-    expect(Cd07EvaluacionSchema.safeParse({ ...valid, comentario: null }).success).toBe(true);
-    expect(Cd07EvaluacionSchema.safeParse({ ...valid, comentario: "x".repeat(2000) }).success).toBe(true);
-    expect(Cd07EvaluacionSchema.safeParse({ ...valid, comentario: "x".repeat(2001) }).success).toBe(false);
+    expect(InstrumentoEspecializadoSchema.safeParse(valid).success).toBe(true);
+    expect(InstrumentoEspecializadoSchema.safeParse({ ...valid, comentario: null }).success).toBe(true);
+    expect(InstrumentoEspecializadoSchema.safeParse({ ...valid, comentario: "x".repeat(2000) }).success).toBe(true);
+    expect(InstrumentoEspecializadoSchema.safeParse({ ...valid, comentario: "x".repeat(2001) }).success).toBe(false);
   });
 
   it("rejects missing, surplus, noninteger, out-of-range and N/A answers", () => {
@@ -77,7 +76,7 @@ describe("detached CD-07 payload", () => {
       ...["N/A", "na", "", "5", null, { value: 5, na_reason: "reason" }]
         .map((answer) => [answer, ...valid.respuestas.slice(1)]),
     ]) {
-      expect(Cd07EvaluacionSchema.safeParse({ ...valid, respuestas: answers }).success).toBe(false);
+      expect(InstrumentoEspecializadoSchema.safeParse({ ...valid, respuestas: answers }).success).toBe(false);
     }
   });
 
@@ -86,14 +85,14 @@ describe("detached CD-07 payload", () => {
       { ...valid, na_reason: "reason" },
       { ...valid, student_id: 1 },
       { ...valid, comentario: 42 },
-    ]) expect(Cd07EvaluacionSchema.safeParse(payload).success).toBe(false);
+    ]) expect(InstrumentoEspecializadoSchema.safeParse(payload).success).toBe(false);
   });
 
   it("keeps the general 19-answer validator active independently", () => {
     const general = { grupo_id: 1, respuestas: valid.respuestas.slice(0, 19), comentario: null };
     expect(EstudianteEvaluacionSchema.safeParse(general).success).toBe(true);
     expect(EstudianteEvaluacionSchema.safeParse(valid).success).toBe(false);
-    expect(Cd07EvaluacionSchema.safeParse(general).success).toBe(false);
+    expect(InstrumentoEspecializadoSchema.safeParse(general).success).toBe(false);
   });
 });
 

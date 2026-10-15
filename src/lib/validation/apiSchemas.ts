@@ -22,11 +22,15 @@ export const EstudianteEvaluacionSchema = z.object({
   comentario: z.string().max(MAX_COMENTARIO_LONGITUD).optional().nullable(),
 });
 
-// Detached CD-07 contract: not connected to the student submission route.
-export const Cd07EvaluacionSchema = z.object({
+// Specialized instruments (CD-07, PP-04, SIM-05, CC-06): 20 answers plus optional comment.
+export const InstrumentoEspecializadoSchema = z.object({
   grupo_id: z.number().int().positive(),
-  instrument_code: z.literal("SED-360-INST-EST-CD-07-V1.1"),
-  assignment_revision: z.string().max(120).refine((value) => value.trim().length > 0),
+  instrument_code: z.enum([
+    "SED-360-INST-EST-CD-07-V1.1",
+    "SED-360-INST-EST-PP-04-V1.1",
+    "SED-360-INST-EST-SIM-05-V1.1",
+    "SED-360-INST-EST-CC-06-V1.1",
+  ]),
   respuestas: z.array(z.number().int().min(1).max(5)).length(20),
   comentario: z.string().max(2000).nullable().optional(),
 }).strict();

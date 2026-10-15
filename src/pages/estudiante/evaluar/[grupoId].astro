@@ -1,7 +1,8 @@
 ---
 import LayoutEstudiante from '../../../layouts/LayoutEstudiante.astro';
 import { crearClienteConSesion } from '../../../lib/supabaseClient';
-import { getCurrentStudentEvaluations, type StudentEvaluation } from '../../../lib/studentEvaluations';
+import { getCurrentStudentEvaluations, SPECIALIZED_INSTRUMENT_CODES, type StudentEvaluation } from '../../../lib/studentEvaluations';
+import { studentEvaluationDraftForms } from '../../../lib/studentEvaluationDraftForms';
 
 const groupId = Number(Astro.params.grupoId);
 if (!Number.isSafeInteger(groupId) || groupId <= 0) return Astro.redirect('/estudiante/dashboard');
@@ -24,7 +25,7 @@ try {
 
 if (!evaluation) return Astro.redirect('/estudiante/dashboard');
 
-const prompts = [
+const generalPrompts = [
   { text: 'En términos generales, ¿cómo califica la calidad de la docencia recibida?', range: 5, labels: ['1 Muy deficiente', '2', '3', '4', '5 Excelente'] },
   { text: 'El docente presentó y siguió el plan de estudios de la asignatura.', range: 5 },
   { text: 'El docente mantuvo un trato respetuoso con el grupo.', range: 5 },
@@ -45,6 +46,14 @@ const prompts = [
   { text: 'El docente explicó con claridad los criterios de evaluación.', range: 5 },
   { text: 'El docente fue receptivo a dudas y comentarios del grupo.', range: 5 },
 ];
+
+const instrumentCode = evaluation.instrument === 'general-19' ? null : SPECIALIZED_INSTRUMENT_CODES[evaluation.instrument];
+const specializedForm = instrumentCode ? studentEvaluationDraftForms.find((form) => form.code === instrumentCode) : undefined;
+if (instrumentCode && !specializedForm) return Astro.redirect('/estudiante/dashboard');
+const prompts: { text: string; range: number; labels?: string[] }[] = specializedForm
+  ? specializedForm.questions.map((text) => ({ text, range: 5 }))
+  : generalPrompts;
+const answerCount = prompts.length;
 ---
 
 <LayoutEstudiante titulo="Realizar evaluación docente">
@@ -56,6 +65,7 @@ const prompts = [
       <h1 class="mt-2 text-2xl font-bold text-slate-800">{evaluation.subjectName}</h1>
       <p class="mt-1 text-slate-600">Docente: <span class="font-semibold">{evaluation.teacherName}</span></p>
       {(evaluation.plan || evaluation.modality) && <p class="mt-1 text-sm text-slate-500">{[evaluation.plan, evaluation.modality].filter(Boolean).join(' · ')}</p>}
+      {specializedForm && <p class="mt-3 text-sm font-semibold text-tup">{specializedForm.title}</p>}
     </div>
 
     {evaluation.completed ? (
@@ -67,6 +77,7 @@ const prompts = [
       <>
         <div class="mt-6 rounded-2xl border border-tup-100 bg-tup-50 p-5 text-sm text-tup-800">
           <p class="font-semibold">Indicaciones de respuesta</p>
+          {specializedForm && <p class="mt-1">{specializedForm.premise}</p>}
           <p class="mt-1">Responde todos los reactivos en una escala de 1 a 5, donde 1 es la valoración más baja y 5 la más alta.</p>
         </div>
 
@@ -89,6 +100,7 @@ const prompts = [
           <div class="rounded-2xl bg-white p-5 shadow-tarjeta">
             <label for="comentario" class="font-semibold text-slate-800">Comentario adicional <span class="font-normal text-slate-500">(opcional)</span></label>
             <textarea id="comentario" name="comentario" maxlength="2000" rows="5" class="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 focus:border-tup focus:outline-none focus:ring-2 focus:ring-tup-100" aria-describedby="comment-help"></textarea>
+            {specializedForm && <p class="mt-2 text-xs text-slate-500">{specializedForm.comment.guidance}</p>}
             <p id="comment-help" class="mt-2 text-xs text-slate-500">Máximo 2000 caracteres. Evita incluir datos personales.</p>
           </div>
 
@@ -106,7 +118,7 @@ const prompts = [
   </section>
 </LayoutEstudiante>
 
-{!evaluation.completed && <script is:inline define:vars={{ groupId }}>
+{!evaluation.completed && <script is:inline define:vars={{ groupId, answerCount, instrumentCode }}>
   var form = document.getElementById('evaluation-form');
   var errorMessage = document.getElementById('form-error');
   var submitButton = document.getElementById('submit-button');
@@ -123,7 +135,7 @@ const prompts = [
     errorMessage.classList.add('hidden');
 
     var answers = [];
-    for (var index = 0; index < 19; index += 1) {
+    for (var index = 0; index < answerCount; index += 1) {
       var selected = document.querySelector('input[name="answer-' + index + '"]:checked');
       if (!selected) {
         showError('Responde todos los reactivos antes de enviar la evaluación.');
@@ -141,11 +153,11 @@ const prompts = [
       var response = await fetch('/api/estudiante/evaluaciones', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(Object.assign({
           grupo_id: groupId,
           respuestas: answers,
           comentario: document.getElementById('comentario').value.trim() || null,
-        }),
+        }, instrumentCode ? { instrument_code: instrumentCode } : {})),
       });
       var data = await response.json();
 

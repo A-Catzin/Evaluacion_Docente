@@ -1,5 +1,7 @@
 # Route approved student evaluations to CD-07
 
+> **REEMPLAZADO (2026-10-15).** Este cambio no se continúa y sus migraciones 104–109 se eliminaron sin aplicarse. Ver [`SUPERSEDED.md`](SUPERSEDED.md). La solución vigente está en las migraciones 110–112.
+
 ## Intent and outcome
 
 The production rollout serves CD-07 instead of the general student form for exactly the 20 approved real cultural/sport class assignments. All other assignments retain the general form. Separately, an isolated, explicit opt-in production fixture path may be authorized for a newly created TEST-CD test course and the separately verified test student and teacher. TEST-CD is never part of the 20-class rollout and its submissions never contribute to institutional results. This closes the gap between the detached CD-07 draft and the live 19-answer route without changing historical general-form results.

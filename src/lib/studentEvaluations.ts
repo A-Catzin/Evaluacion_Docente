@@ -1,6 +1,35 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatPersonName } from "./personName";
 
+// Specialized 20-item forms, keyed as stored in grupos.instrumento_encuesta.
+export const SPECIALIZED_INSTRUMENT_CODES = {
+  "cd07-v1": "SED-360-INST-EST-CD-07-V1.1",
+  "pp04-v1": "SED-360-INST-EST-PP-04-V1.1",
+  "sim05-v1": "SED-360-INST-EST-SIM-05-V1.1",
+  "cc06-v1": "SED-360-INST-EST-CC-06-V1.1",
+} as const;
+
+export type SpecializedInstrument = keyof typeof SPECIALIZED_INSTRUMENT_CODES;
+export type StudentEvaluationInstrument = "general-19" | SpecializedInstrument;
+
+export function isSpecializedInstrument(
+  value: unknown,
+): value is SpecializedInstrument {
+  return (
+    typeof value === "string" &&
+    Object.prototype.hasOwnProperty.call(SPECIALIZED_INSTRUMENT_CODES, value)
+  );
+}
+
+export function specializedInstrumentFromCode(
+  code: string,
+): SpecializedInstrument | null {
+  const entry = Object.entries(SPECIALIZED_INSTRUMENT_CODES).find(
+    ([, value]) => value === code,
+  );
+  return entry ? (entry[0] as SpecializedInstrument) : null;
+}
+
 export type StudentEvaluation = {
   groupId: number;
   teacherName: string;
@@ -9,6 +38,7 @@ export type StudentEvaluation = {
   groupKey: string;
   plan: string | null;
   modality: string | null;
+  instrument: StudentEvaluationInstrument;
   completed: boolean;
 };
 
@@ -39,6 +69,9 @@ function isEvaluation(value: unknown): value is StudentEvaluation {
     typeof value.groupKey === "string" &&
     (typeof value.plan === "string" || value.plan === null) &&
     (typeof value.modality === "string" || value.modality === null) &&
+    // Unknown instruments are dropped so no group falls back to the wrong form.
+    (value.instrument === "general-19" ||
+      isSpecializedInstrument(value.instrument)) &&
     typeof value.completed === "boolean"
   );
 }

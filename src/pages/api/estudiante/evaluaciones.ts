@@ -9,7 +9,11 @@ import {
   MAX_EVALUACION_BODY_BYTES,
   verificarLimiteEnviosEstudiante,
 } from "../../../lib/rateLimit";
-import { EstudianteEvaluacionSchema } from "../../../lib/validation/apiSchemas";
+import { specializedInstrumentFromCode } from "../../../lib/studentEvaluations";
+import {
+  EstudianteEvaluacionSchema,
+  InstrumentoEspecializadoSchema,
+} from "../../../lib/validation/apiSchemas";
 import { formatZodFieldErrors } from "../../../lib/validation/errors";
 import {
   logRecalcError,
@@ -65,11 +69,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     );
   }
 
-  const parseResult = EstudianteEvaluacionSchema.safeParse(body);
+  // The instrument code selects the specialized contract; the RPC re-checks it against the group.
+  const isSpecialized = isRecord(body) && body.instrument_code !== undefined;
+  const parseResult = isSpecialized
+    ? InstrumentoEspecializadoSchema.safeParse(body)
+    : EstudianteEvaluacionSchema.safeParse(body);
   if (!parseResult.success) {
     return json(
       {
-        error: "Completa las 19 respuestas con valores válidos",
+        error: `Completa las ${isSpecialized ? 20 : 19} respuestas con valores válidos`,
         code: "invalid_answers",
         detalles: formatZodFieldErrors(parseResult.error),
       },
@@ -111,11 +119,26 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       }
     }
 
-    const { data, error } = await client.rpc("enviar_encuesta_estudiante", {
-      p_grupo_id: grupo_id,
-      p_respuestas: respuestas,
-      p_comentario: comment,
-    });
+    const instrument = isSpecialized
+      ? specializedInstrumentFromCode(
+          String((body as Record<string, unknown>).instrument_code),
+        )
+      : null;
+    if (isSpecialized && !instrument) {
+      return json({ error: "Formulario no válido", code: "invalid_answers" }, 400);
+    }
+    const { data, error } = instrument
+      ? await client.rpc("enviar_encuesta_estudiante_instrumento", {
+          p_grupo_id: grupo_id,
+          p_instrumento: instrument,
+          p_respuestas: respuestas,
+          p_comentario: comment,
+        })
+      : await client.rpc("enviar_encuesta_estudiante", {
+          p_grupo_id: grupo_id,
+          p_respuestas: respuestas,
+          p_comentario: comment,
+        });
     if (error) {
       if (error.code === "42501")
         return json(
@@ -175,6 +198,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       );
     if (status === "not_enrolled")
       return json({ status, error: "No puedes evaluar este grupo" }, 403);
+    if (status === "wrong_instrument")
+      return json(
+        {
+          status,
+          error: "El formulario no corresponde a este grupo. Recarga la página.",
+        },
+        409,
+      );
     if (status === "invalid_answers" || status === "invalid_comment") {
       return json(
         { status, error: "La información enviada no es válida" },
