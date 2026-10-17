@@ -1,0 +1,70 @@
+---
+// Print-ready report. The browser's print dialog saves it as PDF ("Guardar como PDF").
+import TeacherReportBody from '../../../../components/admin/TeacherReportBody.astro';
+import { requireRole } from '../../../../lib/auth';
+import { dbAdmin } from '../../../../lib/db';
+import { loadTeacherReport } from '../../../../services/teacherReport';
+
+const auth = await requireRole(Astro.cookies, ['superadmin']);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+const teacherId = Number.parseInt(Astro.params.id || '', 10);
+const cycleId = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10);
+if (!Number.isSafeInteger(teacherId) || teacherId < 1 || !Number.isSafeInteger(cycleId) || cycleId < 1) {
+  return new Response('Parámetros inválidos', { status: 400 });
+}
+const report = await loadTeacherReport(dbAdmin(), auth.client, teacherId, cycleId);
+if (!report) return new Response('Docente o ciclo no encontrado', { status: 404 });
+const generated = new Intl.DateTimeFormat('es-MX', { dateStyle: 'long' }).format(new Date());
+const fileTitle = `Reporte docente - ${report.teacher.name} - ${report.cycle.clave}`;
+---
+
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/png" href="/logo-tup.png" />
+    <title>{fileTitle}</title>
+  </head>
+  <body class="bg-slate-100 font-sans text-slate-800 antialiased">
+    <div class="no-print sticky top-0 z-10 flex items-center justify-between gap-4 bg-tup px-6 py-3 text-white">
+      <p class="text-sm">En el diálogo de impresión elige <b>“Guardar como PDF”</b> como destino.</p>
+      <button type="button" id="print" class="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-tup">Imprimir / Guardar PDF</button>
+    </div>
+    <main class="sheet mx-auto my-6 max-w-[8.5in] bg-white p-10 shadow">
+      <header class="flex items-center justify-between border-b-4 border-tup pb-3">
+        <img src="/logo-tup.png" alt="Tecnológico Universitario Playacar" class="h-14" />
+        <div class="text-right">
+          <h1 class="text-2xl font-bold text-tup">Reporte de evaluación docente</h1>
+          <p class="text-xs text-slate-500">Ciclo {report.cycle.clave} · Generado el {generated}</p>
+        </div>
+      </header>
+      <div class="my-4 grid grid-cols-4 gap-3 text-sm">
+        <div class="col-span-2 rounded-lg bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Docente</p><p class="font-bold">{report.teacher.name}</p><p class="text-xs text-slate-500">{report.teacher.email}</p></div>
+        <div class="rounded-lg bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Modalidad</p><p class="font-bold">{report.final.modality || '—'}</p></div>
+        <div class="rounded-lg bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Ciclo</p><p class="font-bold">{report.cycle.clave}</p></div>
+      </div>
+      <TeacherReportBody report={report} />
+    </main>
+  </body>
+</html>
+
+<style is:global>
+  @page { size: letter; margin: 14mm 12mm 16mm; }
+  @media print {
+    body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none !important; }
+    .sheet { margin: 0 !important; padding: 0 !important; box-shadow: none !important; max-width: none !important; }
+    .report-section { break-before: page; }
+    .avoid-break { break-inside: avoid; }
+    .avoid-after { break-after: avoid; }
+  }
+</style>
+
+<script>
+  const print = () => window.print();
+  document.getElementById('print')?.addEventListener('click', print);
+  // Open the print dialog once the logo has loaded so it appears in the PDF.
+  window.addEventListener('load', () => setTimeout(print, 300));
+</script>

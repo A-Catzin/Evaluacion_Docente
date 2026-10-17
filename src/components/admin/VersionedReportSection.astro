@@ -1,0 +1,46 @@
+---
+import type { VersionedReport } from '../../lib/teacherReport';
+
+export interface Props {
+  n: number;
+  title: string;
+  scale: string;
+  empty: string;
+  rows: VersionedReport[];
+  score: number | null;
+}
+const { n, title, scale, empty, rows, score } = Astro.props;
+const fmt = (value: number | null | undefined, digits = 1) =>
+  value === null || value === undefined ? '—' : value.toLocaleString('es-MX', { maximumFractionDigits: digits });
+const fmtDate = (value: string | null | undefined) =>
+  value ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' }).format(new Date(value)) : '—';
+const tone = (value: number | null) =>
+  value === null ? 'bg-slate-100 text-slate-500' : value >= 80 ? 'bg-emerald-100 text-emerald-800' : value >= 60 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800';
+---
+
+<section class="report-section">
+  <header class="flex items-start justify-between gap-4 border-b border-slate-200 pb-2">
+    <div><p class="text-xs uppercase tracking-wide text-slate-400">Instrumento {n} de 5</p><h3 class="text-base font-bold text-tup">{title}</h3><p class="text-xs text-slate-500">{scale}</p></div>
+    <span class={`rounded-xl px-3 py-1 text-lg font-bold ${tone(score)}`}>{fmt(score)}</span>
+  </header>
+  {rows.length === 0 ? <p class="mt-3 rounded-xl bg-slate-50 p-4 italic text-slate-500">{empty}</p> : rows.map((sub) => (
+    <div class="mt-3">
+      <p class="font-semibold text-slate-800">{sub.title}{sub.version ? ` · ${sub.version}` : ''}</p>
+      <p class="text-xs text-slate-500">{[sub.subject, sub.group].filter(Boolean).join(' · ') || 'Sin grupo'} · {fmtDate(sub.date)} · Evaluó: {sub.evaluator || '—'} · Promedio {fmt(sub.raw, 2)} · Puntaje {fmt(sub.score)}{sub.validity && sub.validity !== 'valid' ? ` · ${sub.validity}` : ''}</p>
+      {sub.sections.map((section) => (
+        <div class="mt-2">
+          <p class="avoid-after font-semibold text-tup">{section.title}</p>
+          <table class="w-full">
+            <tbody class="divide-y divide-slate-100">
+              {section.items.map((item) => (
+                <tr class="avoid-break"><td class="w-14 py-1 text-xs text-slate-400">{item.code}</td><td class="py-1">{item.label}</td><td class="w-40 py-1 text-right font-semibold">{item.valueLabel}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          {section.evidence && <p class="avoid-break mt-1 text-xs text-slate-600"><span class="font-semibold">Evidencia:</span> {section.evidence}</p>}
+        </div>
+      ))}
+      {sub.notes.map((note) => <div class="avoid-break mt-2 border-l-4 border-tup bg-slate-50 px-3 py-2"><p class="text-xs uppercase text-slate-500">{note.label}</p><p>{note.text}</p></div>)}
+    </div>
+  ))}
+</section>

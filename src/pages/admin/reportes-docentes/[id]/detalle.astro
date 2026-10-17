@@ -1,0 +1,21 @@
+---
+// HTML fragment injected into the expanded card on /admin/reportes-docentes.
+import TeacherReportBody from '../../../../components/admin/TeacherReportBody.astro';
+import { requireRole } from '../../../../lib/auth';
+import { dbAdmin } from '../../../../lib/db';
+import { loadTeacherReport } from '../../../../services/teacherReport';
+
+export const partial = true;
+
+const auth = await requireRole(Astro.cookies, ['superadmin']);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+const teacherId = Number.parseInt(Astro.params.id || '', 10);
+const cycleId = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10);
+if (!Number.isSafeInteger(teacherId) || teacherId < 1 || !Number.isSafeInteger(cycleId) || cycleId < 1) {
+  return new Response('Parámetros inválidos', { status: 400 });
+}
+const report = await loadTeacherReport(dbAdmin(), auth.client, teacherId, cycleId);
+if (!report) return new Response('Docente o ciclo no encontrado', { status: 404 });
+---
+
+<TeacherReportBody report={report} />

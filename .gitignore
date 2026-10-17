@@ -86,6 +86,11 @@ supabase/migrations/055_fix_cycle_teacher_candidate_eligibility.sql
 !supabase/migrations/110_student_survey_group_opt_out.sql
 !supabase/migrations/111_cd07_student_survey.sql
 !supabase/migrations/112_specialized_student_surveys.sql
+!supabase/migrations/113_student_comment_validation.sql
+!supabase/migrations/114_teacher_student_survey_summary.sql
+!supabase/migrations/115_admin_student_survey_followup.sql
+!supabase/migrations/116_admin_student_followup_stable_order.sql
+!supabase/migrations/117_exclude_inactive_students_from_survey_progress.sql
 
 src/supabase/
 .atl/

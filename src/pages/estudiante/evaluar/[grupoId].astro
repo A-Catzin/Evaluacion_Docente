@@ -3,6 +3,7 @@ import LayoutEstudiante from '../../../layouts/LayoutEstudiante.astro';
 import { crearClienteConSesion } from '../../../lib/supabaseClient';
 import { getCurrentStudentEvaluations, SPECIALIZED_INSTRUMENT_CODES, type StudentEvaluation } from '../../../lib/studentEvaluations';
 import { studentEvaluationDraftForms } from '../../../lib/studentEvaluationDraftForms';
+import { GENERAL_STUDENT_PROMPTS as generalPrompts } from '../../../lib/studentSurveyQuestions';
 
 const groupId = Number(Astro.params.grupoId);
 if (!Number.isSafeInteger(groupId) || groupId <= 0) return Astro.redirect('/estudiante/dashboard');
@@ -25,34 +26,13 @@ try {
 
 if (!evaluation) return Astro.redirect('/estudiante/dashboard');
 
-const generalPrompts = [
-  { text: 'En términos generales, ¿cómo califica la calidad de la docencia recibida?', range: 5, labels: ['1 Muy deficiente', '2', '3', '4', '5 Excelente'] },
-  { text: 'El docente presentó y siguió el plan de estudios de la asignatura.', range: 5 },
-  { text: 'El docente mantuvo un trato respetuoso con el grupo.', range: 5 },
-  { text: 'El docente cumplió con la asistencia programada.', range: 5 },
-  { text: 'El docente inició y concluyó las sesiones con puntualidad.', range: 5 },
-  { text: 'El docente promovió la participación de las y los estudiantes.', range: 5 },
-  { text: 'El docente demostró dominio de los contenidos de la asignatura.', range: 5 },
-  { text: 'El docente utilizó adecuadamente la plataforma institucional cuando fue necesaria.', range: 5 },
-  { text: 'El docente fomentó el pensamiento crítico.', range: 5 },
-  { text: 'El docente planteó retos intelectuales acordes con la asignatura.', range: 5 },
-  { text: 'El docente explicó con claridad los objetivos y actividades del curso.', range: 5 },
-  { text: 'Las lecturas y actividades favorecieron mi aprendizaje.', range: 5 },
-  { text: 'El docente promovió el respeto a las reglas acordadas.', range: 5 },
-  { text: 'El docente despertó interés por la asignatura.', range: 5 },
-  { text: 'El docente utilizó apoyos didácticos pertinentes.', range: 5 },
-  { text: 'El docente mostró actitudes y valores congruentes con su función.', range: 5 },
-  { text: 'El docente proporcionó retroalimentación útil y oportuna.', range: 5 },
-  { text: 'El docente explicó con claridad los criterios de evaluación.', range: 5 },
-  { text: 'El docente fue receptivo a dudas y comentarios del grupo.', range: 5 },
-];
 
 const instrumentCode = evaluation.instrument === 'general-19' ? null : SPECIALIZED_INSTRUMENT_CODES[evaluation.instrument];
 const specializedForm = instrumentCode ? studentEvaluationDraftForms.find((form) => form.code === instrumentCode) : undefined;
 if (instrumentCode && !specializedForm) return Astro.redirect('/estudiante/dashboard');
 const prompts: { text: string; range: number; labels?: string[] }[] = specializedForm
   ? specializedForm.questions.map((text) => ({ text, range: 5 }))
-  : generalPrompts;
+  : [...generalPrompts];
 const answerCount = prompts.length;
 ---
 

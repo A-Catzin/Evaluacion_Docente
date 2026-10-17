@@ -2,13 +2,13 @@ import type { APIRoute } from 'astro';
 import { AuthError, requireRole } from '../../../../lib/auth';
 import { dbAdmin } from '../../../../lib/db';
 import { loadCatalog } from '../../../../lib/adminObservationTracking';
-import { commentDTO, literalCommentLike, MAX_FILTER_IDS, PAGE_SIZE, parseCommentRequest } from '../../../../lib/adminStudentCommentTracking';
+import { commentDTO, literalCommentLike, MAX_FILTER_IDS, PAGE_SIZE, parseCommentRequest, parseValidationRequest } from '../../../../lib/adminStudentCommentTracking';
 import { formatPersonName } from '../../../../lib/personName';
 
 const MAX_BODY_BYTES = 1024;
 type Teacher = { id: number; nombre: string | null; apellidos: string | null };
 type Group = { id: number; clave: string | null };
-type Comment = { docente_id: number; grupo_id: number; comentario_abierto: string | null };
+type Comment = { id: number; docente_id: number; grupo_id: number; comentario_abierto: string | null; comentario_validado: boolean | null };
 
 function json(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: {
@@ -85,8 +85,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (teacherIds?.length === 0 || groupIds?.length === 0) return json({ comentarios: [], total: 0, page: filters.page });
 
     let query = client.from('encuesta_estudiantil_respuestas')
-      .select('docente_id,grupo_id,comentario_abierto', { count: 'exact' })
+      .select('id,docente_id,grupo_id,comentario_abierto,comentario_validado', { count: 'exact' })
       .eq('cuatrimestre_id', filters.cycleId).not('comentario_abierto', 'is', null);
+    if (filters.state !== 'todos') query = query.eq('comentario_validado', filters.state === 'validados');
     if (filters.keyword) query = query.ilike('comentario_abierto', literalCommentLike(filters.keyword));
     if (teacherIds) query = query.in('docente_id', teacherIds);
     if (groupIds) query = query.in('grupo_id', groupIds);
@@ -111,5 +112,54 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ comentarios, total: result.count, page: filters.page });
   } catch {
     return json({ error: 'No se pudieron cargar los comentarios completos' }, 503);
+  }
+};
+
+// Saves one page of decisions: checked comments become visible to their teacher,
+// unchecked ones are withdrawn.
+export const PATCH: APIRoute = async ({ cookies, request }) => {
+  let userId: string;
+  try {
+    userId = (await requireRole(cookies, ['superadmin'])).user.id;
+  } catch (error) {
+    if (error instanceof AuthError) {
+      const body = await error.response.json().catch(() => ({ error: 'No autorizado' }));
+      return json(body, error.response.status);
+    }
+    return json({ error: 'Error interno' }, 500);
+  }
+
+  let body: unknown;
+  try { body = await boundedBody(request); }
+  catch { return json({ error: 'Solicitud inválida' }, 400); }
+
+  try {
+    const client = dbAdmin();
+    const cycles = await loadCatalog<{ id: number }>((start, end) => client.from('cuatrimestres').select('id').order('id').range(start, end));
+    const decision = parseValidationRequest(body, cycles.map(c => c.id));
+    if (!decision) return json({ error: 'Solicitud inválida' }, 400);
+
+    const now = new Date().toISOString();
+    let validated = 0;
+    let withdrawn = 0;
+    if (decision.validate.length) {
+      const result = await client.from('encuesta_estudiantil_respuestas')
+        .update({ comentario_validado: true, comentario_validado_at: now, comentario_validado_por: userId })
+        .eq('cuatrimestre_id', decision.cycleId).in('id', decision.validate).not('comentario_abierto', 'is', null)
+        .select('id');
+      if (result.error) throw new Error('validate');
+      validated = result.data.length;
+    }
+    if (decision.unvalidate.length) {
+      const result = await client.from('encuesta_estudiantil_respuestas')
+        .update({ comentario_validado: false, comentario_validado_at: now, comentario_validado_por: userId })
+        .eq('cuatrimestre_id', decision.cycleId).in('id', decision.unvalidate)
+        .select('id');
+      if (result.error) throw new Error('unvalidate');
+      withdrawn = result.data.length;
+    }
+    return json({ validados: validated, retirados: withdrawn });
+  } catch {
+    return json({ error: 'No se pudo guardar la validación' }, 503);
   }
 };

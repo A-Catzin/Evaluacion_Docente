@@ -4,3 +4,5 @@ docs-privados/
 .git/
 node_modules/
 dist/
+# Local code-index cache (contains a Unix socket the CLI cannot read).
+.codegraph/

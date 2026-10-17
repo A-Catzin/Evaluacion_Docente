@@ -1,0 +1,176 @@
+---
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../../lib/auth';
+import { formatPersonName } from '../../../lib/personName';
+import {
+  fetchFollowupRows, filterFollowupRows, followupPlans, FOLLOWUP_MAX_ROWS, FOLLOWUP_PAGE_SIZE, FOLLOWUP_STATES, parseFollowupFilters,
+  summarizeFollowup, type FollowupRow,
+} from '../../../lib/studentSurveyFollowup';
+
+const auth = await requireRole(Astro.cookies, ['superadmin']);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+const { data: cycles, error: cyclesError } = await auth.client
+  .from('cuatrimestres')
+  .select('id,clave,activo')
+  .order('id', { ascending: false });
+if (cyclesError) throw cyclesError;
+const cycleList = cycles || [];
+const requestedCycle = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10);
+const cookieCycle = Number.parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '', 10);
+const cuatrimestreId = (cycleList.find((c) => c.id === requestedCycle) || cycleList.find((c) => c.id === cookieCycle)
+  || cycleList.find((c) => c.activo) || cycleList[0])?.id || 0;
+if (Astro.url.searchParams.has('cuatrimestre') && cuatrimestreId) {
+  Astro.cookies.set('cuatrimestre_sel', String(cuatrimestreId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+}
+
+const filters = parseFollowupFilters(Astro.url.searchParams);
+let allRows: FollowupRow[] = [];
+let loadError = false;
+let truncated = false;
+try {
+  if (cuatrimestreId) ({ rows: allRows, truncated } = await fetchFollowupRows(auth.client, cuatrimestreId));
+} catch (error) {
+  loadError = true;
+  console.error('[admin student follow-up] load failed', { message: error instanceof Error ? error.message : 'unknown' });
+}
+const summary = summarizeFollowup(allRows);
+const plans = followupPlans(allRows);
+const filtered = filterFollowupRows(allRows, filters);
+const totalPages = Math.max(1, Math.ceil(filtered.length / FOLLOWUP_PAGE_SIZE));
+const page = Math.min(filters.page, totalPages);
+const pageRows = filtered.slice((page - 1) * FOLLOWUP_PAGE_SIZE, page * FOLLOWUP_PAGE_SIZE);
+
+const query = (overrides: Record<string, string | number>) => {
+  const params = new URLSearchParams({ cuatrimestre: String(cuatrimestreId), q: filters.q, plan: filters.plan, estado: filters.state, pagina: String(page) });
+  for (const [key, value] of Object.entries(overrides)) params.set(key, String(value));
+  for (const key of ['q', 'plan']) if (!params.get(key)) params.delete(key);
+  return params.toString();
+};
+const pct = (value: number) => `${value.toLocaleString('es-MX', { maximumFractionDigits: 1 })}%`;
+const fmtDate = (value: string | null) => value
+  ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' }).format(new Date(value))
+  : null;
+---
+
+<LayoutAdmin titulo="Estudiantes pendientes — Seguimiento de instrumentos">
+  <section class="animate-flotar-entrada mx-auto max-w-7xl space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold text-tup">Estudiantes con evaluaciones pendientes</h1>
+        <p class="mt-1 text-sm text-slate-500">Seguimiento de quién no ha respondido sus evaluaciones a docentes. Solo muestra el estado de entrega, nunca respuestas ni comentarios.</p>
+      </div>
+      <form method="GET">
+        <label class="block text-xs font-semibold text-slate-500 mb-1" for="cuatrimestre">Ciclo</label>
+        <select id="cuatrimestre" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cycleList.map((cycle) => <option value={cycle.id} selected={cycle.id === cuatrimestreId}>{cycle.clave}</option>)}
+        </select>
+      </form>
+    </div>
+
+    {loadError ? (
+      <div role="alert" class="rounded-2xl bg-red-50 p-6 text-sm text-red-800">No se pudo cargar el seguimiento. Intenta nuevamente.</div>
+    ) : (
+      <>
+        {truncated && <div role="alert" class="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">Se muestran solo los primeros {FOLLOWUP_MAX_ROWS.toLocaleString('es-MX')} estudiantes. Usa los filtros o pide ampliar el límite.</div>}
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div class="rounded-2xl bg-white p-5 shadow-tarjeta">
+            <p class="text-xs font-semibold uppercase text-slate-500">Avance general</p>
+            <p class="mt-1 text-2xl font-bold text-tup">{pct(summary.progress)}</p>
+            <p class="text-xs text-slate-500">{summary.completed.toLocaleString('es-MX')} de {summary.assigned.toLocaleString('es-MX')} encuestas</p>
+          </div>
+          <div class="rounded-2xl bg-white p-5 shadow-tarjeta">
+            <p class="text-xs font-semibold uppercase text-slate-500">Con pendientes</p>
+            <p class="mt-1 text-2xl font-bold text-amber-600">{summary.pendingStudents.toLocaleString('es-MX')}</p>
+            <p class="text-xs text-slate-500">de {summary.students.toLocaleString('es-MX')} estudiantes</p>
+          </div>
+          <div class="rounded-2xl bg-white p-5 shadow-tarjeta">
+            <p class="text-xs font-semibold uppercase text-slate-500">Nunca han iniciado sesión</p>
+            <p class="mt-1 text-2xl font-bold text-red-600">{summary.neverLoggedIn.toLocaleString('es-MX')}</p>
+            <p class="text-xs text-slate-500">no han entrado a la plataforma</p>
+          </div>
+          <div class="rounded-2xl bg-white p-5 shadow-tarjeta">
+            <p class="text-xs font-semibold uppercase text-slate-500">Completaron todas</p>
+            <p class="mt-1 text-2xl font-bold text-emerald-600">{summary.completeStudents.toLocaleString('es-MX')}</p>
+            <p class="text-xs text-slate-500">estudiantes al día</p>
+          </div>
+        </div>
+
+        <form method="GET" class="grid gap-3 rounded-2xl bg-white p-5 shadow-tarjeta sm:grid-cols-2 lg:grid-cols-4">
+          <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
+          <label class="text-sm text-slate-600">Buscar
+            <input name="q" value={filters.q} maxlength="100" placeholder="Nombre, matrícula o correo" class="mt-1 block w-full rounded-xl border border-slate-200 p-2" />
+          </label>
+          <label class="text-sm text-slate-600">Plan
+            <select name="plan" class="mt-1 block w-full rounded-xl border border-slate-200 p-2">
+              <option value="">Todos</option>
+              {plans.map((plan) => <option value={plan} selected={plan === filters.plan}>{plan}</option>)}
+            </select>
+          </label>
+          <label class="text-sm text-slate-600">Estado
+            <select name="estado" class="mt-1 block w-full rounded-xl border border-slate-200 p-2">
+              {Object.entries(FOLLOWUP_STATES).map(([value, label]) => <option value={value} selected={value === filters.state}>{label}</option>)}
+            </select>
+          </label>
+          <div class="flex items-end gap-2">
+            <button type="submit" class="rounded-xl bg-tup px-4 py-2 font-semibold text-white">Filtrar</button>
+            <a href={`/api/admin/instrumentos/pendientes-estudiantes.csv?${query({})}`} class="rounded-xl border border-tup px-4 py-2 font-semibold text-tup hover:bg-tup/5">Exportar CSV</a>
+          </div>
+        </form>
+
+        <p class="text-sm text-slate-500" role="status">{filtered.length.toLocaleString('es-MX')} estudiante(s) · Página {page} de {totalPages}</p>
+
+        {pageRows.length === 0 ? (
+          <div class="rounded-2xl bg-white p-12 text-center text-slate-500 shadow-tarjeta">No hay estudiantes con estos filtros.</div>
+        ) : (
+          <div class="overflow-x-auto rounded-2xl bg-white shadow-tarjeta">
+            <table class="w-full min-w-[860px] text-sm">
+              <thead>
+                <tr class="border-b bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <th class="px-4 py-3">Estudiante</th>
+                  <th class="px-4 py-3">Plan</th>
+                  <th class="px-4 py-3">Sesión</th>
+                  <th class="px-4 py-3">Avance</th>
+                  <th class="px-4 py-3">Pendientes</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                {pageRows.map((row) => (
+                  <tr class="align-top hover:bg-slate-50">
+                    <td class="px-4 py-3">
+                      <p class="font-medium text-slate-800">{formatPersonName(row.nombre)}</p>
+                      <p class="text-xs text-slate-500">{[row.matricula, row.email].filter(Boolean).join(' · ')}</p>
+                    </td>
+                    <td class="px-4 py-3 text-xs text-slate-600">{row.planes || '—'}</td>
+                    <td class="px-4 py-3">
+                      {row.tiene_cuenta
+                        ? <span class="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">Último acceso: {fmtDate(row.ultimo_acceso) || 'sin fecha'}</span>
+                        : <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">Nunca ha entrado</span>}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <span class={`font-semibold ${row.completadas === row.asignadas ? 'text-emerald-700' : 'text-slate-700'}`}>{row.completadas} / {row.asignadas}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                      {row.pendientes.length === 0 ? <span class="text-xs text-emerald-700">Al día</span> : (
+                        <details>
+                          <summary class="cursor-pointer text-xs font-semibold text-amber-700">{row.pendientes.length} pendiente(s)</summary>
+                          <ul class="mt-2 space-y-1 text-xs text-slate-600">
+                            {row.pendientes.map((p) => <li><span class="font-medium">{p.materia}</span> · {formatPersonName(p.docente)} <span class="text-slate-400">({p.grupo})</span></li>)}
+                          </ul>
+                        </details>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <nav aria-label="Paginación" class="flex items-center gap-4">
+          {page > 1 ? <a href={`?${query({ pagina: page - 1 })}`} class="rounded-xl border px-3 py-2 text-sm">← Anterior</a> : <span class="rounded-xl border px-3 py-2 text-sm opacity-40">← Anterior</span>}
+          {page < totalPages ? <a href={`?${query({ pagina: page + 1 })}`} class="rounded-xl border px-3 py-2 text-sm">Siguiente →</a> : <span class="rounded-xl border px-3 py-2 text-sm opacity-40">Siguiente →</span>}
+        </nav>
+      </>
+    )}
+  </section>
+</LayoutAdmin>

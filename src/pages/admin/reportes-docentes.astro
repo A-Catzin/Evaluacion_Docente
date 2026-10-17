@@ -1,0 +1,138 @@
+---
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import { requireRole } from '../../lib/auth';
+import { dbAdmin } from '../../lib/db';
+import { filterReportCards, type ReportCard } from '../../lib/teacherReport';
+import { loadReportCards } from '../../services/teacherReport';
+
+const PAGE_SIZE = 25;
+const auth = await requireRole(Astro.cookies, ['superadmin']);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+const admin = dbAdmin();
+const { data: cycles, error: cyclesError } = await admin.from('cuatrimestres').select('id,clave,activo').order('id', { ascending: false });
+if (cyclesError) throw cyclesError;
+const cycleList = cycles || [];
+const requestedCycle = Number.parseInt(Astro.url.searchParams.get('cuatrimestre') || '', 10);
+const cookieCycle = Number.parseInt(Astro.cookies.get('cuatrimestre_sel')?.value || '', 10);
+const cycleId = (cycleList.find((c) => c.id === requestedCycle) || cycleList.find((c) => c.id === cookieCycle)
+  || cycleList.find((c) => c.activo) || cycleList[0])?.id || 0;
+if (Astro.url.searchParams.has('cuatrimestre') && cycleId) {
+  Astro.cookies.set('cuatrimestre_sel', String(cycleId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+}
+
+const q = (Astro.url.searchParams.get('q') || '').trim().slice(0, 100);
+const requestedPage = Number.parseInt(Astro.url.searchParams.get('pagina') || '1', 10);
+let cards: ReportCard[] = [];
+let loadError = false;
+try {
+  if (cycleId) cards = await loadReportCards(admin, auth.client, cycleId);
+} catch (error) {
+  loadError = true;
+  console.error('[admin teacher reports] load failed', { message: error instanceof Error ? error.message : 'unknown' });
+}
+const filtered = filterReportCards(cards, q);
+const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+const page = Math.min(Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1, totalPages);
+const pageCards = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+const query = (overrides: Record<string, string | number>) => {
+  const params = new URLSearchParams({ cuatrimestre: String(cycleId), q, pagina: String(page) });
+  for (const [key, value] of Object.entries(overrides)) params.set(key, String(value));
+  if (!params.get('q')) params.delete('q');
+  return params.toString();
+};
+const fmt = (value: number | null) => (value === null ? '—' : value.toLocaleString('es-MX', { maximumFractionDigits: 1 }));
+const scoreLabels: [keyof ReportCard['scores'], string][] = [
+  ['autodiag', 'Autoevaluación'], ['observation', 'Observación'], ['student', 'Estudiantes'], ['coordination', 'Coordinación'], ['planning', 'Planeación'],
+];
+---
+
+<LayoutAdmin titulo="Reportes por docente — Seguimiento de instrumentos">
+  <section class="animate-flotar-entrada mx-auto max-w-6xl space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold text-tup">Reportes por docente</h1>
+        <p class="mt-1 text-sm text-slate-500">Despliega una tarjeta para ver los 5 instrumentos con sus respuestas, o genera el PDF del docente.</p>
+      </div>
+      <form method="GET">
+        <label class="mb-1 block text-xs font-semibold text-slate-500" for="cuatrimestre">Ciclo</label>
+        <select id="cuatrimestre" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+          {cycleList.map((cycle) => <option value={cycle.id} selected={cycle.id === cycleId}>{cycle.clave}</option>)}
+        </select>
+      </form>
+    </div>
+
+    <form method="GET" class="flex flex-wrap items-end gap-3 rounded-2xl bg-white p-5 shadow-tarjeta">
+      <input type="hidden" name="cuatrimestre" value={cycleId} />
+      <label class="min-w-64 flex-1 text-sm text-slate-600">Buscar docente
+        <input name="q" value={q} maxlength="100" placeholder="Nombre o correo" class="mt-1 block w-full rounded-xl border border-slate-200 p-2" />
+      </label>
+      <button type="submit" class="rounded-xl bg-tup px-4 py-2 font-semibold text-white">Buscar</button>
+    </form>
+
+    {loadError ? (
+      <div role="alert" class="rounded-2xl bg-red-50 p-6 text-sm text-red-800">No se pudieron cargar los docentes. Intenta nuevamente.</div>
+    ) : (
+      <>
+        <p class="text-sm text-slate-500" role="status">{filtered.length.toLocaleString('es-MX')} docente(s) · Página {page} de {totalPages}</p>
+        {pageCards.length === 0 ? (
+          <div class="rounded-2xl bg-white p-12 text-center text-slate-500 shadow-tarjeta">No hay docentes con esta búsqueda.</div>
+        ) : (
+          <div class="space-y-3">
+            {pageCards.map((card) => (
+              <details class="group rounded-2xl bg-white shadow-tarjeta" data-report-url={`/admin/reportes-docentes/${card.id}/detalle?cuatrimestre=${cycleId}`}>
+                <summary class="flex cursor-pointer list-none flex-wrap items-center gap-4 p-5">
+                  <span class="text-slate-400 transition-transform group-open:rotate-90" aria-hidden="true">▶</span>
+                  <div class="min-w-48 flex-1">
+                    <p class="font-semibold text-slate-800">{card.name}</p>
+                    <p class="text-xs text-slate-500">{card.email || 'Sin correo'} · Estudiantes: {card.responses} de {card.enrolled}</p>
+                  </div>
+                  <div class="hidden gap-2 lg:flex">
+                    {scoreLabels.map(([key, label]) => (
+                      <span class="rounded-lg bg-slate-50 px-2 py-1 text-center text-xs" title={label}>
+                        <span class="block text-[10px] uppercase text-slate-400">{label}</span>
+                        <span class="font-semibold text-slate-700">{fmt(card.scores[key])}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <div class="text-right">
+                    <p class="text-lg font-bold text-tup">{fmt(card.finalScore)}</p>
+                    <p class="text-xs text-slate-500">{card.category || 'Sin calificación'} · {card.completed ?? 0}/{card.expected ?? 5}</p>
+                  </div>
+                  <a href={`/admin/reportes-docentes/${card.id}/pdf?cuatrimestre=${cycleId}`} target="_blank" rel="noopener"
+                    class="rounded-xl border border-tup px-3 py-2 text-sm font-semibold text-tup hover:bg-tup/5">Generar PDF</a>
+                </summary>
+                <div class="border-t border-slate-100 p-5" data-report-body>
+                  <p class="text-sm text-slate-400">Cargando reporte…</p>
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
+        <nav aria-label="Paginación" class="flex items-center gap-4">
+          {page > 1 ? <a href={`?${query({ pagina: page - 1 })}`} class="rounded-xl border px-3 py-2 text-sm">← Anterior</a> : <span class="rounded-xl border px-3 py-2 text-sm opacity-40">← Anterior</span>}
+          {page < totalPages ? <a href={`?${query({ pagina: page + 1 })}`} class="rounded-xl border px-3 py-2 text-sm">Siguiente →</a> : <span class="rounded-xl border px-3 py-2 text-sm opacity-40">Siguiente →</span>}
+        </nav>
+      </>
+    )}
+  </section>
+</LayoutAdmin>
+
+<script>
+  // Load each report only when its card is opened, so the list stays light.
+  document.querySelectorAll<HTMLDetailsElement>('details[data-report-url]').forEach((card) => {
+    card.addEventListener('toggle', async () => {
+      if (!card.open || card.dataset.loaded) return;
+      card.dataset.loaded = 'loading';
+      const body = card.querySelector<HTMLElement>('[data-report-body]')!;
+      try {
+        const res = await fetch(card.dataset.reportUrl!, { headers: { accept: 'text/html' } });
+        if (!res.ok) throw new Error(String(res.status));
+        body.innerHTML = await res.text();
+        card.dataset.loaded = 'true';
+      } catch {
+        delete card.dataset.loaded;
+        body.innerHTML = '<p class="text-sm text-red-700" role="alert">No se pudo cargar el reporte. Cierra y vuelve a abrir la tarjeta para reintentar.</p>';
+      }
+    });
+  });
+</script>

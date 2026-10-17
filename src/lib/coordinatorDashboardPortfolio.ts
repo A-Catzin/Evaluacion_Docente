@@ -50,10 +50,60 @@ export function buildCoordinatedPortfolio(
   });
 }
 
+type VersionedObservation = {
+  id: number | string;
+  docente_id: number;
+  submitted_by: string | null;
+  submitted_at: string | null;
+  normalized_score: number | null;
+  validity_status: string | null;
+};
+
+type LegacyObservation = {
+  docente_id: number;
+  evaluador_id: string | null;
+  score_normalizado: number | null;
+};
+
+export function summarizeObserverObservations(
+  versioned: VersionedObservation[],
+  legacy: LegacyObservation[],
+  actorId: string,
+) {
+  const completedTeacherIds = new Set<number>();
+  const ownLatestScores = new Map<number, number | null>();
+  const supersededTeacherIds = new Set<number>();
+  if (!actorId) return { completedTeacherIds, ownLatestScores, supersededTeacherIds };
+
+  const ordered = [...versioned].sort((a, b) =>
+    (b.submitted_at || '').localeCompare(a.submitted_at || '') ||
+    String(b.id).localeCompare(String(a.id), undefined, { numeric: true }),
+  );
+  const globalLatest = new Map<number, VersionedObservation>();
+  const ownLatest = new Map<number, VersionedObservation>();
+  for (const row of ordered) {
+    if (!globalLatest.has(row.docente_id)) globalLatest.set(row.docente_id, row);
+    if (row.submitted_by === actorId && !ownLatest.has(row.docente_id)) {
+      ownLatest.set(row.docente_id, row);
+      completedTeacherIds.add(row.docente_id);
+      ownLatestScores.set(row.docente_id, row.normalized_score);
+    }
+  }
+  for (const [teacherId, own] of ownLatest) {
+    if (globalLatest.get(teacherId) !== own) supersededTeacherIds.add(teacherId);
+  }
+  for (const row of legacy) {
+    if (row.evaluador_id !== actorId) continue;
+    completedTeacherIds.add(row.docente_id);
+    if (!ownLatestScores.has(row.docente_id)) ownLatestScores.set(row.docente_id, row.score_normalizado);
+  }
+  return { completedTeacherIds, ownLatestScores, supersededTeacherIds };
+}
+
 export function buildObservationPortfolio(
   teachers: PortfolioTeacher[],
   completedObservationTeacherIds: Set<number>,
-  observationScores: Map<number, number> = new Map(),
+  observationScores: Map<number, number | null> = new Map(),
 ): ObservationPortfolioRow[] {
   return teachers.map((teacher) => ({
     teacher,

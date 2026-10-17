@@ -1,15 +1,19 @@
 export type StudentComment = {
+  id: number;
   docenteId: number;
   grupoId: number;
   docente: string;
   grupo: string;
   comentario: string;
+  validado: boolean;
 };
+
+export type GroupedComment = { id: number; comentario: string; validado: boolean };
 
 export type TeacherComments = {
   docenteId: number;
   docente: string;
-  groups: { grupoId: number; grupo: string; comments: string[] }[];
+  groups: { grupoId: number; grupo: string; comments: GroupedComment[] }[];
 };
 
 /** Group only within the current page; never merge equal display names. */
@@ -30,7 +34,7 @@ export function groupComments(rows: StudentComment[]): TeacherComments[] {
       teacherGroups.set(row.grupoId, group);
       teacher.groups.push(group);
     }
-    group.comments.push(row.comentario);
+    group.comments.push({ id: row.id, comentario: row.comentario, validado: row.validado });
   }
   return [...teachers.values()];
 }
