@@ -2,12 +2,14 @@
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { dbAdmin } from '../../../lib/db';
 import { requireRole } from '../../../lib/auth';
-import { calcFinalScore, calcObservationScore, fetchNativeStudentEvaluationScores, formatScore, OBSERVATION_SELECT, roundTo2 } from '../../../services/scoring';
+import { calcFinalScore, calcObservationScore, excludesPlanning, fetchNativeStudentEvaluationScores, formatScore, OBSERVATION_SELECT, roundTo2 } from '../../../services/scoring';
 import { groupPlanningAssignmentsBySubjectName, normalizePlanningSubjectName } from '../../../lib/planningSubjectScope';
 import { getPlanningSubjectStatus } from '../../../lib/planningSubjectStatus';
 import { obtenerCalificacionDocente } from '../../../services/calificaciones';
 import { OBSERVATION_INSTRUMENT_DEFINITIONS, OBSERVATION_STORAGE_SECTIONS, getObservationQuestion, isObservationInstrumentVersion, type ObservationInstrumentVersion } from '../../../lib/observationDefinitions';
 import { formatPersonName } from '../../../lib/personName';
+import { loadTeacherReport } from '../../../services/teacherReport';
+import VersionedReportContent from '../../../components/admin/VersionedReportContent.astro';
 
 const COORD_SECTION_DEFS = [
   { code: 'A', title: 'Cumplimiento Académico', fields: ['a1', 'a2', 'a3'] },
@@ -383,6 +385,16 @@ const autoRecords = autoRows.map((row) => ({
   comments: row.comentarios || null,
 }));
 
+// Coordination and observation are captured with the versioned instruments, not the legacy tables above.
+const versionedReport = cuatrimestreId
+  ? await loadTeacherReport(cl, auth.client, docenteId, cuatrimestreId).catch((error) => {
+      console.error('[admin docente 360] versioned report failed', { message: error instanceof Error ? error.message : 'unknown' });
+      return null;
+    })
+  : null;
+const versionedCoordination = versionedReport?.coordination ?? [];
+const versionedObservations = versionedReport?.observations ?? [];
+
 type SubjectPerformance = {
   key: string;
   asignatura: string;
@@ -441,12 +453,27 @@ for (const row of obsRows) {
   if (row.grupo_id_fk) performance.grupos.add(groupLabel(row.grupo_id_fk));
   addFiniteScore(performance.obs, calcObservationScore(row));
 }
+const currentCal = cuatrimestreId ? await obtenerCalificacionDocente(cl, docenteId, cuatrimestreId) : null;
+// Coordination, observation and self-assessment happen once per teacher, so every subject shows the teacher-level score.
+// Subjects that share a group (e.g. the three Professional Practice subjects) are surveyed once, so
+// a subject without its own student score takes the one from the subject it shares the group with.
+const ownStudentScore = (performance: SubjectPerformance) => performance.eeResponses ? performance.eeTotal / performance.eeResponses : null;
+const sharedStudentScore = (performance: SubjectPerformance) => {
+  for (const other of subjectPerformance.values()) {
+    if (other === performance) continue;
+    const otherScore = ownStudentScore(other);
+    if (otherScore != null && [...performance.grupos].some((group) => other.grupos.has(group))) return otherScore;
+  }
+  return null;
+};
 const subjectPerformanceRows = [...subjectPerformance.values()]
   .map((performance) => {
-    const ee = performance.eeResponses ? performance.eeTotal / performance.eeResponses : null;
-    const coord = averageScore(performance.coord);
+    const ee = ownStudentScore(performance) ?? sharedStudentScore(performance);
+    const coord = currentCal?.score_coordinacion ?? averageScore(performance.coord);
     const plan = averageScore(performance.plan);
-    const obs = averageScore(performance.obs);
+    const obs = currentCal?.score_observacion ?? averageScore(performance.obs);
+    const auto = currentCal?.score_autoevaluacion ?? undefined;
+    const planningStatus = planningStatusBySubject.get(performance.key) || 'pending';
     const hasScore = [ee, coord, plan, obs].some((score) => score != null);
     return {
       ...performance,
@@ -455,14 +482,13 @@ const subjectPerformanceRows = [...subjectPerformance.values()]
       coord,
       plan,
       obs,
-      planningStatus: planningStatusBySubject.get(performance.key) || 'pending',
-      final: hasScore ? calcFinalScore({ ee: ee ?? undefined, coord: coord ?? undefined, plan: plan ?? undefined, obs: obs ?? undefined }).final : null,
+      planningStatus,
+      final: hasScore ? calcFinalScore({ ee: ee ?? undefined, coord: coord ?? undefined, plan: excludesPlanning(planningStatus) ? undefined : plan ?? undefined, obs: obs ?? undefined, auto }, excludesPlanning(planningStatus) ? 'ejecutivo' : undefined).final : null,
 
     };
   })
   .sort((left, right) => left.asignatura.localeCompare(right.asignatura, 'es-MX'));
 
-const currentCal = cuatrimestreId ? await obtenerCalificacionDocente(cl, docenteId, cuatrimestreId) : null;
 const currentScores = {
   ee: currentCal?.score_encuesta_estudiantil ?? null,
   coord: currentCal?.score_coordinacion ?? null,
@@ -470,6 +496,7 @@ const currentScores = {
   obs: currentCal?.score_observacion ?? null,
   auto: currentCal?.score_autoevaluacion ?? null,
 };
+const autoNotDone = currentCal?.instrument_validity?.autodiagnostico === 'not_done';
 const currentFinal = {
   final: currentCal?.calificacion_final ?? 0,
   category: currentCal?.categoria_final ?? 'No iniciado',
@@ -477,7 +504,7 @@ const currentFinal = {
   expectedInstrumentCount: currentCal?.num_instrumentos_esperados ?? 0,
 };
 
-const historial: { clave: string; final: number; cat: string; inst: number; expected: number; ee: number | null; coord?: number; plan?: number; obs?: number; auto?: number }[] = [];
+const historial: { clave: string; final: number; cat: string; inst: number; expected: number; ee: number | null; coord?: number; plan?: number; obs?: number; auto?: number; autoNotDone?: boolean }[] = [];
 let sumFinals = 0;
 let bestCycle = { clave: '', final: 0 };
     
@@ -500,6 +527,7 @@ for (const c of cuatrimestres) {
     plan: row.score_planeacion != null ? Number(row.score_planeacion) : null,
     obs: row.score_observacion != null ? Number(row.score_observacion) : null,
     auto: row.score_autoevaluacion != null ? Number(row.score_autoevaluacion) : null,
+    autoNotDone: row.instrument_validity?.autodiagnostico === 'not_done',
   });
   sumFinals += final;
   if (final > bestCycle.final) bestCycle = { clave: c.clave || '', final };
@@ -591,7 +619,7 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
         <p class="text-xs uppercase text-slate-400">Autodiagnóstico</p>
-        <p class={`text-2xl font-bold mt-1 ${scoreClass(currentScores.auto)}`}>{fmt(currentScores.auto)}</p>
+        <p class={`text-2xl font-bold mt-1 ${scoreClass(currentScores.auto)}`}>{autoNotDone ? 'No realizado' : fmt(currentScores.auto)}</p>
       </div>
     </div>
 
@@ -609,7 +637,7 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
         <thead><tr class="bg-slate-50 border-b text-slate-500"><th class="text-left px-3 py-3 text-xs uppercase">Asignatura</th><th class="text-left px-3 py-3 text-xs uppercase">Grupos</th><th class="text-center px-3 py-3 text-xs uppercase">Estudiantil</th><th class="text-center px-3 py-3 text-xs uppercase">Coordinación</th><th class="text-center px-3 py-3 text-xs uppercase">Planeación</th><th class="text-center px-3 py-3 text-xs uppercase">Observación</th><th class="text-center px-3 py-3 text-xs uppercase">Final</th></tr></thead>
-        <tbody class="divide-y">{subjectPerformanceRows.map((row) => (<tr class="hover:bg-slate-50"><td class="px-3 py-3 font-medium text-slate-700">{row.asignatura}</td><td class="px-3 py-3 text-slate-600">{row.grupos.join(', ') || '—'}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.ee)}`}>{fmt(row.ee)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.coord)}`}>{fmt(row.coord)}</td><td class={`px-3 py-3 text-center font-medium ${row.planningStatus === 'np' ? 'text-slate-500' : scoreClass(row.plan)}`}>{row.planningStatus === 'np' ? 'NP' : fmt(row.plan)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.obs)}`}>{fmt(row.obs)}</td><td class={`px-3 py-3 text-center font-bold ${scoreClass(row.final)}`}>{fmt(row.final)}</td></tr>))}</tbody>
+        <tbody class="divide-y">{subjectPerformanceRows.map((row) => (<tr class="hover:bg-slate-50"><td class="px-3 py-3 font-medium text-slate-700">{row.asignatura}</td><td class="px-3 py-3 text-slate-600">{row.grupos.join(', ') || '—'}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.ee)}`}>{fmt(row.ee)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.coord)}`}>{fmt(row.coord)}</td><td class={`px-3 py-3 text-center font-medium ${excludesPlanning(row.planningStatus) ? 'text-slate-500' : scoreClass(row.plan)}`}>{row.planningStatus === 'np' ? 'NP' : row.planningStatus === 'correction' ? 'Corrección' : row.planningStatus === 'review' && row.plan == null ? 'En revisión' : fmt(row.plan)}</td><td class={`px-3 py-3 text-center font-medium ${scoreClass(row.obs)}`}>{fmt(row.obs)}</td><td class={`px-3 py-3 text-center font-bold ${scoreClass(row.final)}`}>{fmt(row.final)}</td></tr>))}</tbody>
           </table>
         </div>
       )}
@@ -672,10 +700,10 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
       <details class="bg-white rounded-3xl shadow-tarjeta overflow-hidden">
         <summary class="px-6 py-4 border-b border-slate-100 cursor-pointer list-none flex items-center justify-between">
           <span class="text-lg font-bold text-tup">Coordinación</span>
-          <span class="text-sm text-slate-400">{coordRecords.length} registros</span>
+          <span class="text-sm text-slate-400">{coordRecords.length + versionedCoordination.length} registros</span>
         </summary>
         <div class="p-6 space-y-6">
-          {coordRecords.length === 0 ? (
+          {coordRecords.length === 0 && versionedCoordination.length === 0 ? (
             <div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400">No hay evaluaciones de coordinación para este ciclo.</div>
           ) : (
             coordRecords.map((record) => (
@@ -723,6 +751,7 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
               </article>
             ))
           )}
+          <VersionedReportContent rows={versionedCoordination} empty="" />
         </div>
       </details>
 
@@ -785,10 +814,10 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
       <details class="bg-white rounded-3xl shadow-tarjeta overflow-hidden">
         <summary class="px-6 py-4 border-b border-slate-100 cursor-pointer list-none flex items-center justify-between">
           <span class="text-lg font-bold text-tup">Observación de clase</span>
-          <span class="text-sm text-slate-400">{obsRecords.length} registros</span>
+          <span class="text-sm text-slate-400">{obsRecords.length + versionedObservations.length} registros</span>
         </summary>
         <div class="p-6 space-y-6">
-          {obsRecords.length === 0 ? (
+          {obsRecords.length === 0 && versionedObservations.length === 0 ? (
             <div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-400">No hay observaciones para este ciclo.</div>
           ) : (
             obsRecords.map((record) => (
@@ -836,7 +865,7 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
                         </div>
                       </section>
                     ))}
-                  </div>
+        </div>
                 </details>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
                   {record.comments && <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Comentarios</p><p class="text-slate-600 italic">“{record.comments}”</p></div>}
@@ -844,6 +873,7 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
               </article>
             ))
           )}
+          <VersionedReportContent rows={versionedObservations} empty="" />
         </div>
       </details>
 
@@ -926,7 +956,7 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
                     <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.coord)}`}>{fmt(h.coord)}</td>
                     <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.plan)}`}>{fmt(h.plan)}</td>
                     <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.obs)}`}>{fmt(h.obs)}</td>
-                    <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.auto)}`}>{fmt(h.auto)}</td>
+                    <td class={`px-3 py-3 text-center font-medium ${scoreClass(h.auto)}`}>{h.autoNotDone ? 'No realizado' : fmt(h.auto)}</td>
                     <td class={`px-3 py-3 text-center font-bold ${scoreClass(h.final)}`}>{fmt(h.final)}</td>
                     <td class="px-3 py-3 text-center"><span class={`px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeClass(h.cat)}`}>{h.cat}</span></td>
                     <td class="px-3 py-3 text-center text-xs text-slate-400">{h.inst}/{h.expected}</td>

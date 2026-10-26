@@ -8,10 +8,15 @@ export type InstrumentScoreSummary = {
   normalizedScore: number | null;
 };
 
-/** Computes from the definition supplied by the server; no fixed rubric length. */
+/**
+ * Computes from the definition supplied by the server; no fixed rubric length.
+ * With scale `points` (e.g. 1 -> 50), the score is the average of those points;
+ * otherwise each answer is worth value / maxScore * 100.
+ */
 export function summarizeInstrumentAnswers(
   values: InstrumentAnswerValue[],
   maxScore: number,
+  points?: Record<string, number>,
 ): InstrumentScoreSummary {
   const naCount = values.filter((value) => value === "na").length;
   const applicableItemCount = values.length;
@@ -22,9 +27,10 @@ export function summarizeInstrumentAnswers(
   const rawScore = answered.length
     ? answered.reduce((total, value) => total + value, 0) / answered.length
     : null;
+  const pointsFor = (value: number) => points?.[String(value)] ?? (value / maxScore) * 100;
   const normalizedScore =
     !isInvalidExcessiveNa && answered.length && maxScore > 0
-      ? Math.round((answered.reduce((total, value) => total + value, 0) / (answered.length * maxScore)) * 10000) / 100
+      ? Math.round((answered.reduce((total, value) => total + pointsFor(value), 0) / answered.length) * 100) / 100
       : null;
   return { naCount, applicableItemCount, isInvalidExcessiveNa, rawScore, normalizedScore };
 }

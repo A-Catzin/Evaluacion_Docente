@@ -33,7 +33,7 @@ const fileTitle = `Reporte docente - ${report.teacher.name} - ${report.cycle.cla
       <button type="button" id="print" class="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-tup">Imprimir / Guardar PDF</button>
     </div>
     <main class="sheet mx-auto my-6 max-w-[8.5in] bg-white p-10 shadow">
-      <header class="flex items-center justify-between border-b-4 border-tup pb-3">
+      <header class="flex items-center justify-between border-b-4 border-tup pb-3 shadow-[0_3px_0_0_#e8a020]">
         <img src="/logo-tup.png" alt="Tecnológico Universitario Playacar" class="h-14" />
         <div class="text-right">
           <h1 class="text-2xl font-bold text-tup">Reporte de evaluación docente</h1>
@@ -45,7 +45,7 @@ const fileTitle = `Reporte docente - ${report.teacher.name} - ${report.cycle.cla
         <div class="rounded-lg bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Modalidad</p><p class="font-bold">{report.final.modality || '—'}</p></div>
         <div class="rounded-lg bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Ciclo</p><p class="font-bold">{report.cycle.clave}</p></div>
       </div>
-      <TeacherReportBody report={report} />
+      <TeacherReportBody report={report} collapsible={false} />
     </main>
   </body>
 </html>

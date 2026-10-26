@@ -50,7 +50,7 @@ function subjectScopeValidity(
   subjects: Array<{ planningStatus: string }>,
 ): Array<[string, string]> {
   if (!subjects.length) return [];
-  const counts = { approved: 0, np: 0, pending: 0 };
+  const counts = { approved: 0, np: 0, pending: 0, correction: 0, review: 0 };
   for (const subject of subjects) {
     if (subject.planningStatus in counts)
       counts[subject.planningStatus as keyof typeof counts] += 1;
@@ -60,7 +60,9 @@ function subjectScopeValidity(
   return [
     [
       "planning_subject_status",
-      `approved=${counts.approved};np=${counts.np};pending=${counts.pending}`,
+      `approved=${counts.approved};np=${counts.np};pending=${counts.pending}${
+        counts.correction ? `;correction=${counts.correction}` : ""
+      }${counts.review ? `;review=${counts.review}` : ""}`,
     ],
   ];
 }
@@ -157,6 +159,7 @@ export async function calcularCalificacionDocenteInline(
         (purpose) => [purpose, "invalid_excessive_na"] as [string, string],
       ),
       ...subjectScopeValidity(subjectAware.subjects),
+      ...(scores.autoNotDone ? [["autodiagnostico", "not_done"] as [string, string]] : []),
     ]),
     has_invalid_instrument: (scores.invalidPurposes || []).length > 0,
     docente_nombre: docenteInfo?.nombre ?? null,
@@ -433,6 +436,7 @@ export async function recalcularCalificacionDocente(
         (purpose) => [purpose, "invalid_excessive_na"] as [string, string],
       ),
       ...subjectScopeValidity(subjectAware.subjects),
+      ...(scores.autoNotDone ? [["autodiagnostico", "not_done"] as [string, string]] : []),
     ]),
     has_invalid_instrument: (scores.invalidPurposes || []).length > 0,
   };

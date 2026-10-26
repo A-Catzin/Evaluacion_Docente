@@ -14,7 +14,16 @@ export type PlanningGroupNpRecord = {
   estado?: string | null;
 };
 
-export type PlanningSubjectStatus = "approved" | "np" | "pending";
+// "correction": the plan was reviewed and sent back. It is excluded from the grade like NP
+// (and labelled "Corrección") until it is approved.
+// "review": the plan was uploaded and waits for the coordinator; it still counts as pending
+// in the grade, but is labelled "En revisión".
+export type PlanningSubjectStatus =
+  | "approved"
+  | "np"
+  | "correction"
+  | "review"
+  | "pending";
 
 /**
  * Subject NP applies to every normalized assignment. A documented approved plan
@@ -47,13 +56,28 @@ export function getPlanningSubjectStatus(
   );
   if (hasApprovedPlanning) return "approved";
 
-  return npRecords.some(
-    (record) =>
-      normalizePlanningSubjectName(record.subject_key) === scope.key &&
-      record.estado === "NP",
+  if (
+    npRecords.some(
+      (record) =>
+        normalizePlanningSubjectName(record.subject_key) === scope.key &&
+        record.estado === "NP",
+    )
   )
-    ? "np"
-    : "pending";
+    return "np";
+
+  return planningRecords.some(
+    (record) =>
+      normalizePlanningSubjectName(record.asignaturaNombre) === scope.key &&
+      record.estado === "Corrección",
+  )
+    ? "correction"
+    : planningRecords.some(
+          (record) =>
+            normalizePlanningSubjectName(record.asignaturaNombre) === scope.key &&
+            record.estado === "Pendiente",
+        )
+      ? "review"
+      : "pending";
 }
 
 export function isPlanningSubjectMarkedNp(

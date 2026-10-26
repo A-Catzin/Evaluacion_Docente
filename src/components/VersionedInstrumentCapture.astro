@@ -107,7 +107,7 @@ const isCoordination = definition.purpose === "coordination";
     <label class="block text-sm font-medium text-slate-700">{isPlanning ? 'Motivo de corrección / observaciones generales' : 'Observaciones generales'}<textarea id="metadata-general" rows="3" maxlength={MAX_INSTRUMENT_TEXT_LENGTH} aria-describedby="correction-reason-hint" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
     {isPlanning && <p id="correction-reason-hint" class="text-xs text-slate-500">Obligatorio si el exceso de respuestas N/A envía la planeación a corrección.</p>}
     <button type="submit" class="w-full rounded-xl bg-tup py-4 font-semibold text-white hover:bg-tup/90">Enviar instrumento</button>
-    {isObservation && <p id="instrument-draft-status" class="text-sm text-slate-500" aria-live="polite"></p>}
+    {(isObservation || isCoordination) && <p id="instrument-draft-status" class="text-sm text-slate-500" aria-live="polite"></p>}
     <p id="instrument-message" class="text-sm" aria-live="polite"></p>
   </section>
 </form>
@@ -143,6 +143,8 @@ const isCoordination = definition.purpose === "coordination";
       }
   const answerInputs = Array.from(form.querySelectorAll("[data-item]"));
   const isObservation = definition.purpose === "observation";
+  const isCoordination = definition.purpose === "coordination";
+  const hasDraft = isObservation || isCoordination;
   let draftTimer;
   let savingDraft = false;
   let draftDirty = false;
@@ -201,7 +203,7 @@ const isCoordination = definition.purpose === "coordination";
   }
       if (teacher && !teacher.disabled) teacher.addEventListener("change", function() {
         refreshSubjects();
-        if (isObservation) loadObservationDraft();
+        if (hasDraft) loadObservationDraft();
       });
       if (subject) subject.addEventListener("change", refreshGroups);
       if (teacher && teacher.value && subject) refreshSubjects();
@@ -238,7 +240,7 @@ const isCoordination = definition.purpose === "coordination";
       updateNaSummary();
 
       function observationDraftContext() {
-        if (!isObservation || finalSubmissionSucceeded) return null;
+        if (!hasDraft || finalSubmissionSucceeded) return null;
         const docenteId = Number(teacher?.value);
         if (!Number.isSafeInteger(docenteId) || docenteId <= 0) return null;
         return {
@@ -259,6 +261,7 @@ const isCoordination = definition.purpose === "coordination";
           const reason = entry.querySelector("[data-na-reason]");
           if (reason) reason.classList.add("hidden");
         });
+        form.querySelectorAll("[data-check] input[type=radio]").forEach(function(input) { input.checked = false; });
         form.querySelectorAll("[data-check-na-reason]").forEach(function(reason) { reason.classList.add("hidden"); });
         form.querySelectorAll("textarea").forEach(function(field) { field.value = ""; });
         updateNaSummary();
@@ -279,6 +282,12 @@ const isCoordination = definition.purpose === "coordination";
           evidence: definition.sections.map(function(section) {
             return { section_id: section.id, evidence: form.querySelector("[data-evidence='" + section.id + "']")?.value || "" };
           }),
+          checks: Array.from(form.querySelectorAll("[data-check]")).map(function(entry) {
+            const selected = entry.querySelector("input[type=radio]:checked");
+            if (!selected) return null;
+            const reason = entry.querySelector("[data-check-na-reason] textarea")?.value.trim() || null;
+            return { check_id: entry.dataset.check, value: selected.value, na_reason: selected.value === "na" ? reason : null };
+          }).filter(Boolean),
           metadata: {
             strengths: document.getElementById("metadata-strengths")?.value || null,
             priority_area: document.getElementById("metadata-priority")?.value || null,
@@ -304,6 +313,16 @@ const isCoordination = definition.purpose === "coordination";
             const reasonField = entry.querySelector("[data-na-reason] textarea");
             if (reasonField) reasonField.value = normalizeNaReason(answer.value, answer.na_reason) || "";
           }
+        });
+        (Array.isArray(draft?.checks) ? draft.checks : []).forEach(function(saved) {
+          const entry = form.querySelector("[data-check='" + saved.check_id + "']");
+          const selected = entry?.querySelector("input[type=radio][value='" + saved.value + "']");
+          if (!selected) return;
+          selected.checked = true;
+          const reason = entry.querySelector("[data-check-na-reason]");
+          if (reason) reason.classList.toggle("hidden", saved.value !== "na");
+          const reasonField = entry.querySelector("[data-check-na-reason] textarea");
+          if (reasonField && saved.value === "na") reasonField.value = saved.na_reason || "";
         });
         (Array.isArray(draft?.evidence) ? draft.evidence : []).forEach(function(entry) {
           const field = form.querySelector("[data-evidence='" + entry.section_id + "']");
@@ -336,6 +355,7 @@ const isCoordination = definition.purpose === "coordination";
         setDraftStatus(context, "Cargando borrador…", "text-slate-500");
         try {
           const params = new URLSearchParams({ docente_id: String(context.docente_id), cuatrimestre_id: String(context.cuatrimestre_id), version_id: context.version_id });
+          if (isCoordination) params.set("purpose", "coordination");
           if (allowReevaluation) {
             const stateResponse = await fetch("/api/instrumentos/revision-draft?" + params.toString());
             const stateResult = await stateResponse.json();
@@ -394,6 +414,7 @@ const isCoordination = definition.purpose === "coordination";
           const response = await fetch(revision ? "/api/instrumentos/revision-draft" : "/api/instrumentos/draft", {
             method: "PUT", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ docente_id: context.docente_id, cuatrimestre_id: context.cuatrimestre_id, version_id: context.version_id,
+              ...(isCoordination ? { purpose: "coordination" } : {}),
               ...(revision ? { operation_id: intent.operation_id, supersedes_submission_id: intent.supersedes_submission_id } : {}), draft })
           });
           const result = await response.json();
@@ -433,7 +454,7 @@ const isCoordination = definition.purpose === "coordination";
           }
         }
       }
-      if (isObservation) {
+      if (hasDraft) {
         form.addEventListener("input", function() { scheduleObservationDraftSave(); });
         form.addEventListener("change", function(event) {
           if (event.target === teacher) return;
@@ -545,7 +566,7 @@ const isCoordination = definition.purpose === "coordination";
           message.className = "text-sm text-red-700";
           submit.disabled = false;
           if (allowReevaluation) revisionTeacher.disabled = false;
-          if (isObservation) scheduleObservationDraftSave(0);
+          if (hasDraft) scheduleObservationDraftSave(0);
           return;
         }
         if (!response.ok) {
@@ -566,7 +587,7 @@ const isCoordination = definition.purpose === "coordination";
           try {
             await fetch("/api/instrumentos/draft", {
               method: "DELETE", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ docente_id: completedDraftContext.docente_id, cuatrimestre_id: completedDraftContext.cuatrimestre_id, version_id: completedDraftContext.version_id })
+              body: JSON.stringify({ docente_id: completedDraftContext.docente_id, cuatrimestre_id: completedDraftContext.cuatrimestre_id, version_id: completedDraftContext.version_id, ...(isCoordination ? { purpose: "coordination" } : {}) })
             });
           } catch {
             // The completed submission remains authoritative if draft cleanup is interrupted.

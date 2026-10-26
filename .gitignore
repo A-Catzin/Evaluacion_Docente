@@ -91,6 +91,8 @@ supabase/migrations/055_fix_cycle_teacher_candidate_eligibility.sql
 !supabase/migrations/115_admin_student_survey_followup.sql
 !supabase/migrations/116_admin_student_followup_stable_order.sql
 !supabase/migrations/117_exclude_inactive_students_from_survey_progress.sql
+!supabase/migrations/118_observation_scale_points.sql
+!supabase/migrations/120_disable_student_survey_bloque_2.sql
 
 src/supabase/
 .atl/
@@ -111,3 +113,5 @@ docs/ui_ux_guidelines.md
 
 # private project documentation
 docs-privados/
+!supabase/migrations/121_coordination_instrument_drafts.sql
+!supabase/migrations/122_autodiagnostico_cycle_window_closed.sql

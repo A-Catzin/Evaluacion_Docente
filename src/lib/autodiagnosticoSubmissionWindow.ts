@@ -245,3 +245,25 @@ export async function requireTeacherAutodiagnosticoSubmissionOpen(
     },
   );
 }
+
+/**
+ * True once the cycle's self-assessment window has been configured and then closed
+ * (manually, or by a scheduled end). A cycle that never configured it is not "closed":
+ * the instrument was simply not part of that cycle. The window table itself is not readable
+ * by user sessions, so this goes through a SECURITY DEFINER function (migration 122).
+ */
+export async function isAutodiagnosticoClosedForCycle(
+  client: SupabaseClient,
+  cycleId: number,
+): Promise<boolean> {
+  if (!Number.isSafeInteger(cycleId) || cycleId <= 0) return false;
+  const { data, error } = await client.rpc("autodiagnostico_cycle_window_closed", {
+    p_cuatrimestre_id: cycleId,
+  });
+  if (error) {
+    // Never fail a grade calculation over this; log so a missing function is visible.
+    console.error("[autodiagnostico window] closed-state lookup failed", { cycleId, message: error.message });
+    return false;
+  }
+  return data === true;
+}

@@ -1,0 +1,35 @@
+---
+// Answers of versioned instruments (observation, coordination) grouped by snapshot section.
+import type { VersionedReport } from '../../lib/teacherReport';
+
+export interface Props {
+  rows: VersionedReport[];
+  empty: string;
+}
+const { rows, empty } = Astro.props;
+const fmt = (value: number | null | undefined, digits = 1) =>
+  value === null || value === undefined ? '—' : value.toLocaleString('es-MX', { maximumFractionDigits: digits });
+const fmtDate = (value: string | null | undefined) =>
+  value ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' }).format(new Date(value)) : '—';
+---
+
+{rows.length === 0 ? <p class="mt-3 rounded-xl bg-slate-50 p-4 italic text-slate-500">{empty}</p> : rows.map((sub) => (
+  <div>
+    <p class="avoid-after mt-4 border-l-4 border-dorado bg-tup-50 px-3 py-1.5 font-semibold text-tup">{sub.title}{sub.version ? ` · ${sub.version}` : ''}</p>
+    <p class="mt-1 text-xs text-slate-500">{[sub.subject, sub.group].filter(Boolean).join(' · ') || 'Sin grupo'} · {fmtDate(sub.date)} · Evaluó: {sub.evaluator || '—'} · Promedio {fmt(sub.raw, 2)} · Puntaje {fmt(sub.score)}{sub.validity && sub.validity !== 'valid' ? ` · ${sub.validity}` : ''}</p>
+    {sub.sections.map((section) => (
+      <div class="mt-3">
+        <p class="avoid-after border-b border-dorado-300 pb-0.5 font-semibold text-tup">{section.title}</p>
+        <table class="w-full">
+          <tbody class="divide-y divide-slate-100">
+            {section.items.map((item) => (
+              <tr class="avoid-break"><td class="w-14 py-1 text-xs text-slate-400">{item.code}</td><td class="py-1">{item.label}</td><td class="w-40 py-1 text-right font-semibold">{item.valueLabel}</td></tr>
+            ))}
+          </tbody>
+        </table>
+        {section.evidence && <p class="avoid-break mt-1 text-xs text-slate-600"><span class="font-semibold">Evidencia:</span>{' '}{section.evidence}</p>}
+      </div>
+    ))}
+    {sub.notes.map((note) => <div class="avoid-break mt-2 border-l-4 border-tup bg-slate-50 px-3 py-2"><p class="text-xs uppercase text-slate-500">{note.label}</p><p>{note.text}</p></div>)}
+  </div>
+))}

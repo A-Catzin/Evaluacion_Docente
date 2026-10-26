@@ -21,3 +21,22 @@ describe("summarizeInstrumentAnswers", () => {
     expect(summarizeInstrumentAnswers(values, 2).isInvalidExcessiveNa).toBe(false);
   });
 });
+
+describe("summarizeInstrumentAnswers with scale points", () => {
+  const points = { "1": 50, "2": 70, "3": 100 };
+
+  it("averages the declared points per answer and leaves the raw 1-3 average untouched", () => {
+    const result = summarizeInstrumentAnswers([1, 2, 3], 3, points);
+    expect(result.normalizedScore).toBe(73.33);
+    expect(result.rawScore).toBe(2);
+  });
+
+  it("scores every 'Requiere mejora' answer as 50 instead of 33.33", () => {
+    expect(summarizeInstrumentAnswers([1, 1, 1, 1], 3, points).normalizedScore).toBe(50);
+    expect(summarizeInstrumentAnswers([1, 1, 1, 1], 3).normalizedScore).toBe(33.33);
+  });
+
+  it("keeps N/A out of the points average", () => {
+    expect(summarizeInstrumentAnswers([2, 2, 2, 2, "na"], 3, points).normalizedScore).toBe(70);
+  });
+});

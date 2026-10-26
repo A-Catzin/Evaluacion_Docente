@@ -49,9 +49,11 @@ const filasBase = aggData
     promPlan: row.score_planeacion,
     promObs: row.score_observacion,
     promAuto: row.score_autoevaluacion,
+    autoNoRealizado: row.instrument_validity?.autodiagnostico === 'not_done',
     final360: row.calificacion_final,
     cat360: String(row.categoria_final ?? 'No iniciado'),
     instrumentos: row.num_instrumentos_completados,
+    esperados: Number(row.num_instrumentos_esperados) || 5,
   }));
 
 const filas = busqueda
@@ -100,12 +102,12 @@ function buildPageUrl(p:number) {
               <tr class="hover:bg-slate-50">
                 <td class="px-2 py-2 text-center font-medium">{f.nombre.toUpperCase()} {f.apellidos.toUpperCase()}</td>
                 <td class="px-2 py-2 text-center text-slate-600 text-[10px]">{f.email}</td>
-                <td class="px-2 py-2 text-center">{f.instrumentos}/5</td>
+                <td class="px-2 py-2 text-center">{f.instrumentos}/{f.esperados}</td>
                 <td class={`px-2 py-2 text-center ${colorScore(f.promEst)}`}>{formatScore(f.promEst)}</td>
                 <td class={`px-2 py-2 text-center ${colorScore(f.promCoord)}`}>{formatScore(f.promCoord)}</td>
                 <td class={`px-2 py-2 text-center ${colorScore(f.promPlan)}`}>{formatScore(f.promPlan)}</td>
                 <td class={`px-2 py-2 text-center ${colorScore(f.promObs)}`}>{formatScore(f.promObs)}</td>
-                <td class={`px-2 py-2 text-center ${colorScore(f.promAuto)}`}>{formatScore(f.promAuto)}</td>
+                <td class={`px-2 py-2 text-center ${colorScore(f.promAuto)}`}>{f.autoNoRealizado ? 'No realizado' : formatScore(f.promAuto)}</td>
                 <td class={`px-2 py-2 text-center font-bold ${colorScore(f.final360)}`}>{formatScore(f.final360)}</td>
                 <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{f.cat360}</span></td>
                 <td class="px-2 py-2 text-center"><a href={`/admin/docentes/${f.id}${qs}`} class="px-2 py-0.5 rounded-lg bg-tup/10 text-tup text-[10px] font-medium hover:bg-tup/20 whitespace-nowrap">Ver</a></td>

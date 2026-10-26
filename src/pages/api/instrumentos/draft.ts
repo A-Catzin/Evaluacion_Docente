@@ -15,8 +15,12 @@ const DraftIdentitySchema = z
     docente_id: z.coerce.number().int().positive(),
     cuatrimestre_id: z.coerce.number().int().positive(),
     version_id: z.string().uuid(),
+    purpose: z.enum(["observation", "coordination"]).optional(),
   })
   .strict();
+
+const rpcName = (action: "get" | "save" | "delete", purpose?: string) =>
+  `${action}_${purpose === "coordination" ? "coordination" : "observation"}_instrument_draft`;
 
 const DraftSchema = z
   .object({
@@ -27,7 +31,7 @@ const DraftSchema = z
         z
           .object({
             item_id: z.string().uuid(),
-            value: z.union([z.number().int().min(1).max(3), z.literal("na")]),
+            value: z.union([z.number().int().min(1).max(5), z.literal("na")]),
             na_reason: z
               .string()
               .max(MAX_INSTRUMENT_TEXT_LENGTH)
@@ -48,6 +52,22 @@ const DraftSchema = z
           .strict(),
       )
       .max(20)
+      .default([]),
+    checks: z
+      .array(
+        z
+          .object({
+            check_id: z.string().uuid(),
+            value: z.enum(["complies", "does_not_comply", "na"]),
+            na_reason: z
+              .string()
+              .max(MAX_INSTRUMENT_TEXT_LENGTH)
+              .nullable()
+              .optional(),
+          })
+          .strict(),
+      )
+      .max(40)
       .default([]),
     metadata: z
       .object({
@@ -148,7 +168,7 @@ export const GET: APIRoute = async ({ request, cookies }) => {
         : json({ error: "Datos del borrador no válidos" }, 400);
     }
     const { data, error } = await auth.client.rpc(
-      "get_observation_instrument_draft",
+      rpcName("get", parsed.data.purpose),
       {
         p_docente_id: parsed.data.docente_id,
         p_cuatrimestre_id: parsed.data.cuatrimestre_id,
@@ -178,7 +198,7 @@ export const PUT: APIRoute = async ({ request, cookies }) => {
     const parsed = SaveDraftSchema.safeParse(body);
     if (!parsed.success) return validationError(parsed.error);
     const { data, error } = await auth.client.rpc(
-      "save_observation_instrument_draft",
+      rpcName("save", parsed.data.purpose),
       {
         p_docente_id: parsed.data.docente_id,
         p_cuatrimestre_id: parsed.data.cuatrimestre_id,
@@ -211,7 +231,7 @@ export const DELETE: APIRoute = async ({ request, cookies }) => {
     const parsed = DraftIdentitySchema.safeParse(body);
     if (!parsed.success) return validationError(parsed.error);
     const { error } = await auth.client.rpc(
-      "delete_observation_instrument_draft",
+      rpcName("delete", parsed.data.purpose),
       {
         p_docente_id: parsed.data.docente_id,
         p_cuatrimestre_id: parsed.data.cuatrimestre_id,

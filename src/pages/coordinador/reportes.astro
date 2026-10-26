@@ -6,6 +6,7 @@ import { formatScore, roundTo2 } from '../../services/scoring';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 import { resolveCoordinatorCycle } from '../../lib/coordinatorCycle';
 import { crearClienteConSesion } from '../../lib/supabaseClient';
+import { parsePlanningStatusSummary, planningCellLabel } from '../../lib/planningStatusSummary';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -88,25 +89,37 @@ if (modo === 'individual') {
     }
   }
 
+  const scoreByTeacher = new Map(todasLasCalificaciones.map((row) => [row.docente_id, row]));
+  // Every active assigned teacher is listed, even without instruments yet.
+  const { data: assignedTeachers } = ids.length
+    ? await dbAdmin().from('docentes').select('id,nombre,apellidos,email').in('id', ids).eq('activo', true)
+    : { data: [] };
+
   individualData = {
-    docentes: todasLasCalificaciones
-      .filter((row) => ids.includes(row.docente_id) && row.num_instrumentos_completados > 0 && (!docenteIdSolicitado || row.docente_id === docenteIdSolicitado))
-      .map((row) => ({
-        id: row.docente_id,
-        nombre: String(row.docente_nombre ?? ''),
-        apellidos: String(row.docente_apellidos ?? ''),
-        email: String(row.docente_email ?? ''),
-        modalidad: String(row.modalidad_snapshot ?? ''),
-        ee: row.score_encuesta_estudiantil,
-        coord: row.score_coordinacion,
-        plan: row.score_planeacion,
-        obs: row.score_observacion,
-        auto: row.score_autoevaluacion,
-        final: row.calificacion_final,
-        category: row.has_invalid_instrument ? 'Parcial con instrumento inválido' : String(row.categoria_final ?? ''),
-        instrumentCount: row.num_instrumentos_completados,
-      }))
-      .sort((a, b) => a.apellidos.localeCompare(b.apellidos)),
+    docentes: (assignedTeachers || [])
+      .filter((teacher: any) => !docenteIdSolicitado || teacher.id === docenteIdSolicitado)
+      .map((teacher: any) => {
+        const row = scoreByTeacher.get(teacher.id);
+        return {
+          id: teacher.id,
+          nombre: String(teacher.nombre ?? ''),
+          apellidos: String(teacher.apellidos ?? ''),
+          email: String(teacher.email ?? ''),
+          modalidad: String(row?.modalidad_snapshot ?? ''),
+          ee: row?.score_encuesta_estudiantil ?? null,
+          coord: row?.score_coordinacion ?? null,
+          plan: row?.score_planeacion ?? null,
+          planCell: planningCellLabel(row?.score_planeacion, parsePlanningStatusSummary(row?.instrument_validity?.planning_subject_status), formatScore),
+          obs: row?.score_observacion ?? null,
+          auto: row?.score_autoevaluacion ?? null,
+          autoNoRealizado: row?.instrument_validity?.autodiagnostico === 'not_done',
+          final: row?.calificacion_final ?? null,
+          category: row ? (row.has_invalid_instrument ? 'Parcial con instrumento inválido' : String(row.categoria_final ?? '')) : 'No iniciado',
+          instrumentCount: row?.num_instrumentos_completados ?? 0,
+          expectedCount: row?.num_instrumentos_esperados ?? 0,
+        };
+      })
+      .sort((a: any, b: any) => a.apellidos.localeCompare(b.apellidos)),
     anualMap,
   };
 }
@@ -209,13 +222,14 @@ if (modo === 'general') {
 
     {modo === 'individual' && (
       (individualData?.docentes || []).length === 0 ? (
-        <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">{docenteIdSolicitado ? 'El docente seleccionado no tiene resultados disponibles en este ciclo.' : 'No tienes docentes coordinados con resultados en este cuatrimestre.'}</div>
+        <div class="bg-white rounded-2xl p-12 text-center text-slate-400 shadow-tarjeta">{docenteIdSolicitado ? 'El docente seleccionado no está entre tus docentes coordinados de este ciclo.' : 'No tienes docentes coordinados en este cuatrimestre.'}</div>
       ) : (
         <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead><tr class="bg-slate-50 border-b">
                 <th class="text-left px-3 py-3 text-xs uppercase">Docente</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Prog.</th>
                 <th class="text-center px-2 py-3 text-xs uppercase">EE</th>
                 <th class="text-center px-2 py-3 text-xs uppercase">Coord</th>
                 <th class="text-center px-2 py-3 text-xs uppercase">Plan</th>
@@ -224,6 +238,7 @@ if (modo === 'general') {
                 <th class="text-center px-2 py-3 text-xs uppercase">Final</th>
                 <th class="text-center px-2 py-3 text-xs uppercase">Cat</th>
                 <th class="text-center px-2 py-3 text-xs uppercase bg-tup/10 text-tup">Prom. anual</th>
+                <th class="text-center px-2 py-3 text-xs uppercase">Ver</th>
               </tr></thead>
               <tbody class="divide-y">
 {individualData?.docentes?.map((d: any) => {
@@ -232,14 +247,16 @@ if (modo === 'general') {
                   return (
                     <tr class="hover:bg-slate-50">
                       <td class="px-3 py-2"><p class="font-medium text-xs">{d.nombre.toUpperCase()} {d.apellidos.toUpperCase()}</p><p class="text-[10px] text-slate-400">{d.email}</p></td>
+                      <td class="px-2 py-2 text-center text-xs font-medium text-slate-600">{d.instrumentCount}/{d.expectedCount || 5}</td>
                       <td class={"px-2 py-2 text-center font-medium " + colorN(d.ee)}>{fmt(d.ee)}</td>
                       <td class={"px-2 py-2 text-center font-medium " + colorN(d.coord)}>{fmt(d.coord)}</td>
-                      <td class={"px-2 py-2 text-center font-medium " + colorN(d.plan)}>{fmt(d.plan)}</td>
+                      <td class={"px-2 py-2 text-center font-medium " + colorN(d.plan)}>{d.planCell}</td>
                       <td class={"px-2 py-2 text-center font-medium " + colorN(d.obs)}>{fmt(d.obs)}</td>
-                      <td class={"px-2 py-2 text-center font-medium " + colorN(d.auto)}>{fmt(d.auto)}</td>
+                      <td class={"px-2 py-2 text-center font-medium " + colorN(d.auto)}>{d.autoNoRealizado ? 'No realizado' : fmt(d.auto)}</td>
                       <td class={"px-2 py-2 text-center font-bold " + colorN(d.final)}>{d.instrumentCount > 0 ? fmt(d.final) : '—'}</td>
                       <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{d.category}</span></td>
                       <td class={"px-2 py-2 text-center font-bold bg-tup/5 " + colorN(anualAvg)}>{fmt(anualAvg)}</td>
+                      <td class="px-2 py-2 text-center"><a href={`/coordinador/docentes/${d.id}?cuatrimestre=${cuatrimestreId}`} class="rounded-lg bg-tup px-3 py-1 text-xs font-medium text-white hover:opacity-90">Ver</a></td>
                     </tr>
                   );
                 })}

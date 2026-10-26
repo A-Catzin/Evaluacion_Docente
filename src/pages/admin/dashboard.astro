@@ -3,6 +3,7 @@ import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
 import { obtenerCuatrimestres, obtenerCuatrimestreActivo } from '../../services/catalogos';
 import { db, dbAdmin } from '../../lib/db';
 import { formatScore, roundTo2 } from '../../services/scoring';
+import { parsePlanningStatusSummary, planningCellLabel } from '../../lib/planningStatusSummary';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 import { formatPersonName } from '../../lib/personName';
 
@@ -116,10 +117,12 @@ import { formatPersonName } from '../../lib/personName';
 
 interface FilaDashboard {
   id: number; nombre: string; apellidos: string; email: string;
-  promEst: number | null; promObs: number | null; promCoord: number | null; promPlan: number | null; promAuto: number | null;
+  promEst: number | null; promObs: number | null; promCoord: number | null; promPlan: number | null; promAuto: number | null; autoNoRealizado: boolean;
   respuestasNativas: number;
   final360: number | null; cat360: string;
   instrumentos: number;
+  esperados: number;
+  planCell: string;
 }
 
 const filasTodas: FilaDashboard[] = aggData
@@ -136,10 +139,13 @@ const filasTodas: FilaDashboard[] = aggData
       promPlan: row.score_planeacion,
       promObs: row.score_observacion,
       promAuto: row.score_autoevaluacion,
+      autoNoRealizado: row.instrument_validity?.autodiagnostico === 'not_done',
       respuestasNativas: progresoNativo?.respuestas_nativas || 0,
       final360: row.calificacion_final,
       cat360: String(row.categoria_final ?? 'No iniciado'),
       instrumentos: row.num_instrumentos_completados,
+      esperados: Number(row.num_instrumentos_esperados) || 5,
+      planCell: planningCellLabel(row.score_planeacion, parsePlanningStatusSummary(row.instrument_validity?.planning_subject_status), formatScore),
     };
   });
 
@@ -273,12 +279,12 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
           <tr class="hover:bg-slate-50">
             <td class="px-3 py-2 text-center font-medium">{formatPersonName(`${d.nombre} ${d.apellidos}`.trim())}</td>
             <td class="px-3 py-2 text-center text-slate-600 text-xs">{d.email}</td>
-            <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/5</span></td>
+            <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/{d.esperados}</span></td>
             <td class={`px-2 py-2 text-center ${colorN(d.promEst)}`}>{formatScore(d.promEst)}</td>
             <td class={`px-2 py-2 text-center ${colorN(d.promCoord)}`}>{formatScore(d.promCoord)}</td>
-            <td class={`px-2 py-2 text-center ${colorN(d.promPlan)}`}>{formatScore(d.promPlan)}</td>
+            <td class={`px-2 py-2 text-center ${colorN(d.promPlan)}`}>{d.planCell}</td>
             <td class={`px-2 py-2 text-center ${colorN(d.promObs)}`}>{formatScore(d.promObs)}</td>
-            <td class={`px-2 py-2 text-center ${colorN(d.promAuto)}`}>{formatScore(d.promAuto)}</td>
+            <td class={`px-2 py-2 text-center ${colorN(d.promAuto)}`}>{d.autoNoRealizado ? 'No realizado' : formatScore(d.promAuto)}</td>
             <td class={`px-2 py-2 text-center font-bold ${colorN(d.final360)}`}>{formatScore(d.final360)}</td>
             <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100">{d.cat360}</span></td>
             <td class="px-2 py-2 text-center">

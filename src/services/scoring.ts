@@ -7,6 +7,7 @@ import {
   normalizePlanningSubjectName,
   type PlanningSubjectScope,
 } from "../lib/planningSubjectScope";
+import { isAutodiagnosticoClosedForCycle } from "../lib/autodiagnosticoSubmissionWindow";
 import {
   getPlanningSubjectStatus,
   type PlanningSubjectStatus,
@@ -124,6 +125,8 @@ export interface InstrumentScores {
   plan?: number;
   obs?: number;
   auto?: number;
+  /** The self-assessment window closed without a submission: it counts as 0 and is shown as "No realizado". */
+  autoNotDone?: boolean;
   /** Whether the aggregate planning score represents at least one delivered plan. */
   planCompleted?: boolean;
   invalidPurposes?: Array<"coordination" | "planning" | "observation">;
@@ -235,6 +238,11 @@ export function aggregateNativeScoresByTeacherAndSubject(
       .set(total.asignaturaId, total.score / total.responses);
   }
   return result;
+}
+
+/** NP and "Corrección" subjects are left out of the planning average and use the four-instrument profile. */
+export function excludesPlanning(status: PlanningSubjectStatus): boolean {
+  return status === "np" || status === "correction";
 }
 
 export interface FinalScore {
@@ -407,7 +415,9 @@ export async function fetchCuatrimestreScores(
     obs = calcObservationScore(o);
   }
   const autoValue = (diagData as any[])?.[0]?.puntaje_total;
-  const auto = autoValue == null ? undefined : (Number(autoValue) / 120) * 100;
+  let auto = autoValue == null ? undefined : (Number(autoValue) / 120) * 100;
+  const autoNotDone = auto === undefined && (await isAutodiagnosticoClosedForCycle(cl, cuatrimestreId));
+  if (autoNotDone) auto = 0;
 
   const observationCapture = latestVersioned.get("observation");
   if (observationCapture?.validity_status === "valid")
@@ -417,7 +427,7 @@ export async function fetchCuatrimestreScores(
   const invalidPurposes = [...latestVersioned.values()]
     .filter((row) => row.validity_status === "invalid_excessive_na")
     .map((row) => row.purpose);
-  return { ee, coord, plan, obs, auto, invalidPurposes };
+  return { ee, coord, plan, obs, auto, autoNotDone: autoNotDone || undefined, invalidPurposes };
 }
 
 export type SubjectInstrumentScores = InstrumentScores & {
@@ -560,16 +570,16 @@ export function calculateSubjectAwareFinal(
     const final = calcFinalScore(
       {
         ...subject,
-        plan: subject.planningStatus === "np" ? undefined : subject.plan,
+        plan: excludesPlanning(subject.planningStatus) ? undefined : subject.plan,
       },
-      subject.planningStatus === "np"
+      excludesPlanning(subject.planningStatus)
         ? "ejecutivo"
         : (subject.modalidad ?? modalidad),
     );
     return { ...subject, final };
   });
   const planningSubjects = calculated.filter(
-    (subject) => subject.planningStatus !== "np",
+    (subject) => !excludesPlanning(subject.planningStatus),
   );
   const plan = planningSubjects.length
     ? planningSubjects.reduce(
@@ -611,15 +621,16 @@ export function calculateSubjectAwareFinal(
     auto:
       teacherScores?.auto ??
       firstAvailable(calculated.map((subject) => subject.auto)),
+    autoNotDone: teacherScores?.autoNotDone,
     invalidPurposes,
   };
   const hasApprovedPlan = calculated.some(
     (subject) => subject.planningStatus === "approved",
   );
-  const hasNp = calculated.some((subject) => subject.planningStatus === "np");
+  const hasNp = calculated.some((subject) => excludesPlanning(subject.planningStatus));
   const hasNormalAssignedModality = calculated.some(
     (subject) =>
-      subject.planningStatus !== "np" &&
+      !excludesPlanning(subject.planningStatus) &&
       obtenerPerfilModalidad(subject.modalidad ?? modalidad).weights.plan > 0,
   );
   // An actually approved plan always selects normal weights. Otherwise NP
@@ -666,7 +677,7 @@ export async function fetchSubjectAwareCuatrimestreScores(
       .select("asignatura_id,puntaje_promedio,estado,asignaturas!inner(nombre)")
       .eq("docente_id", docenteId)
       .eq("cuatrimestre_id", cuatrimestreId)
-      .eq("estado", "Aprobado"),
+      .in("estado", ["Aprobado", "Corrección", "Pendiente"]),
     cl
       .from("planning_subject_np")
       .select("subject_key,estado")
@@ -723,7 +734,9 @@ export async function fetchSubjectAwareCuatrimestreScores(
       final: calcFinalScore(legacy, modalidad),
     };
 
-  const approvedPlans = (plansResult.data || []) as any[];
+  const reviewedPlans = (plansResult.data || []) as any[];
+  // Only approved plans carry a score; "Corrección" and "Pendiente" plans just mark the subject's status.
+  const approvedPlans = reviewedPlans.filter((plan) => plan.estado === "Aprobado");
   const npRecords = (npResult.data || []) as any[];
   const groupNpRecords = (groupNpResult.data || []) as any[];
   const coordinationRows = (coordinationResult.data ||
@@ -785,7 +798,7 @@ export async function fetchSubjectAwareCuatrimestreScores(
     );
     const planningStatus = getPlanningSubjectStatus(
       scope,
-      approvedPlans.map((item) => ({
+      reviewedPlans.map((item) => ({
         asignaturaNombre: item.asignaturas?.nombre || "",
         estado: item.estado,
       })),
@@ -906,9 +919,11 @@ export async function fetchBatchScoresPorDocente(
     if (!byPurpose.has(row.purpose)) byPurpose.set(row.purpose, row);
     versionedByTeacher.set(Number(row.docente_id), byPurpose);
   }
+  const autoClosed = await isAutodiagnosticoClosedForCycle(cl, cuatrimestreId);
   const result = new Map<number, InstrumentScores>();
   for (const id of docenteIds) {
     const planAcc = planMap.get(id);
+    const autoNotDone = autoClosed && !diagMap.has(id);
     const plan = planAcc ? planAcc.sum / planAcc.count : undefined;
     const versioned = versionedByTeacher.get(id);
     const validScore = (purpose: string, fallback: number | undefined) => {
@@ -924,7 +939,8 @@ export async function fetchBatchScoresPorDocente(
       coord: validScore("coordination", coordMap.get(id)),
       plan: validScore("planning", plan),
       obs: validScore("observation", obsMap.get(id)),
-      auto: diagMap.get(id),
+      auto: autoNotDone ? 0 : diagMap.get(id),
+      autoNotDone: autoNotDone || undefined,
       invalidPurposes: [...(versioned?.values() || [])]
         .filter((capture) => capture.validity_status === "invalid_excessive_na")
         .map((capture) => capture.purpose),

@@ -13,16 +13,24 @@ export type PlanningRecord = {
 export type CoordinatedPortfolioRow = {
   teacher: PortfolioTeacher;
   coordinationCompleted: boolean;
+  /** Normalized score of the versioned coordination submission; null when legacy-only or invalid. */
+  coordinationScore: number | null;
   planningSubmitted: number;
   planningPending: number;
   planningReviewed: number;
   resultsAvailable: boolean;
 };
 
+export type OtherAccountObservation = { score: number | null; by: string };
+
 export type ObservationPortfolioRow = {
   teacher: PortfolioTeacher;
   observationCompleted: boolean;
   observationScore: number | null;
+  /** True when someone else registered the observation and the actor has none of their own. */
+  observationRegisteredByOther: boolean;
+  observationOtherScore: number | null;
+  observationOtherBy: string | null;
 };
 
 export function buildCoordinatedPortfolio(
@@ -30,6 +38,7 @@ export function buildCoordinatedPortfolio(
   completedCoordinationTeacherIds: Set<number>,
   planningRecords: PlanningRecord[],
   teacherIdsWithResults: Set<number>,
+  versionedCoordination: Map<number, number | null> = new Map(),
 ): CoordinatedPortfolioRow[] {
   return teachers.map((teacher) => {
     const plans = planningRecords.filter(
@@ -41,13 +50,38 @@ export function buildCoordinatedPortfolio(
 
     return {
       teacher,
-      coordinationCompleted: completedCoordinationTeacherIds.has(teacher.id),
+      coordinationCompleted:
+        completedCoordinationTeacherIds.has(teacher.id) ||
+        versionedCoordination.has(teacher.id),
+      coordinationScore: versionedCoordination.get(teacher.id) ?? null,
       planningSubmitted: plans.length,
       planningPending,
       planningReviewed: plans.length - planningPending,
       resultsAvailable: teacherIdsWithResults.has(teacher.id),
     };
   });
+}
+
+type VersionedCoordination = {
+  docente_id: number;
+  normalized_score: number | string | null;
+  validity_status: string | null;
+};
+
+/** Latest versioned coordination per teacher (one capture per teacher, whoever submitted it). */
+export function summarizeVersionedCoordination(
+  rows: VersionedCoordination[],
+): Map<number, number | null> {
+  const byTeacher = new Map<number, number | null>();
+  for (const row of rows) {
+    if (byTeacher.has(row.docente_id)) continue;
+    const score = Number(row.normalized_score);
+    byTeacher.set(
+      row.docente_id,
+      row.validity_status === "valid" && Number.isFinite(score) ? score : null,
+    );
+  }
+  return byTeacher;
 }
 
 type VersionedObservation = {
@@ -73,7 +107,8 @@ export function summarizeObserverObservations(
   const completedTeacherIds = new Set<number>();
   const ownLatestScores = new Map<number, number | null>();
   const supersededTeacherIds = new Set<number>();
-  if (!actorId) return { completedTeacherIds, ownLatestScores, supersededTeacherIds };
+  const registeredByOthers = new Map<number, OtherAccountObservation>();
+  if (!actorId) return { completedTeacherIds, ownLatestScores, supersededTeacherIds, registeredByOthers };
 
   const ordered = [...versioned].sort((a, b) =>
     (b.submitted_at || '').localeCompare(a.submitted_at || '') ||
@@ -97,19 +132,32 @@ export function summarizeObserverObservations(
     completedTeacherIds.add(row.docente_id);
     if (!ownLatestScores.has(row.docente_id)) ownLatestScores.set(row.docente_id, row.score_normalizado);
   }
-  return { completedTeacherIds, ownLatestScores, supersededTeacherIds };
+  // The actor's own work stays separate: an observation by someone else is reported, never attributed to the actor.
+  for (const [teacherId, latest] of globalLatest) {
+    if (completedTeacherIds.has(teacherId)) continue;
+    registeredByOthers.set(teacherId, { score: latest.normalized_score, by: latest.submitted_by ?? "" });
+  }
+  return { completedTeacherIds, ownLatestScores, supersededTeacherIds, registeredByOthers };
 }
 
 export function buildObservationPortfolio(
   teachers: PortfolioTeacher[],
   completedObservationTeacherIds: Set<number>,
   observationScores: Map<number, number | null> = new Map(),
+  registeredByOthers: Map<number, OtherAccountObservation> = new Map(),
 ): ObservationPortfolioRow[] {
-  return teachers.map((teacher) => ({
-    teacher,
-    observationCompleted: completedObservationTeacherIds.has(teacher.id),
-    observationScore: observationScores.get(teacher.id) ?? null,
-  }));
+  return teachers.map((teacher) => {
+    const completed = completedObservationTeacherIds.has(teacher.id);
+    const other = completed ? undefined : registeredByOthers.get(teacher.id);
+    return {
+      teacher,
+      observationCompleted: completed,
+      observationScore: observationScores.get(teacher.id) ?? null,
+      observationRegisteredByOther: Boolean(other),
+      observationOtherScore: other?.score ?? null,
+      observationOtherBy: other?.by ?? null,
+    };
+  });
 }
 
 function withCycle(path: string, cycleId: number, teacherId?: number): string {

@@ -5,6 +5,7 @@ import {
   coordinatedPortfolioLinks,
   observationPortfolioLinks,
   summarizeObserverObservations,
+  summarizeVersionedCoordination,
 } from "./coordinatorDashboardPortfolio";
 
 const coordinatedTeacher = {
@@ -120,6 +121,56 @@ describe("coordinator dashboard portfolios", () => {
     expect(summary.supersededTeacherIds).toEqual(new Set());
   });
 
+  it("reports the latest observation registered by another account when the actor has none", () => {
+    const summary = summarizeObserverObservations(
+      [
+        { id: 20, docente_id: 15, submitted_by: "proyectos", submitted_at: "2026-10-12T18:00:00Z", normalized_score: 80, validity_status: "valid" },
+        { id: 21, docente_id: 15, submitted_by: "calidad", submitted_at: "2026-10-13T18:00:00Z", normalized_score: 90, validity_status: "valid" },
+      ],
+      [],
+      "cristhian",
+    );
+
+    expect(summary.completedTeacherIds).toEqual(new Set());
+    expect(summary.registeredByOthers).toEqual(new Map([[15, { score: 90, by: "calidad" }]]));
+  });
+
+  it("does not report another account's observation when the actor has registered their own", () => {
+    const summary = summarizeObserverObservations(
+      [
+        { id: 22, docente_id: 15, submitted_by: "cristhian", submitted_at: "2026-10-12T18:00:00Z", normalized_score: 70, validity_status: "valid" },
+        { id: 23, docente_id: 15, submitted_by: "proyectos", submitted_at: "2026-10-13T18:00:00Z", normalized_score: 80, validity_status: "valid" },
+      ],
+      [],
+      "cristhian",
+    );
+
+    expect(summary.completedTeacherIds).toEqual(new Set([15]));
+    expect(summary.registeredByOthers).toEqual(new Map());
+  });
+
+  it("keeps a null score for an invalid submission registered by another account", () => {
+    const summary = summarizeObserverObservations(
+      [{ id: 24, docente_id: 16, submitted_by: "proyectos", submitted_at: "2026-10-12T18:00:00Z", normalized_score: null, validity_status: "invalid_excessive_na" }],
+      [],
+      "cristhian",
+    );
+
+    expect(summary.registeredByOthers).toEqual(new Map([[16, { score: null, by: "proyectos" }]]));
+  });
+
+  it("marks a teacher registered by another account in the observation portfolio, without counting it as the actor's own", () => {
+    const rows = buildObservationPortfolio(
+      [observationTeacher, sharedTeacher],
+      new Set([sharedTeacher.id]),
+      new Map([[sharedTeacher.id, 70]]),
+      new Map([[observationTeacher.id, { score: 80, by: "proyectos" }]]),
+    );
+
+    expect(rows[0]).toMatchObject({ observationCompleted: false, observationRegisteredByOther: true, observationOtherScore: 80, observationOtherBy: "proyectos" });
+    expect(rows[1]).toMatchObject({ observationCompleted: true, observationRegisteredByOther: false, observationOtherScore: null, observationOtherBy: null });
+  });
+
   it("exposes actions only for their portfolio purpose", () => {
     expect(coordinatedPortfolioLinks(12, 1)).toEqual({
       coordination:
@@ -131,5 +182,30 @@ describe("coordinator dashboard portfolios", () => {
       observation:
         "/coordinador/captura/observacion?cuatrimestre=12&docente_id=2",
     });
+  });
+});
+
+describe("versioned coordination in the coordinated portfolio", () => {
+  const teacher = { id: 336, nombre: "A", apellidos: "B", modalidad: null };
+
+  it("counts a versioned coordination as registered with its score", () => {
+    const versioned = summarizeVersionedCoordination([
+      { docente_id: 336, normalized_score: "98.33", validity_status: "valid" },
+    ]);
+    const [row] = buildCoordinatedPortfolio([teacher], new Set(), [], new Set(), versioned);
+    expect(row.coordinationCompleted).toBe(true);
+    expect(row.coordinationScore).toBe(98.33);
+  });
+
+  it("keeps it registered without score when invalid, and pending when absent", () => {
+    const invalid = summarizeVersionedCoordination([
+      { docente_id: 336, normalized_score: null, validity_status: "invalid_excessive_na" },
+    ]);
+    expect(buildCoordinatedPortfolio([teacher], new Set(), [], new Set(), invalid)[0]).toMatchObject({ coordinationCompleted: true, coordinationScore: null });
+    expect(buildCoordinatedPortfolio([teacher], new Set(), [], new Set())[0]).toMatchObject({ coordinationCompleted: false, coordinationScore: null });
+  });
+
+  it("still honors the legacy coordination table", () => {
+    expect(buildCoordinatedPortfolio([teacher], new Set([336]), [], new Set())[0].coordinationCompleted).toBe(true);
   });
 });

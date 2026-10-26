@@ -1,21 +1,40 @@
 ---
 import type { TeacherReport } from '../../services/teacherReport';
-import VersionedReportSection from './VersionedReportSection.astro';
+import ReportSection from './ReportSection.astro';
+import VersionedReportContent from './VersionedReportContent.astro';
 
-export interface Props { report: TeacherReport }
-const { report } = Astro.props;
+export interface Props {
+  report: TeacherReport;
+  /** Collapsible instrument sub-cards on screen; the PDF passes false to print everything open. */
+  collapsible?: boolean;
+}
+const { report, collapsible = true } = Astro.props;
 
 const fmt = (value: number | null | undefined, digits = 1) =>
   value === null || value === undefined ? '—' : value.toLocaleString('es-MX', { maximumFractionDigits: digits });
 const fmtDate = (value: string | null | undefined) =>
   value ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' }).format(new Date(value)) : '—';
-const tone = (score: number | null) =>
-  score === null ? 'bg-slate-100 text-slate-500' : score >= 80 ? 'bg-emerald-100 text-emerald-800' : score >= 60 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800';
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+const studentResponses = report.student.instruments.reduce((n, i) => n + i.responses, 0);
+const planStatuses = [...new Set(report.planning.map((p) => p.status).filter(Boolean))].join(', ');
+const status = {
+  autodiag: report.autodiag ? `Respondido el ${fmtDate(report.autodiag.date)} · Nivel ${report.autodiag.level || '—'}` : 'Sin registro en el ciclo',
+  observation: report.observations.length ? plural(report.observations.length, 'observación', 'observaciones') : 'Sin registro en el ciclo',
+  student: studentResponses
+    ? `${studentResponses} de ${report.student.enrolled} estudiantes · ${plural(report.student.comments.length, 'comentario', 'comentarios')}`
+    : 'Sin respuestas en el ciclo',
+  coordination: report.coordination.length ? plural(report.coordination.length, 'evaluación', 'evaluaciones') : 'Pendiente de registro',
+  planning: report.planning.length ? `${plural(report.planning.length, 'planeación', 'planeaciones')} · ${planStatuses || 'sin estado'}` : 'Sin planeaciones entregadas',
+};
+const block = 'avoid-after mt-4 border-l-4 border-dorado bg-tup-50 px-3 py-1.5 font-semibold text-tup';
+const note = 'avoid-break mt-2 border-l-4 border-tup bg-slate-50 px-3 py-2';
+const empty = 'mt-3 rounded-xl bg-slate-50 p-4 italic text-slate-500';
 ---
 
-<div class="report space-y-6 text-sm text-slate-700">
-  <div class="report-block">
-    <h3 class="text-base font-bold text-tup">Resumen por instrumento</h3>
+<div class="report space-y-3 text-sm text-slate-700">
+  <div class="report-block rounded-xl border border-slate-200 border-t-4 border-t-tup bg-white p-4">
+    <h3 class="border-b-2 border-dorado pb-1 text-base font-bold text-tup">Resumen por instrumento</h3>
     <table class="mt-2 w-full">
       <tbody class="divide-y divide-slate-100">
         {report.summary.map((row, i) => (
@@ -29,46 +48,40 @@ const tone = (score: number | null) =>
       </tbody>
     </table>
     <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div class="rounded-xl border border-slate-200 p-3"><p class="text-xs uppercase text-slate-500">Calificación final</p><p class="text-lg font-bold">{fmt(report.final.score)}</p></div>
-      <div class="rounded-xl border border-slate-200 p-3"><p class="text-xs uppercase text-slate-500">Categoría</p><p class="text-lg font-bold">{report.final.category || '—'}</p></div>
-      <div class="rounded-xl border border-slate-200 p-3"><p class="text-xs uppercase text-slate-500">Instrumentos completos</p><p class="text-lg font-bold">{report.final.completed ?? '—'} de {report.final.expected ?? 5}</p></div>
-      <div class="rounded-xl border border-slate-200 p-3"><p class="text-xs uppercase text-slate-500">Último cálculo</p><p class="text-lg font-bold">{fmtDate(report.final.calculatedAt)}</p></div>
+      <div class="rounded-lg border-t-2 border-dorado bg-tup-50 p-3"><p class="text-xs uppercase text-slate-500">Calificación final</p><p class="text-lg font-bold text-tup">{fmt(report.final.score)}</p></div>
+      <div class="rounded-lg border-t-2 border-dorado bg-tup-50 p-3"><p class="text-xs uppercase text-slate-500">Categoría</p><p class="text-lg font-bold text-tup">{report.final.category || '—'}</p></div>
+      <div class="rounded-lg border-t-2 border-dorado bg-tup-50 p-3"><p class="text-xs uppercase text-slate-500">Instrumentos completos</p><p class="text-lg font-bold text-tup">{report.final.completed ?? '—'} de {report.final.expected ?? 5}</p></div>
+      <div class="rounded-lg border-t-2 border-dorado bg-tup-50 p-3"><p class="text-xs uppercase text-slate-500">Último cálculo</p><p class="text-lg font-bold text-tup">{fmtDate(report.final.calculatedAt)}</p></div>
     </div>
     <p class="mt-2 text-xs text-slate-500">La calificación final es la registrada en el último cálculo del sistema. Un puntaje marcado como “calculado” se obtuvo de las respuestas mostradas porque el sistema aún no lo registra.</p>
   </div>
 
-  <section class="report-section">
-    <header class="flex items-start justify-between gap-4 border-b border-slate-200 pb-2">
-      <div><p class="text-xs uppercase tracking-wide text-slate-400">Instrumento 1 de 5</p><h3 class="text-base font-bold text-tup">Autoevaluación (autodiagnóstico)</h3><p class="text-xs text-slate-500">Escala 1 a 5</p></div>
-      <span class={`rounded-xl px-3 py-1 text-lg font-bold ${tone(report.summary[0].score)}`}>{fmt(report.summary[0].score)}</span>
-    </header>
+  <ReportSection n={1} title="Autoevaluación (autodiagnóstico)" scale="Escala 1 a 5" score={report.summary[0].score} status={status.autodiag} collapsible={collapsible}>
     {report.autodiag ? (
       <>
-        <p class="mt-2 text-xs text-slate-500">Respondido el {fmtDate(report.autodiag.date)} · Puntaje total {fmt(report.autodiag.total, 0)} · Nivel {report.autodiag.level || '—'}</p>
-        <table class="mt-2 w-full">
+        <p class="mt-1 text-xs text-slate-500">Puntaje total {fmt(report.autodiag.total, 0)}</p>
+        <p class={block}>Reactivos</p>
+        <table class="mt-1 w-full">
           <tbody class="divide-y divide-slate-100">
             {report.autodiag.items.map((item) => (
               <tr class="avoid-break"><td class="w-8 py-1 text-slate-400">{item.n}</td><td class="py-1">{item.text}</td><td class="w-16 py-1 text-right font-semibold">{item.value ?? '—'} / 5</td></tr>
             ))}
           </tbody>
         </table>
-        {report.autodiag.comment && <div class="avoid-break mt-3 border-l-4 border-tup bg-slate-50 px-3 py-2"><p class="text-xs uppercase text-slate-500">Comentarios del docente</p><p>{report.autodiag.comment}</p></div>}
+        {report.autodiag.comment && <div class={note}><p class="text-xs uppercase text-slate-500">Comentarios del docente</p><p>{report.autodiag.comment}</p></div>}
       </>
-    ) : <p class="mt-3 rounded-xl bg-slate-50 p-4 italic text-slate-500">Sin autodiagnóstico registrado en el ciclo.</p>}
-  </section>
+    ) : <p class={empty}>Sin autodiagnóstico registrado en el ciclo.</p>}
+  </ReportSection>
 
-  <VersionedReportSection n={2} title="Observación de clase" scale="Escala del instrumento observado"
-    empty="Sin observación de clase registrada en el ciclo." rows={report.observations} score={report.summary[1].score} />
+  <ReportSection n={2} title="Observación de clase" scale="Escala del instrumento observado" score={report.summary[1].score} status={status.observation} collapsible={collapsible}>
+    <VersionedReportContent rows={report.observations} empty="Sin observación de clase registrada en el ciclo." />
+  </ReportSection>
 
-  <section class="report-section">
-    <header class="flex items-start justify-between gap-4 border-b border-slate-200 pb-2">
-      <div><p class="text-xs uppercase tracking-wide text-slate-400">Instrumento 3 de 5</p><h3 class="text-base font-bold text-tup">Encuesta estudiantil</h3><p class="text-xs text-slate-500">Escala 1 a 5 · puntaje = (promedio − 1) × 25</p></div>
-      <span class={`rounded-xl px-3 py-1 text-lg font-bold ${tone(report.summary[2].score)}`}>{fmt(report.summary[2].score)}</span>
-    </header>
-    {report.student.instruments.length === 0 ? <p class="mt-3 rounded-xl bg-slate-50 p-4 italic text-slate-500">Sin respuestas de estudiantes en el ciclo.</p> : report.student.instruments.map((inst) => (
-      <div class="mt-3">
-        <p class="font-semibold text-slate-800">{inst.title}</p>
-        <p class="text-xs text-slate-500">{inst.responses} respuesta(s) de {report.student.enrolled} estudiantes inscritos · Promedio {inst.mean.toFixed(2)} / 5 · Puntaje {fmt(inst.score)}</p>
+  <ReportSection n={3} title="Encuesta estudiantil" scale="Escala 1 a 5 · puntaje = (promedio − 1) × 25" score={report.summary[2].score} status={status.student} collapsible={collapsible}>
+    {report.student.instruments.length === 0 ? <p class={empty}>Sin respuestas de estudiantes en el ciclo.</p> : report.student.instruments.map((inst) => (
+      <div>
+        <p class={block}>{inst.title}</p>
+        <p class="mt-1 text-xs text-slate-500">{inst.responses} respuesta(s) de {report.student.enrolled} estudiantes inscritos · Promedio {inst.mean.toFixed(2)} / 5 · Puntaje {fmt(inst.score)}</p>
         <ul class="mt-1 list-disc pl-5 text-xs text-slate-600">{inst.groups.map((g) => <li>{g.label}: <b>{g.count}</b> respuesta(s)</li>)}</ul>
         <table class="mt-2 w-full">
           <thead><tr class="border-b border-slate-200 text-xs uppercase text-slate-400"><th class="py-1 text-left">#</th><th class="py-1 text-left">Reactivo</th>{[1, 2, 3, 4, 5].map((v) => <th class="w-7 py-1 text-center">{v}</th>)}<th class="w-14 py-1 text-right">Prom.</th></tr></thead>
@@ -80,25 +93,22 @@ const tone = (score: number | null) =>
         </table>
       </div>
     ))}
-    <p class="mt-3 font-semibold text-slate-800">Comentarios de estudiantes (anónimos y validados)</p>
+    <p class={block}>Comentarios de estudiantes (anónimos y validados)</p>
     {report.student.comments.length === 0 ? <p class="mt-1 italic text-slate-500">Sin comentarios validados.</p> : (
-      <ul class="mt-1 space-y-1.5">{report.student.comments.map((c) => <li class="avoid-break rounded-lg bg-slate-50 px-3 py-2">“{c}”</li>)}</ul>
+      <ul class="mt-2 space-y-1.5">{report.student.comments.map((c) => <li class="avoid-break rounded-lg border-l-2 border-dorado-300 bg-slate-50 px-3 py-2">“{c}”</li>)}</ul>
     )}
     <p class="mt-2 text-xs text-slate-500">Las respuestas se presentan agregadas por reactivo para preservar el anonimato de las y los estudiantes.</p>
-  </section>
+  </ReportSection>
 
-  <VersionedReportSection n={4} title="Evaluación de coordinación" scale="Escala del instrumento de coordinación"
-    empty="La coordinación aún no registra la evaluación de este docente en el ciclo." rows={report.coordination} score={report.summary[3].score} />
+  <ReportSection n={4} title="Evaluación de coordinación" scale="Escala del instrumento de coordinación" score={report.summary[3].score} status={status.coordination} collapsible={collapsible}>
+    <VersionedReportContent rows={report.coordination} empty="La coordinación aún no registra la evaluación de este docente en el ciclo." />
+  </ReportSection>
 
-  <section class="report-section">
-    <header class="flex items-start justify-between gap-4 border-b border-slate-200 pb-2">
-      <div><p class="text-xs uppercase tracking-wide text-slate-400">Instrumento 5 de 5</p><h3 class="text-base font-bold text-tup">Planeación didáctica</h3><p class="text-xs text-slate-500">Escala 0 a 2 por criterio</p></div>
-      <span class={`rounded-xl px-3 py-1 text-lg font-bold ${tone(report.summary[4].score)}`}>{fmt(report.summary[4].score)}</span>
-    </header>
-    {report.planning.length === 0 ? <p class="mt-3 rounded-xl bg-slate-50 p-4 italic text-slate-500">Sin planeaciones entregadas en el ciclo.</p> : report.planning.map((plan) => (
-      <div class="mt-3">
-        <p class="font-semibold text-slate-800">{plan.subject || 'Asignatura'} · {plan.group || ''}</p>
-        <p class="text-xs text-slate-500">Estado: {plan.status || '—'} · Puntaje {fmt(plan.score)} / 100 · Criterios N/A: {plan.naCount} · Revisión: {fmtDate(plan.date)}</p>
+  <ReportSection n={5} title="Planeación didáctica" scale="Escala 0 a 2 por criterio" score={report.summary[4].score} status={status.planning} collapsible={collapsible}>
+    {report.planning.length === 0 ? <p class={empty}>Sin planeaciones entregadas en el ciclo.</p> : report.planning.map((plan) => (
+      <div>
+        <p class={block}>{plan.subject || 'Asignatura'} · {plan.group || ''}</p>
+        <p class="mt-1 text-xs text-slate-500">Estado: {plan.status || '—'} · Puntaje {fmt(plan.score)} / 100 · Criterios N/A: {plan.naCount} · Revisión: {fmtDate(plan.date)}</p>
         <table class="mt-2 w-full">
           <tbody class="divide-y divide-slate-100">
             {plan.criteria.map((c) => (
@@ -110,8 +120,8 @@ const tone = (score: number | null) =>
             ))}
           </tbody>
         </table>
-        {plan.notes.map((note) => <div class="avoid-break mt-2 border-l-4 border-tup bg-slate-50 px-3 py-2"><p class="text-xs uppercase text-slate-500">{note.label}</p><p>{note.text}</p></div>)}
+        {plan.notes.map((n) => <div class={note}><p class="text-xs uppercase text-slate-500">{n.label}</p><p>{n.text}</p></div>)}
       </div>
     ))}
-  </section>
+  </ReportSection>
 </div>

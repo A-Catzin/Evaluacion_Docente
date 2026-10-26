@@ -1,7 +1,53 @@
 ---
+// Read-only teacher report for a coordinator: same content as the admin report, limited to the
+// teachers assigned to them. Student comments stay out of this view.
 import LayoutCoordinador from '../../../layouts/LayoutCoordinador.astro';
-const { id } = Astro.params;
+import TeacherReportBody from '../../../components/admin/TeacherReportBody.astro';
+import { requireRole } from '../../../lib/auth';
+import { dbAdmin } from '../../../lib/db';
+import { resolveCoordinatorCycle } from '../../../lib/coordinatorCycle';
+import { getMyAssignedTeacherIds } from '../../../lib/teacherAssignments';
+import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
+import { loadTeacherReport } from '../../../services/teacherReport';
+
+const auth = await requireRole(Astro.cookies, ['coordinador', 'superadmin']);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+const teacherId = Number.parseInt(Astro.params.id || '', 10);
+if (!Number.isSafeInteger(teacherId) || teacherId < 1) return Astro.redirect('/coordinador/reportes');
+
+const [activeCycle, cycles] = await Promise.all([obtenerCuatrimestreActivo(auth.client), obtenerCuatrimestres(auth.client)]);
+const cycleId = resolveCoordinatorCycle({
+  query: Astro.url.searchParams.get('cuatrimestre'),
+  cookie: Astro.cookies.get('cuatrimestre_sel')?.value,
+  active: activeCycle?.id,
+  catalog: cycles,
+});
+
+const assigned = await getMyAssignedTeacherIds(auth.client, 'coordinated', cycleId);
+if (auth.profile.rol !== 'superadmin' && !assigned.has(teacherId)) {
+  return new Response('No tienes asignado a este docente en el ciclo seleccionado', { status: 403 });
+}
+
+const report = await loadTeacherReport(dbAdmin(), auth.client, teacherId, cycleId).catch((error) => {
+  console.error('[coordinador docente report] load failed', { message: error instanceof Error ? error.message : 'unknown' });
+  return null;
+});
+const visibleReport = report ? { ...report, student: { ...report.student, comments: [] } } : null;
+const backUrl = `/coordinador/reportes?cuatrimestre=${cycleId}`;
 ---
-<LayoutCoordinador titulo={`Perfil Docente ${id}`}>
-  <div class="animate-flotar-entrada"><h1 class="text-3xl font-bold text-tup mb-6">Perfil del Docente</h1><div class="bg-white rounded-2xl p-8 shadow-tarjeta text-center "><p>Detalle del docente ID: {id}</p></div></div>
+
+<LayoutCoordinador titulo={visibleReport ? `Reporte de ${visibleReport.teacher.name}` : 'Reporte docente'}>
+  <div class="animate-flotar-entrada max-w-5xl mx-auto">
+    <a href={backUrl} class="text-sm text-slate-500 hover:text-tup">← Volver a reportes</a>
+    {visibleReport ? (
+      <div class="mt-4 rounded-2xl bg-white p-6 shadow-tarjeta">
+        <h1 class="text-2xl font-bold text-tup">{visibleReport.teacher.name}</h1>
+        <p class="text-xs text-slate-500">{visibleReport.teacher.email || ''} · Ciclo {visibleReport.cycle.clave}</p>
+        <div class="mt-4"><TeacherReportBody report={visibleReport} /></div>
+      </div>
+    ) : (
+      <div class="mt-4 rounded-2xl bg-white p-12 text-center text-slate-400 shadow-tarjeta" role="alert">No se pudo cargar el reporte de este docente.</div>
+    )}
+  </div>
 </LayoutCoordinador>
