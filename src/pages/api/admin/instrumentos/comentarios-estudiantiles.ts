@@ -8,7 +8,7 @@ import { formatPersonName } from '../../../../lib/personName';
 const MAX_BODY_BYTES = 1024;
 type Teacher = { id: number; nombre: string | null; apellidos: string | null };
 type Group = { id: number; clave: string | null };
-type Comment = { id: number; docente_id: number; grupo_id: number; comentario_abierto: string | null; comentario_validado: boolean | null };
+type Comment = { id: number; docente_id: number; grupo_id: number; comentario_abierto: string | null; comentario_validado: boolean | null; comentario_no_autorizado: boolean | null; comentario_sin_aporte: boolean | null };
 
 function json(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: {
@@ -85,9 +85,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (teacherIds?.length === 0 || groupIds?.length === 0) return json({ comentarios: [], total: 0, page: filters.page });
 
     let query = client.from('encuesta_estudiantil_respuestas')
-      .select('id,docente_id,grupo_id,comentario_abierto,comentario_validado', { count: 'exact' })
+      .select('id,docente_id,grupo_id,comentario_abierto,comentario_validado,comentario_no_autorizado,comentario_sin_aporte', { count: 'exact' })
       .eq('cuatrimestre_id', filters.cycleId).not('comentario_abierto', 'is', null);
-    if (filters.state !== 'todos') query = query.eq('comentario_validado', filters.state === 'validados');
+    if (filters.state === 'validados') query = query.eq('comentario_validado', true);
+    else if (filters.state === 'no_autorizados') query = query.eq('comentario_no_autorizado', true);
+    else if (filters.state === 'sin_aporte') query = query.eq('comentario_sin_aporte', true);
+    else if (filters.state === 'pendientes') query = query.eq('comentario_validado', false).eq('comentario_no_autorizado', false).eq('comentario_sin_aporte', false);
     if (filters.keyword) query = query.ilike('comentario_abierto', literalCommentLike(filters.keyword));
     if (teacherIds) query = query.in('docente_id', teacherIds);
     if (groupIds) query = query.in('grupo_id', groupIds);
@@ -115,8 +118,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 };
 
-// Saves one page of decisions: checked comments become visible to their teacher,
-// unchecked ones are withdrawn.
+// Saves one page of decisions: validated comments become visible to their teacher, "no autorizado"
+// ones are marked as rejected, and withdrawn ones go back to pending. Only validated comments reach the teacher.
 export const PATCH: APIRoute = async ({ cookies, request }) => {
   let userId: string;
   try {
@@ -142,9 +145,11 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     const now = new Date().toISOString();
     let validated = 0;
     let withdrawn = 0;
+    let rejected = 0;
+    let noContribution = 0;
     if (decision.validate.length) {
       const result = await client.from('encuesta_estudiantil_respuestas')
-        .update({ comentario_validado: true, comentario_validado_at: now, comentario_validado_por: userId })
+        .update({ comentario_validado: true, comentario_no_autorizado: false, comentario_sin_aporte: false, comentario_validado_at: now, comentario_validado_por: userId })
         .eq('cuatrimestre_id', decision.cycleId).in('id', decision.validate).not('comentario_abierto', 'is', null)
         .select('id');
       if (result.error) throw new Error('validate');
@@ -152,13 +157,29 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     }
     if (decision.unvalidate.length) {
       const result = await client.from('encuesta_estudiantil_respuestas')
-        .update({ comentario_validado: false, comentario_validado_at: now, comentario_validado_por: userId })
+        .update({ comentario_validado: false, comentario_no_autorizado: false, comentario_sin_aporte: false, comentario_validado_at: now, comentario_validado_por: userId })
         .eq('cuatrimestre_id', decision.cycleId).in('id', decision.unvalidate)
         .select('id');
       if (result.error) throw new Error('unvalidate');
       withdrawn = result.data.length;
     }
-    return json({ validados: validated, retirados: withdrawn });
+    if (decision.reject.length) {
+      const result = await client.from('encuesta_estudiantil_respuestas')
+        .update({ comentario_validado: false, comentario_no_autorizado: true, comentario_sin_aporte: false, comentario_validado_at: now, comentario_validado_por: userId })
+        .eq('cuatrimestre_id', decision.cycleId).in('id', decision.reject).not('comentario_abierto', 'is', null)
+        .select('id');
+      if (result.error) throw new Error('reject');
+      rejected = result.data.length;
+    }
+    if (decision.noContribution.length) {
+      const result = await client.from('encuesta_estudiantil_respuestas')
+        .update({ comentario_validado: false, comentario_no_autorizado: false, comentario_sin_aporte: true, comentario_validado_at: now, comentario_validado_por: userId })
+        .eq('cuatrimestre_id', decision.cycleId).in('id', decision.noContribution).not('comentario_abierto', 'is', null)
+        .select('id');
+      if (result.error) throw new Error('no contribution');
+      noContribution = result.data.length;
+    }
+    return json({ validados: validated, retirados: withdrawn, no_autorizados: rejected, sin_aporte: noContribution });
   } catch {
     return json({ error: 'No se pudo guardar la validación' }, 503);
   }

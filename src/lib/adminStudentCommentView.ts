@@ -6,9 +6,10 @@ export type StudentComment = {
   grupo: string;
   comentario: string;
   validado: boolean;
+  estado: 'pendiente' | 'validado' | 'no_autorizado' | 'sin_aporte';
 };
 
-export type GroupedComment = { id: number; comentario: string; validado: boolean };
+export type GroupedComment = { id: number; comentario: string; validado: boolean; estado: StudentComment['estado'] };
 
 export type TeacherComments = {
   docenteId: number;
@@ -34,7 +35,7 @@ export function groupComments(rows: StudentComment[]): TeacherComments[] {
       teacherGroups.set(row.grupoId, group);
       teacher.groups.push(group);
     }
-    group.comments.push({ id: row.id, comentario: row.comentario, validado: row.validado });
+    group.comments.push({ id: row.id, comentario: row.comentario, validado: row.validado, estado: row.estado });
   }
   return [...teachers.values()];
 }

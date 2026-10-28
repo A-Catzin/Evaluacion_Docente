@@ -119,6 +119,12 @@ const statusLabel = (status: string) => status === 'valid' ? 'Válida' : status 
 <LayoutAdmin titulo="Seguimiento de instrumentos — Observaciones">
   <div class="max-w-7xl mx-auto space-y-6">
     <header><h1 class="text-3xl font-bold text-tup">Seguimiento de instrumentos</h1><p class="text-slate-500">Resultados de observaciones · Todas las capturas y revisiones del ciclo seleccionado.</p></header>
+    {filters.cycleId > 0 && (
+      <div class="flex flex-wrap items-center gap-3 rounded-2xl bg-white p-4 shadow-tarjeta">
+        <a href={`/api/admin/instrumentos/comentarios-observaciones.csv?cuatrimestre=${filters.cycleId}`} download class="rounded-xl bg-tup px-4 py-2 text-sm font-semibold text-white">Descargar comentarios finales (CSV)</a>
+        <span class="text-sm text-slate-500">Todas las observaciones del ciclo con Fortalezas, Área prioritaria de mejora, Recomendación y Observaciones generales.</span>
+      </div>
+    )}
     <form method="GET" class="bg-white rounded-2xl shadow-tarjeta p-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label class="text-sm text-slate-600">Ciclo<select name="cuatrimestre" class="block w-full rounded-xl border p-2"><option value="">Selecciona ciclo</option>{cycles.map(c => <option value={c.id} selected={c.id === filters.cycleId}>{c.clave} {c.nombre}</option>)}</select></label>
       <label class="text-sm text-slate-600">Docente<input name="docente" value={filters.teacher} class="block w-full rounded-xl border p-2" /></label>

@@ -115,3 +115,5 @@ docs/ui_ux_guidelines.md
 docs-privados/
 !supabase/migrations/121_coordination_instrument_drafts.sql
 !supabase/migrations/122_autodiagnostico_cycle_window_closed.sql
+!supabase/migrations/123_student_comment_not_authorized.sql
+!supabase/migrations/124_student_comment_no_contribution.sql

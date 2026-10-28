@@ -25,7 +25,7 @@ const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Ast
     <header>
       <h1 class="text-3xl font-bold text-tup">Comentarios estudiantiles</h1>
       <p class="text-slate-600">Consulta exclusiva para superadmin. El texto original puede identificar a quien lo escribió aunque no se muestren identificadores. Trátalo como información confidencial.</p>
-      <p class="mt-2 text-slate-600">Marca los comentarios que el docente podrá ver y pulsa <strong>Validar selección</strong>. Los que desmarques dejarán de mostrarse al docente.</p>
+      <p class="mt-2 text-slate-600">Elige el estado de cada comentario y pulsa <strong>Guardar cambios</strong>. Solo los <strong>Validados</strong> los puede ver el docente; <strong>Pendiente</strong>, <strong>No autorizado</strong> y <strong>Sin aporte</strong> (comentarios que no aportan nada) no se muestran.</p>
     </header>
     {catalogError && <p role="alert">No se pudieron cargar los ciclos. Intenta nuevamente.</p>}
     <form id="comment-filters" method="POST" action="/api/admin/instrumentos/comentarios-estudiantiles" autocomplete="off" class="bg-white rounded-2xl p-5 grid gap-3 sm:grid-cols-2">
@@ -39,18 +39,32 @@ const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Ast
         <option value="todos">Todos</option>
         <option value="pendientes" selected>Pendientes de validar</option>
         <option value="validados">Validados</option>
+        <option value="no_autorizados">No autorizados</option>
+        <option value="sin_aporte">Sin aporte</option>
       </select></label>
       <button type="submit" disabled={catalogError || !selected} class="rounded-xl bg-tup text-white px-4 py-2">Buscar</button>
     </form>
+    <div id="comment-downloads" class="flex flex-wrap items-center gap-2 rounded-2xl bg-white p-4">
+      <span class="text-sm font-medium text-slate-700">Descargar CSV del ciclo:</span>
+      <a data-download="pendientes" class="rounded-lg border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-50" href="#">Pendientes</a>
+      <a data-download="validados" class="rounded-lg border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-50" href="#">Validados</a>
+      <a data-download="no_autorizados" class="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50" href="#">No autorizados</a>
+      <a data-download="sin_aporte" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50" href="#">Sin aporte</a>
+      <a data-download="todos" class="rounded-lg bg-tup px-3 py-1.5 text-sm font-medium text-white" href="#">Todos los comentarios</a>
+    </div>
     <noscript><p role="alert">Esta consulta requiere JavaScript para enviar filtros en JSON por POST. No envíes comentarios por la dirección URL.</p></noscript>
     <p id="comment-status" role="status" aria-live="polite">Preparando consulta…</p>
-    <div id="comment-actions" class="hidden sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-2xl bg-white p-4 shadow-tarjeta">
-      <label class="flex items-center gap-2 text-sm font-medium text-slate-700"><input id="comment-select-all" type="checkbox" class="h-4 w-4 accent-tup" /> Seleccionar todos en esta página</label>
-      <span id="comment-selected" class="text-sm text-slate-500"></span>
-      <button id="comment-validate" type="button" class="ml-auto rounded-xl bg-tup px-4 py-2 font-semibold text-white disabled:opacity-50">Validar selección</button>
-    </div>
     <p id="comment-save-status" role="status" aria-live="polite" class="text-sm"></p>
     <div id="comment-results" class="space-y-4"></div>
+    <div id="comment-actions" class="hidden sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-2xl bg-white p-4 shadow-tarjeta ring-1 ring-slate-200">
+      <span class="text-sm font-medium text-slate-700">Marcar toda la página como:</span>
+      <button type="button" data-bulk="validado" class="rounded-lg border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-50">Validado</button>
+      <button type="button" data-bulk="no_autorizado" class="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50">No autorizado</button>
+      <button type="button" data-bulk="sin_aporte" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Sin aporte</button>
+      <button type="button" data-bulk="pendiente" class="rounded-lg border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-50">Pendiente</button>
+      <span id="comment-selected" class="text-sm text-slate-500"></span>
+      <button id="comment-validate" type="button" class="ml-auto rounded-xl bg-tup px-4 py-2 font-semibold text-white disabled:opacity-50">Guardar cambios</button>
+    </div>
     <nav aria-label="Paginación de comentarios" class="flex gap-4">
       <button id="comment-prev" type="button" disabled class="rounded-xl border p-2 disabled:opacity-50">← Anterior</button>
       <button id="comment-next" type="button" disabled class="rounded-xl border p-2 disabled:opacity-50">Siguiente →</button>
@@ -66,7 +80,6 @@ const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Ast
   const prev = document.querySelector<HTMLButtonElement>('#comment-prev')!;
   const next = document.querySelector<HTMLButtonElement>('#comment-next')!;
   const actions = document.querySelector<HTMLElement>('#comment-actions')!;
-  const selectAll = document.querySelector<HTMLInputElement>('#comment-select-all')!;
   const selectedLabel = document.querySelector<HTMLElement>('#comment-selected')!;
   const validateButton = document.querySelector<HTMLButtonElement>('#comment-validate')!;
   const saveStatus = document.querySelector<HTMLElement>('#comment-save-status')!;
@@ -76,19 +89,22 @@ const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Ast
   let controller: AbortController | undefined;
   let filters: { cuatrimestreId: number; keyword: string; docente: string; grupo: string; estado: string } | undefined;
   // Validation state as loaded, to send only the decisions that changed.
-  let loadedState = new Map<number, boolean>();
+  type Review = 'pendiente' | 'validado' | 'no_autorizado' | 'sin_aporte';
+  let loadedState = new Map<number, Review>();
 
-  function checkboxes(): HTMLInputElement[] {
-    return [...results.querySelectorAll<HTMLInputElement>('input[data-comment-id]')];
+  function cards(): HTMLElement[] {
+    return [...results.querySelectorAll<HTMLElement>('[data-comment-id]')];
+  }
+
+  function currentReview(card: HTMLElement): Review {
+    const picked = card.querySelector<HTMLInputElement>('input[type="radio"]:checked');
+    return (picked?.value as Review | undefined) ?? 'pendiente';
   }
 
   function updateSelection(): void {
-    const boxes = checkboxes();
-    const checked = boxes.filter(box => box.checked).length;
-    selectAll.checked = boxes.length > 0 && checked === boxes.length;
-    selectAll.indeterminate = checked > 0 && checked < boxes.length;
-    const changes = boxes.filter(box => box.checked !== loadedState.get(Number(box.dataset.commentId))).length;
-    selectedLabel.textContent = `${checked} de ${boxes.length} seleccionado(s) · ${changes} cambio(s) sin guardar`;
+    const all = cards();
+    const changes = all.filter(card => currentReview(card) !== loadedState.get(Number(card.dataset.commentId))).length;
+    selectedLabel.textContent = `${all.length} comentario(s) en esta página · ${changes} cambio(s) sin guardar`;
     validateButton.disabled = changes === 0;
   }
 
@@ -112,27 +128,42 @@ const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Ast
       for (const group of teacher.groups) {
         const groupNode = details(group.grupo, 'bg-slate-50 rounded-xl');
         for (const comment of group.comments) {
-          const card = document.createElement('label');
-          card.className = 'flex cursor-pointer items-start gap-3 rounded-xl border bg-white p-4';
-          const box = document.createElement('input');
-          box.type = 'checkbox';
-          box.className = 'mt-1 h-4 w-4 flex-shrink-0 accent-tup';
-          box.dataset.commentId = String(comment.id);
-          box.checked = comment.validado;
-          box.setAttribute('aria-label', 'Mostrar este comentario al docente');
-          box.addEventListener('change', updateSelection);
+          const card = document.createElement('div');
+          card.className = 'flex flex-col gap-3 rounded-xl border bg-white p-4 sm:flex-row sm:items-start';
+          card.dataset.commentId = String(comment.id);
+          const options = document.createElement('div');
+          options.className = 'flex flex-shrink-0 flex-col gap-1 text-sm';
+          options.setAttribute('role', 'radiogroup');
+          options.setAttribute('aria-label', 'Estado del comentario');
+          for (const [value, label] of [['validado', 'Validado'], ['no_autorizado', 'No autorizado'], ['sin_aporte', 'Sin aporte'], ['pendiente', 'Pendiente']] as const) {
+            const option = document.createElement('label');
+            option.className = 'flex cursor-pointer items-center gap-2';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = `review-${comment.id}`;
+            radio.value = value;
+            radio.checked = comment.estado === value;
+            radio.className = 'h-4 w-4 accent-tup';
+            radio.addEventListener('change', updateSelection);
+            option.append(radio, document.createTextNode(label));
+            options.append(option);
+          }
           const content = document.createElement('div');
           content.className = 'min-w-0 flex-1';
           const text = document.createElement('p');
           text.className = 'whitespace-pre-wrap break-words';
           text.textContent = comment.comentario;
           const badge = document.createElement('span');
-          badge.className = comment.validado
-            ? 'mt-2 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800'
-            : 'mt-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800';
-          badge.textContent = comment.validado ? 'Validado · visible para el docente' : 'Pendiente · no visible para el docente';
+          const badgeStyle = {
+            validado: ['bg-emerald-100 text-emerald-800', 'Validado · visible para el docente'],
+            no_autorizado: ['bg-red-100 text-red-800', 'No autorizado · no visible para el docente'],
+            sin_aporte: ['bg-slate-200 text-slate-700', 'Sin aporte · no visible para el docente'],
+            pendiente: ['bg-amber-100 text-amber-800', 'Pendiente · no visible para el docente'],
+          }[comment.estado];
+          badge.className = `mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${badgeStyle[0]}`;
+          badge.textContent = badgeStyle[1];
           content.append(text, badge);
-          card.append(box, content);
+          card.append(options, content);
           groupNode.body.append(card);
         }
         teacherNode.body.append(groupNode.outer);
@@ -144,7 +175,7 @@ const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Ast
       : `No hay comentarios en esta página. Página ${current} de ${Math.max(1, Math.ceil(count / 20))}.`;
     prev.disabled = current <= 1;
     next.disabled = current * 20 >= count || current >= 10000;
-    loadedState = new Map(rows.map(row => [row.id, row.validado]));
+    loadedState = new Map(rows.map(row => [row.id, row.estado]));
     actions.classList.toggle('hidden', rows.length === 0);
     updateSelection();
   }
@@ -175,7 +206,7 @@ const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Ast
             const c = row as Record<string, unknown>;
             return Number.isSafeInteger(c.id) && Number.isSafeInteger(c.docenteId) && Number.isSafeInteger(c.grupoId) &&
               typeof c.docente === 'string' && typeof c.grupo === 'string' && typeof c.comentario === 'string' &&
-              typeof c.validado === 'boolean';
+              typeof c.validado === 'boolean' && (c.estado === 'pendiente' || c.estado === 'validado' || c.estado === 'no_autorizado' || c.estado === 'sin_aporte');
           })) throw new Error('response');
       if (requestId !== sequence) return;
       page = requestedPage;
@@ -187,6 +218,18 @@ const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Ast
       prev.disabled = next.disabled = true;
     }
   }
+
+  // Downloads follow the selected cycle; they ignore the text filters and the page.
+  const downloads = [...document.querySelectorAll<HTMLAnchorElement>('[data-download]')];
+  function updateDownloads(): void {
+    const cycle = Number(new FormData(form).get('cuatrimestreId'));
+    for (const link of downloads) {
+      link.href = `/api/admin/instrumentos/comentarios-estudiantiles.csv?cuatrimestre=${cycle}&estado=${link.dataset.download}`;
+      link.setAttribute('download', '');
+    }
+  }
+  form.querySelector('select[name="cuatrimestreId"]')?.addEventListener('change', updateDownloads);
+  updateDownloads();
 
   form.addEventListener('submit', event => {
     event.preventDefault();
@@ -209,38 +252,47 @@ const selected = [Number(Astro.url.searchParams.get('cuatrimestre')), Number(Ast
     saveStatus.textContent = '';
     void load(1);
   });
-  selectAll.addEventListener('change', () => {
-    for (const box of checkboxes()) box.checked = selectAll.checked;
-    updateSelection();
+  actions.querySelectorAll<HTMLButtonElement>('[data-bulk]').forEach(button => {
+    button.addEventListener('click', () => {
+      for (const card of cards()) {
+        const radio = card.querySelector<HTMLInputElement>(`input[type="radio"][value="${button.dataset.bulk}"]`);
+        if (radio) radio.checked = true;
+      }
+      updateSelection();
+    });
   });
 
   validateButton.addEventListener('click', async () => {
     if (!filters) return;
-    const boxes = checkboxes();
-    const changed = boxes.filter(box => box.checked !== loadedState.get(Number(box.dataset.commentId)));
-    const validar = changed.filter(box => box.checked).map(box => Number(box.dataset.commentId));
-    const quitar = changed.filter(box => !box.checked).map(box => Number(box.dataset.commentId));
-    if (!validar.length && !quitar.length) return;
+    const changed = cards()
+      .map(card => ({ id: Number(card.dataset.commentId), review: currentReview(card) }))
+      .filter(item => item.review !== loadedState.get(item.id));
+    const ids = (review: Review) => changed.filter(item => item.review === review).map(item => item.id);
+    const validar = ids('validado');
+    const rechazar = ids('no_autorizado');
+    const sinAporte = ids('sin_aporte');
+    const quitar = ids('pendiente');
+    if (!validar.length && !rechazar.length && !sinAporte.length && !quitar.length) return;
     validateButton.disabled = true;
     saveStatus.className = 'text-sm text-slate-600';
-    saveStatus.textContent = 'Guardando validación…';
+    saveStatus.textContent = 'Guardando cambios…';
     try {
       const response = await fetch('/api/admin/instrumentos/comentarios-estudiantiles', {
         method: 'PATCH', credentials: 'same-origin', cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cuatrimestreId: filters.cuatrimestreId, validar, quitar }),
+        body: JSON.stringify({ cuatrimestreId: filters.cuatrimestreId, validar, quitar, rechazar, sinAporte }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error('save');
-      const result = data as { validados?: number; retirados?: number };
+      const result = data as { validados?: number; retirados?: number; no_autorizados?: number; sin_aporte?: number };
       saveStatus.className = 'text-sm text-emerald-700';
-      saveStatus.textContent = `Listo: ${result.validados ?? 0} comentario(s) validado(s) y ${result.retirados ?? 0} retirado(s).`;
+      saveStatus.textContent = `Listo: ${result.validados ?? 0} validado(s), ${result.no_autorizados ?? 0} no autorizado(s), ${result.sin_aporte ?? 0} sin aporte y ${result.retirados ?? 0} devuelto(s) a pendiente.`;
       await load(page);
       // With a state filter the saved comments leave the list; step back if this page emptied.
       if (page > 1 && (page - 1) * 20 >= total) await load(page - 1);
     } catch {
       saveStatus.className = 'text-sm text-red-700';
-      saveStatus.textContent = 'No se pudo guardar la validación. Intenta nuevamente.';
+      saveStatus.textContent = 'No se pudieron guardar los cambios. Intenta nuevamente.';
       updateSelection();
     }
   });
