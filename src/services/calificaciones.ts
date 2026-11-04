@@ -31,6 +31,8 @@ export interface CalificacionFinal {
   docente_apellidos?: string | null;
   docente_email?: string | null;
   docente_campus?: string | null;
+  /** False for inactive teachers; undefined when the teacher info was not loaded. */
+  docente_activo?: boolean;
 }
 
 const VERSION_CALCULO = "v2.5-teacher-cycle-aggregate";
@@ -234,18 +236,18 @@ async function leerInfoDocentes(
 ): Promise<
   Map<
     number,
-    { nombre: string; apellidos: string; email: string; campus: string }
+    { nombre: string; apellidos: string; email: string; campus: string; activo: boolean }
   >
 > {
   const map = new Map<
     number,
-    { nombre: string; apellidos: string; email: string; campus: string }
+    { nombre: string; apellidos: string; email: string; campus: string; activo: boolean }
   >();
   if (!docenteIds.length) return map;
 
   const { data, error } = await client
     .from("docentes")
-    .select("id,nombre,apellidos,email,campus")
+    .select("id,nombre,apellidos,email,campus,activo")
     .in("id", docenteIds);
 
   if (error) {
@@ -258,6 +260,7 @@ async function leerInfoDocentes(
       apellidos: String(row.apellidos ?? ""),
       email: String(row.email ?? ""),
       campus: String(row.campus ?? ""),
+      activo: row.activo !== false,
     });
   }
   return map;
@@ -327,7 +330,7 @@ export async function obtenerCalificacionesPorCuatrimestre(
 
   // Completar info de docente para las filas precalculadas que no la tengan.
   const idsSinInfo = resultados
-    .filter((r) => !r.docente_nombre && !r.docente_apellidos)
+    .filter((r) => (!r.docente_nombre && !r.docente_apellidos) || r.docente_activo === undefined)
     .map((r) => r.docente_id);
   if (idsSinInfo.length) {
     const infoDocentes = await leerInfoDocentes(client, idsSinInfo);
@@ -338,6 +341,7 @@ export async function obtenerCalificacionesPorCuatrimestre(
         r.docente_apellidos = info.apellidos;
         r.docente_email = info.email;
         r.docente_campus = info.campus;
+        r.docente_activo = info.activo;
       }
     }
   }

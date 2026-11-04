@@ -61,6 +61,7 @@ export type PlanningReport = {
 export type ReportCard = {
   id: number;
   name: string;
+  active: boolean;
   email: string | null;
   finalScore: number | null;
   category: string | null;

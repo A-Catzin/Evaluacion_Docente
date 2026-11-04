@@ -42,3 +42,31 @@ describe("migration 122", () => {
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.autodiagnostico_cycle_window_closed\(INTEGER\) TO authenticated, service_role/);
   });
 });
+
+describe("autodiagnóstico not done only penalises teachers who were expected to do it", () => {
+  const tables: Record<string, unknown[]> = {
+    grupos: [{ docente_id: 1 }, { docente_id: 2 }],
+    docentes: [{ id: 1 }, { id: 3 }],
+  };
+  const chain = (rows: unknown[]) => {
+    const query: Record<string, unknown> = {};
+    for (const method of ["select", "eq", "in", "order", "limit", "not", "is", "gt"]) query[method] = () => query;
+    query.then = (resolve: (value: unknown) => unknown) => resolve({ data: rows, error: null });
+    return query;
+  };
+  const client = {
+    from: (table: string) => chain(tables[table] ?? []),
+    rpc: (fn: string) => Promise.resolve({ data: fn === "autodiagnostico_cycle_window_closed" ? true : [], error: null }),
+  } as unknown as SupabaseClient;
+
+  it("gives 0 + the flag to an active teacher with groups, and nothing to inactive or group-less ones", async () => {
+    const { fetchBatchScoresPorDocente } = await import("../services/scoring");
+    const result = await fetchBatchScoresPorDocente(client, [1, 2, 3], 11);
+    expect(result.get(1)).toMatchObject({ auto: 0, autoNotDone: true });
+    // 2 has a group but is inactive; 3 is active but has no group.
+    expect(result.get(2)?.auto).toBeUndefined();
+    expect(result.get(2)?.autoNotDone).toBeUndefined();
+    expect(result.get(3)?.auto).toBeUndefined();
+    expect(result.get(3)?.autoNotDone).toBeUndefined();
+  });
+});

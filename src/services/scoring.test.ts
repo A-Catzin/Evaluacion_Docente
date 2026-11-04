@@ -246,7 +246,7 @@ describe("scoring", () => {
       expect(calcFinalScore(scores)).toMatchObject({
         final: 0,
         instrumentCount: 5,
-        category: "Insuficiente",
+        category: "Desempeño Crítico",
       });
     });
 
@@ -390,7 +390,7 @@ describe("scoring", () => {
       ]);
       expect(result.final).toMatchObject({
         final: 90,
-        category: "Sobresaliente",
+        category: "Eficaz",
         expectedInstrumentCount: 5,
       });
       expect(result.aggregate.plan).toBe(90);
@@ -413,7 +413,7 @@ describe("scoring", () => {
       ]);
       expect(result.final).toMatchObject({
         final: 85,
-        category: "Distinguido",
+        category: "Adecuado",
         expectedInstrumentCount: 4,
       });
       expect(result.aggregate.plan).toBeUndefined();
@@ -676,7 +676,7 @@ describe("scoring", () => {
         final: 85,
         instrumentCount: 4,
         expectedInstrumentCount: 4,
-        category: "Distinguido",
+        category: "Adecuado",
       });
     });
 
@@ -744,12 +744,16 @@ describe("scoring", () => {
 
   describe("getCategory", () => {
     it("clasifica correctamente con todos los instrumentos", () => {
+      expect(getCategory(100, 5)).toBe("Sobresaliente");
       expect(getCategory(95, 5)).toBe("Sobresaliente");
-      expect(getCategory(85, 5)).toBe("Distinguido");
-      expect(getCategory(75, 5)).toBe("Bueno");
-      expect(getCategory(65, 5)).toBe("Aprobado");
-      expect(getCategory(55, 5)).toBe("A mejorar");
-      expect(getCategory(45, 5)).toBe("Insuficiente");
+      expect(getCategory(94, 5)).toBe("Eficaz");
+      expect(getCategory(86, 5)).toBe("Eficaz");
+      expect(getCategory(85, 5)).toBe("Adecuado");
+      expect(getCategory(76, 5)).toBe("Adecuado");
+      expect(getCategory(75, 5)).toBe("Proceso de Mejora");
+      expect(getCategory(66, 5)).toBe("Proceso de Mejora");
+      expect(getCategory(65, 5)).toBe("Desempeño Crítico");
+      expect(getCategory(0, 5)).toBe("Desempeño Crítico");
     });
 
     it("clasifica parcial cuando faltan instrumentos", () => {

@@ -245,7 +245,7 @@ function resolveCalificacionFinal(builder: MockQueryBuilder) {
         score_observacion: 80,
         score_autoevaluacion: 100,
         calificacion_final: 82,
-        categoria_final: "Distinguido",
+        categoria_final: "Adecuado",
         num_instrumentos_completados: 5,
         num_instrumentos_esperados: 5,
         version_calculo: "v2.2-versioned-instruments",
@@ -350,7 +350,7 @@ describe("calificaciones", () => {
       expect(result.num_instrumentos_esperados).toBe(5);
       expect(result.version_calculo).toBe("v2.5-teacher-cycle-aggregate");
       expect(result.calificacion_final).toBe(81.5);
-      expect(result.categoria_final).toBe("Distinguido");
+      expect(result.categoria_final).toBe("Adecuado");
 
       expect(capturedSnapshotCall).toMatchObject({
         p_docente_id: 1,
@@ -497,7 +497,7 @@ describe("calificaciones", () => {
         score_observacion: 90,
         score_autoevaluacion: 85,
         calificacion_final: 82,
-        categoria_final: "Distinguido",
+        categoria_final: "Adecuado",
         num_instrumentos_completados: 4,
         num_instrumentos_esperados: 5,
         version_calculo: "v2.1",
@@ -536,7 +536,7 @@ describe("calificaciones", () => {
         docente_id: 1,
         cuatrimestre_id: 10,
         calificacion_final: 82,
-        categoria_final: "Distinguido",
+        categoria_final: "Adecuado",
       });
     });
 
@@ -553,7 +553,7 @@ describe("calificaciones", () => {
           score_observacion: 80,
           score_autoevaluacion: 100,
           calificacion_final: 82,
-          categoria_final: "Distinguido",
+          categoria_final: "Adecuado",
           num_instrumentos_completados: 5,
           num_instrumentos_esperados: 5,
           version_calculo: "v2.2-versioned-instruments",
@@ -570,7 +570,7 @@ describe("calificaciones", () => {
           score_observacion: 80,
           score_autoevaluacion: 100,
           calificacion_final: 82,
-          categoria_final: "Distinguido",
+          categoria_final: "Adecuado",
           num_instrumentos_completados: 5,
           num_instrumentos_esperados: 5,
           version_calculo: "v2.2-versioned-instruments",

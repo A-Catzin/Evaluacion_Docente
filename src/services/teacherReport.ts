@@ -59,8 +59,8 @@ export async function loadReportCards(admin: SupabaseClient, userClient: Supabas
   ]);
   const gradeByTeacher = new Map(grades.map((g) => [Number(g.docente_id), g]));
   const ids = [...new Set([...groups.map((g) => g.docente_id), ...gradeByTeacher.keys()].filter(Boolean))];
-  const teachers = await selectIn<{ id: number; nombre: string | null; apellidos: string | null; email: string | null }>(
-    ids, (chunk) => admin.from('docentes').select('id,nombre,apellidos,email').in('id', chunk),
+  const teachers = await selectIn<{ id: number; nombre: string | null; apellidos: string | null; email: string | null; activo: boolean | null }>(
+    ids, (chunk) => admin.from('docentes').select('id,nombre,apellidos,email,activo').in('id', chunk),
   );
   return teachers.map((t) => {
     const g = gradeByTeacher.get(t.id) || {};
@@ -68,6 +68,7 @@ export async function loadReportCards(admin: SupabaseClient, userClient: Supabas
     return {
       id: t.id,
       name: formatPersonName([t.nombre, t.apellidos].filter(Boolean).join(' ')) || t.email || `Docente #${t.id}`,
+      active: t.activo !== false,
       email: t.email,
       finalScore: toNumber(g.calificacion_final),
       category: (g.categoria_final as string) || null,

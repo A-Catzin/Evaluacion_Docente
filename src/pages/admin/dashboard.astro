@@ -4,10 +4,13 @@ import { obtenerCuatrimestres, obtenerCuatrimestreActivo } from '../../services/
 import { db, dbAdmin } from '../../lib/db';
 import { formatScore, roundTo2 } from '../../services/scoring';
 import { parsePlanningStatusSummary, planningCellLabel } from '../../lib/planningStatusSummary';
+import { CATEGORY_NAMES_360 } from '../../lib/categoria360';
+import InactiveBadge from '../../components/admin/InactiveBadge.astro';
 import { obtenerCalificacionesPorCuatrimestre } from '../../services/calificaciones';
 import { formatPersonName } from '../../lib/personName';
 
     const busqueda = Astro.url.searchParams.get('q') || '';
+    const categoriaFiltro = Astro.url.searchParams.get('categoria') || '';
     const pathname = Astro.url.pathname;
     const dashboardWarnings: string[] = [];
     function reportDashboardFailure(operation: string, error: unknown): void {
@@ -40,6 +43,7 @@ import { formatPersonName } from '../../lib/personName';
     const qs = navigationParams.size ? `?${navigationParams.toString()}` : '';
     const clearSearchParams = new URLSearchParams(navigationParams);
     clearSearchParams.delete('q');
+    clearSearchParams.delete('categoria');
     const qsWithoutSearch = clearSearchParams.size ? `?${clearSearchParams.toString()}` : '';
     // Persistir en cookie
     if (Astro.url.searchParams.has('cuatrimestre')) {
@@ -117,7 +121,7 @@ import { formatPersonName } from '../../lib/personName';
 
 interface FilaDashboard {
   id: number; nombre: string; apellidos: string; email: string;
-  promEst: number | null; promObs: number | null; promCoord: number | null; promPlan: number | null; promAuto: number | null; autoNoRealizado: boolean;
+  promEst: number | null; promObs: number | null; promCoord: number | null; promPlan: number | null; promAuto: number | null; autoNoRealizado: boolean; activo: boolean;
   respuestasNativas: number;
   final360: number | null; cat360: string;
   instrumentos: number;
@@ -139,6 +143,7 @@ const filasTodas: FilaDashboard[] = aggData
       promPlan: row.score_planeacion,
       promObs: row.score_observacion,
       promAuto: row.score_autoevaluacion,
+      activo: row.docente_activo !== false,
       autoNoRealizado: row.instrument_validity?.autodiagnostico === 'not_done',
       respuestasNativas: progresoNativo?.respuestas_nativas || 0,
       final360: row.calificacion_final,
@@ -150,15 +155,16 @@ const filasTodas: FilaDashboard[] = aggData
   });
 
 // Filtro por búsqueda (server-side GET)
-const filas = busqueda
+const filasBuscadas = busqueda
   ? filasTodas.filter(f => `${f.nombre} ${f.apellidos}`.toLowerCase().includes(busqueda.toLowerCase()) || f.apellidos.toLowerCase().includes(busqueda.toLowerCase()) || f.email.toLowerCase().includes(busqueda.toLowerCase()))
   : filasTodas;
+const filas = categoriaFiltro ? filasBuscadas.filter(f => f.cat360 === categoriaFiltro) : filasBuscadas;
 
 const totalEvaluados = filas.length;
 const docentesConEENativaIniciada = filasTodas.filter(f => f.respuestasNativas > 0).length;
 const conFinal = filasTodas.filter(f => (f.final360 || 0) > 0);
 const promInstitucional = conFinal.length > 0 ? roundTo2(conFinal.reduce((s,f) => s + (f.final360 || 0), 0) / conFinal.length) : null;
-const sobresalientes = conFinal.filter(f => (f.final360 || 0) >= 80).length;
+const sobresalientes = conFinal.filter(f => (f.final360 || 0) >= 95).length;
 const pctSobresaliente = conFinal.length > 0 ? Math.round((sobresalientes / conFinal.length) * 100) : 0;
 
 function avgInstrumento(vals: Array<number | null>): number {
@@ -171,8 +177,10 @@ const avgPlan = avgInstrumento(filasTodas.map(f => f.promPlan));
 const avgObs = avgInstrumento(filasTodas.map(f => f.promObs));
 const avgAuto = avgInstrumento(filasTodas.map(f => f.promAuto));
 
-const catCounts: Record<string,number> = {'Sobresaliente':0,'Distinguido':0,'Bueno':0,'Aprobado':0,'A mejorar':0,'Insuficiente':0,'Parcial':0,'No iniciado':0};
+const catCounts: Record<string,number> = Object.fromEntries([...CATEGORY_NAMES_360, 'Parcial', 'No iniciado'].map(name => [name, 0]));
 filasTodas.forEach(f => { catCounts[f.cat360] = (catCounts[f.cat360] || 0) + 1; });
+// Category filter options: the usual ones plus any other category present (e.g. "Parcial con instrumento inválido").
+const categoriasFiltro = Object.keys(catCounts).filter(c => catCounts[c] > 0 || c === categoriaFiltro);
 
 function colorN(n: number|null|undefined): string { if (n == null) return ''; if (n>=80) return 'text-emerald-600'; if (n>=60) return 'text-amber-600'; return 'text-red-600'; }
 
@@ -223,6 +231,7 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
       <div><p class="text-sm text-slate-400">Ciclo activo</p><p class="text-slate-500">{cuatrimestreSel?.clave || 'Sin cuatrimestre activo'}</p></div>
       <form method="GET" class="flex items-center gap-2">
         {busqueda && <input type="hidden" name="q" value={busqueda} />}
+        {categoriaFiltro && <input type="hidden" name="categoria" value={categoriaFiltro} />}
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.clave}</option>))}</select>
       </form>
     </div>
@@ -231,8 +240,8 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Docentes Evaluados</p><p class="text-3xl font-bold text-tup mt-1">{totalEvaluados}</p><p class="text-xs text-slate-400 mt-1">de {filasTodas.length} con actividad puntuable</p></div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">EE nativa iniciada</p><p class="text-3xl font-bold text-tup mt-1">{docentesConEENativaIniciada}</p><p class="text-xs text-slate-400 mt-1">docentes con respuestas</p></div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Promedio Inst.</p><p class="text-3xl font-bold text-tup mt-1">{formatScore(promInstitucional)}</p><p class="text-xs text-slate-400 mt-1">escala 0-100</p></div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Distinguidos</p><p class="text-3xl font-bold text-emerald-600 mt-1">{pctSobresaliente}%</p><p class="text-xs text-slate-400 mt-1">≥80 puntos</p></div>
-      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">A Mejorar</p><p class="text-3xl font-bold text-red-500 mt-1">{catCounts['A mejorar'] + catCounts['Insuficiente']}</p><p class="text-xs text-slate-400 mt-1">&lt;60 puntos</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Sobresalientes</p><p class="text-3xl font-bold text-emerald-600 mt-1">{pctSobresaliente}%</p><p class="text-xs text-slate-400 mt-1">≥95 puntos</p></div>
+      <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Desempeño crítico</p><p class="text-3xl font-bold text-red-500 mt-1">{catCounts['Desempeño Crítico']}</p><p class="text-xs text-slate-400 mt-1">&lt;66 puntos</p></div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta"><p class="text-xs text-slate-400 uppercase">Pendientes</p><a href="/admin/usuarios?rol=pendiente" class="block"><p class="text-3xl font-bold text-amber-500 mt-1">{pendientes || 0}</p><p class="text-xs text-slate-400 mt-1">por aprobar</p></a></div>
     </div>
 
@@ -251,15 +260,19 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
       <form method="GET" class="flex gap-3">
         <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
         <input type="text" name="q" value={busqueda} placeholder="Buscar docente por nombre, apellidos o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <select name="categoria" aria-label="Filtrar por categoría" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" onchange="this.form.submit()">
+          <option value="">Todas las categorías</option>
+          {categoriasFiltro.map(c => (<option value={c} selected={c === categoriaFiltro}>{c} ({catCounts[c]})</option>))}
+        </select>
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
-        {busqueda && (<a href={`/admin/dashboard${qsWithoutSearch}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
+        {(busqueda || categoriaFiltro) && (<a href={`/admin/dashboard${qsWithoutSearch}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
     </div>
 
     <div class="bg-white rounded-2xl shadow-tarjeta overflow-hidden">
       <div class="px-6 py-4 border-b flex items-center justify-between">
         <h2 class="font-semibold text-slate-700">Docentes con actividad ({filas.length})</h2>
-        {busqueda && (<span class="text-xs ">Filtrado: "{busqueda}"</span>)}
+        {(busqueda || categoriaFiltro) && (<span class="text-xs ">Filtrado: {[busqueda && `"${busqueda}"`, categoriaFiltro && `categoría ${categoriaFiltro}`].filter(Boolean).join(' · ')}</span>)}
       </div>
       {filas.length === 0 ? (<div class="p-12 text-center ">No se encontraron docentes.</div>) : (
         <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50 border-b">
@@ -277,7 +290,7 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
         </tr></thead>
         <tbody class="divide-y">{filas.map(d => (
           <tr class="hover:bg-slate-50">
-            <td class="px-3 py-2 text-center font-medium">{formatPersonName(`${d.nombre} ${d.apellidos}`.trim())}</td>
+            <td class="px-3 py-2 text-center font-medium">{formatPersonName(`${d.nombre} ${d.apellidos}`.trim())}{!d.activo && <InactiveBadge />}</td>
             <td class="px-3 py-2 text-center text-slate-600 text-xs">{d.email}</td>
             <td class="px-2 py-2 text-center"><span class="text-xs font-medium text-slate-600">{d.instrumentos}/{d.esperados}</span></td>
             <td class={`px-2 py-2 text-center ${colorN(d.promEst)}`}>{formatScore(d.promEst)}</td>
@@ -306,7 +319,7 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
       const catData = JSON.parse(ctxCat.dataset.chart || '{}');
       const labels = Object.keys(catData);
       const values = Object.values(catData);
-      const bgColors = ['#22c55e','#3b82f6','#a855f7','#f59e0b','#f97316','#ef4444','#fbbf24','#94a3b8'];
+      const bgColors = ['#22c55e','#3b82f6','#a855f7','#f97316','#ef4444','#fbbf24','#94a3b8'];
       new Chart(ctxCat, {
         type: 'bar',
         data: { labels: labels, datasets: [{ data: values, backgroundColor: bgColors, borderRadius: 6, borderWidth: 0 }] },

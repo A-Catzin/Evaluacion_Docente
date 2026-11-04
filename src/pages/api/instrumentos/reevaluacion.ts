@@ -8,6 +8,7 @@ import {
 } from "../../../lib/moderation";
 import { ObservationReevaluationSchema } from "../../../lib/validation/apiSchemas";
 import { formatZodFieldErrors } from "../../../lib/validation/errors";
+import { excessiveNaMessage, hasExcessiveNa } from "../../../lib/instrumentNaLimit";
 import {
   logRecalcError,
   recalcularCalificacionDocente,
@@ -37,6 +38,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (!parsed.success)
       return json({ error: "Datos de reevaluación no válidos", detalles: formatZodFieldErrors(parsed.error) }, 400);
     const submission = parsed.data;
+    const naCount = submission.answers.filter((answer) => answer.value === "na").length;
+    if (hasExcessiveNa(naCount, submission.answers.length))
+      return json({ error: excessiveNaMessage(naCount, submission.answers.length), code: "excessive_na" }, 400);
     const text = Object.fromEntries([
       ...submission.evidence.map((entry, index) => [`evidence_${index}`, entry.evidence]),
       ...submission.answers.filter((entry) => entry.value === "na")

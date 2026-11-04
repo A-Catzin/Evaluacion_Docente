@@ -7,6 +7,7 @@ import {
   normalizePlanningSubjectName,
   type PlanningSubjectScope,
 } from "../lib/planningSubjectScope";
+import { categoryForScore } from "../lib/categoria360";
 import { isAutodiagnosticoClosedForCycle } from "../lib/autodiagnosticoSubmissionWindow";
 import {
   getPlanningSubjectStatus,
@@ -310,12 +311,7 @@ export function getCategory(
   expectedInstrumentCount = 5,
 ): string {
   if (instrumentCount === expectedInstrumentCount) {
-    if (finalScore >= 90) return "Sobresaliente";
-    if (finalScore >= 80) return "Distinguido";
-    if (finalScore >= 70) return "Bueno";
-    if (finalScore >= 60) return "Aprobado";
-    if (finalScore >= 50) return "A mejorar";
-    return "Insuficiente";
+    return categoryForScore(finalScore);
   }
   return instrumentCount > 0 ? "Parcial" : "No iniciado";
 }
@@ -416,7 +412,10 @@ export async function fetchCuatrimestreScores(
   }
   const autoValue = (diagData as any[])?.[0]?.puntaje_total;
   let auto = autoValue == null ? undefined : (Number(autoValue) / 120) * 100;
-  const autoNotDone = auto === undefined && (await isAutodiagnosticoClosedForCycle(cl, cuatrimestreId));
+  const autoNotDone =
+    auto === undefined &&
+    (await isAutodiagnosticoClosedForCycle(cl, cuatrimestreId)) &&
+    (await teachersExpectedToSelfAssess(cl, [docenteId], cuatrimestreId)).has(docenteId);
   if (autoNotDone) auto = 0;
 
   const observationCapture = latestVersioned.get("observation");
@@ -444,6 +443,34 @@ export type SubjectAwareScores = {
   aggregate: InstrumentScores;
   final: FinalScore;
 };
+
+/**
+ * Teachers who are expected to do the self-assessment in a cycle: active and with at least one
+ * active group. Inactive teachers and teachers without classes are not penalised for skipping it.
+ */
+async function teachersExpectedToSelfAssess(
+  cl: SupabaseClient,
+  docenteIds: number[],
+  cuatrimestreId: number,
+): Promise<Set<number>> {
+  const expected = new Set<number>();
+  for (let start = 0; start < docenteIds.length; start += 100) {
+    const chunk = docenteIds.slice(start, start + 100);
+    const [groups, teachers] = await Promise.all([
+      cl.from("grupos").select("docente_id").eq("cuatrimestre_id", cuatrimestreId).eq("activo", true).in("docente_id", chunk),
+      cl.from("docentes").select("id").eq("activo", true).in("id", chunk),
+    ]);
+    if (groups.error || teachers.error) {
+      console.error("[autodiagnostico expected] lookup failed", { cuatrimestreId });
+      continue;
+    }
+    const active = new Set((teachers.data || []).map((row: { id: number }) => row.id));
+    for (const row of (groups.data || []) as { docente_id: number }[]) {
+      if (active.has(row.docente_id)) expected.add(row.docente_id);
+    }
+  }
+  return expected;
+}
 
 function averageAvailable(
   values: Array<number | undefined>,
@@ -920,10 +947,13 @@ export async function fetchBatchScoresPorDocente(
     versionedByTeacher.set(Number(row.docente_id), byPurpose);
   }
   const autoClosed = await isAutodiagnosticoClosedForCycle(cl, cuatrimestreId);
+  const expectedSelfAssess = autoClosed
+    ? await teachersExpectedToSelfAssess(cl, docenteIds.filter((id) => !diagMap.has(id)), cuatrimestreId)
+    : new Set<number>();
   const result = new Map<number, InstrumentScores>();
   for (const id of docenteIds) {
     const planAcc = planMap.get(id);
-    const autoNotDone = autoClosed && !diagMap.has(id);
+    const autoNotDone = autoClosed && !diagMap.has(id) && expectedSelfAssess.has(id);
     const plan = planAcc ? planAcc.sum / planAcc.count : undefined;
     const versioned = versionedByTeacher.get(id);
     const validScore = (purpose: string, fallback: number | undefined) => {

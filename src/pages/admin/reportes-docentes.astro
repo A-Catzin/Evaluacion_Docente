@@ -1,5 +1,6 @@
 ---
-import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import LayoutAdmin from '../../layouts/LayoutAdmin.astro';import InactiveBadge from '../../components/admin/InactiveBadge.astro';
+
 import { requireRole } from '../../lib/auth';
 import { dbAdmin } from '../../lib/db';
 import { filterReportCards, type ReportCard } from '../../lib/teacherReport';
@@ -89,7 +90,7 @@ const scoreLabels: [keyof ReportCard['scores'], string][] = [
                 <summary class="flex cursor-pointer list-none [&::-webkit-details-marker]:hidden flex-wrap items-center gap-4 p-5">
                   <svg class="h-5 w-5 shrink-0 text-tup transition-transform group-open:rotate-90" aria-hidden="true" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.17 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
                   <div class="min-w-48 flex-1">
-                    <p class="font-semibold text-slate-800">{card.name}</p>
+                    <p class="font-semibold text-slate-800">{card.name}{!card.active && <InactiveBadge />}</p>
                     <p class="text-xs text-slate-500">{card.email || 'Sin correo'} · Estudiantes: {card.responses} de {card.enrolled}</p>
                   </div>
                   <div class="hidden gap-2 lg:flex">

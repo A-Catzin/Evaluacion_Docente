@@ -215,7 +215,7 @@ const isCoordination = definition.purpose === "coordination";
     const percentage = total ? (naCount * 100 / total) : 0;
     const invalid = naCount * 100 > total * 20;
     const summary = document.getElementById("na-summary");
-    summary.textContent = "N/A: " + naCount + " de " + total + " criterios (" + percentage.toFixed(1) + "%). " + (invalid ? (definition.purpose === "planning" ? "La planeación será enviada a corrección; captura el motivo de corrección." : "La captura será inválida por exceso de N/A y no aportará puntaje oficial.") : "Límite máximo válido: 20%.");
+    summary.textContent = "N/A: " + naCount + " de " + total + " criterios (" + percentage.toFixed(1) + "%). " + (invalid ? (definition.purpose === "planning" ? "La planeación será enviada a corrección; captura el motivo de corrección." : "No se puede enviar: máximo " + Math.floor(total * 20 / 100) + " N/A (20%). Contesta más criterios.") : "Límite máximo válido: 20%.");
     summary.className = "rounded-xl px-4 py-3 text-sm " + (invalid ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-900");
   }
   function normalizeNaReason(value, reason) {
@@ -534,6 +534,12 @@ const isCoordination = definition.purpose === "coordination";
     if (missingReason) { message.textContent = "Cada N/A requiere un motivo."; message.className = "text-sm text-red-700"; return; }
     const generalObservations = document.getElementById("metadata-general")?.value.trim() || null;
     const excessiveNa = answers.filter(function(answer) { return answer.value === "na"; }).length * 100 > answerInputs.length * 20;
+    if (definition.purpose !== "planning" && excessiveNa) {
+      const naTotal = answers.filter(function(answer) { return answer.value === "na"; }).length;
+      message.textContent = "Hay demasiadas respuestas N/A (" + naTotal + " de " + answerInputs.length + "). Máximo permitido: " + Math.floor(answerInputs.length * 20 / 100) + " (20%). Contesta más criterios para poder enviar.";
+      message.className = "text-sm text-red-700";
+      return;
+    }
     if (definition.purpose === "planning" && excessiveNa && !generalObservations) { message.textContent = "El motivo de corrección es obligatorio cuando el exceso de N/A envía la planeación a corrección."; message.className = "text-sm text-red-700"; return; }
     const payload = {
       version_id: definition.version_id, docente_id: Number(teacher.value), cuatrimestre_id: cuatrimestreId,

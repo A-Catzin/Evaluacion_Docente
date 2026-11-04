@@ -13,6 +13,7 @@ import {
   recalcularCalificacionDocente,
 } from "../../../services/calificaciones";
 import { notificarDocente } from "../../../services/notificaciones";
+import { excessiveNaMessage, hasExcessiveNa } from "../../../lib/instrumentNaLimit";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const OBSERVATION_DUPLICATE_CONSTRAINT =
@@ -66,11 +67,23 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const submission = parsed.data;
     const correctionReason =
       submission.metadata.general_observations?.trim() || null;
+    const naCount = submission.answers.filter(
+      (answer) => answer.value === "na",
+    ).length;
+    const excessiveNa = hasExcessiveNa(naCount, submission.answers.length);
+    // Coordination and observation are blocked, not saved as invalid; planning (the one with a
+    // source record) keeps its correction flow below.
+    if (excessiveNa && submission.source_record_id == null) {
+      return new Response(
+        JSON.stringify({
+          error: excessiveNaMessage(naCount, submission.answers.length),
+          code: "excessive_na",
+        }),
+        { status: 400, headers: JSON_HEADERS },
+      );
+    }
     const invalidPlanningSubmission =
-      submission.source_record_id != null &&
-      submission.answers.filter((answer) => answer.value === "na").length *
-        100 >
-        submission.answers.length * 20;
+      submission.source_record_id != null && excessiveNa;
     if (invalidPlanningSubmission && !correctionReason) {
       return new Response(
         JSON.stringify({

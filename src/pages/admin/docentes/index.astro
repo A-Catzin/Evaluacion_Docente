@@ -1,5 +1,6 @@
 ---
-import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';import InactiveBadge from '../../../components/admin/InactiveBadge.astro';
+
 import { dbAdmin } from '../../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 import { formatScore } from '../../../services/scoring';
@@ -49,6 +50,7 @@ const filasBase = aggData
     promPlan: row.score_planeacion,
     promObs: row.score_observacion,
     promAuto: row.score_autoevaluacion,
+    activo: row.docente_activo !== false,
     autoNoRealizado: row.instrument_validity?.autodiagnostico === 'not_done',
     final360: row.calificacion_final,
     cat360: String(row.categoria_final ?? 'No iniciado'),
@@ -100,7 +102,7 @@ function buildPageUrl(p:number) {
           <tbody class="divide-y">{filasPag.map(f => {
             return (
               <tr class="hover:bg-slate-50">
-                <td class="px-2 py-2 text-center font-medium">{f.nombre.toUpperCase()} {f.apellidos.toUpperCase()}</td>
+                <td class="px-2 py-2 text-center font-medium">{f.nombre.toUpperCase()} {f.apellidos.toUpperCase()}{!f.activo && <InactiveBadge />}</td>
                 <td class="px-2 py-2 text-center text-slate-600 text-[10px]">{f.email}</td>
                 <td class="px-2 py-2 text-center">{f.instrumentos}/{f.esperados}</td>
                 <td class={`px-2 py-2 text-center ${colorScore(f.promEst)}`}>{formatScore(f.promEst)}</td>
