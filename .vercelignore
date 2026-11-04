@@ -4,5 +4,23 @@ docs-privados/
 .git/
 node_modules/
 dist/
-# Local code-index cache (contains a Unix socket the CLI cannot read).
+
+# Local AI tooling, caches and editor settings: not needed to build or run.
 .codegraph/
+.atl/
+.claude/
+.agents/
+.gemini/
+.codex/
+.opencode/
+.cursor/
+.engram/
+.ruff_cache/
+.vscode/
+__pycache__/
+*.pyc
+
+# Not part of the app runtime.
+openspec/
+sync/
+scripts/

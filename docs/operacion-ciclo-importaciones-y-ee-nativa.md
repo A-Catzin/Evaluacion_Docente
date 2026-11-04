@@ -381,3 +381,11 @@ git diff --check
 ```
 
 Consulte también [la especificación nativa](documentacion/11-evaluacion-estudiantil-nativa.md) y [el resumen de implementación](documentacion/08-resumen-implementacion.md).
+
+## Novedades del ciclo 27-1 (actualizado 2026-11-03)
+
+- **Migraciones 055 a 125:** el checklist anterior termina en la 054. Revisar el manual de base de datos para 120-125 y aplicarlas en orden.
+- **Bloque 2:** la encuesta se deshabilita con `grupos.encuesta_estudiantil_habilitada = FALSE` (migración 120) y se rehabilita con el mismo listado de ids; después recalcular calificaciones. Contexto en `docs-privados/Bloques/BLOQUE_2_27-1.md`.
+- **Cierre del autodiagnóstico:** al cerrar la ventana, los no realizados cuentan 0; recalcular calificaciones para reflejarlo.
+- **Seguimiento admin:** `/admin/instrumentos/pendientes-estudiantes` y `/admin/instrumentos/avance-docentes` (por docente y materia); los comentarios abiertos se revisan en `/admin/instrumentos/seguimiento-estudiantes` y se descargan en CSV.
+- **Reglas de captura:** máximo 20 % de N/A, una coordinación por docente y ciclo, borradores de coordinación (121), y planeaciones NP/Corrección/En revisión con perfil 40/25/0/30/5.

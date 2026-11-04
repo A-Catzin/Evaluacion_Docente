@@ -90,7 +90,7 @@ Nota Final = EE(35%) + CA(20%) + PD(15%) + OC(25%) + AD(5%)
 - **Observación**: Usa `asignatura_id` + `grupo` como clave compuesta. Ciclo readonly desde cuatrimestre activo. 3 modalidades con reactivos dinámicos. Scoring por modalidad implementado en `scoring.ts`.
 - **Importaciones de ciclo**: El superadmin selecciona el ciclo, importa docentes, padrón completo de estudiantes y asignaciones; después revisa reportes y `/admin/grupos-asignados`.
 - **Notificaciones**: Sistema de notificaciones in-app implementado. Tabla `notificaciones` con campana en layouts de rol. API en `/api/notificaciones`.
-- **Datos estudiantiles**: Las RPC derivan identidad y asignación en servidor. Personal sólo recibe agregados; las respuestas y comentarios no son datos de interfaz.
+- **Datos estudiantiles**: Las RPC derivan identidad y asignación en servidor. Personal sólo recibe agregados; las respuestas no son datos de interfaz. Los comentarios abiertos solo los revisa el superadmin (4 estados: pendiente, validado, no autorizado y sin aporte; migraciones 113, 123 y 124) y el docente solo ve los validados. El superadmin puede exportarlos a CSV.
 - **Saeko**: Retirado como importación y fuente activa. Se conserva sólo como auditoría de superadmin.
 
 ## 8. Arquitectura de scoring
@@ -105,7 +105,7 @@ El scoring de SED-360 se precalcula y persiste para que dashboards y reportes le
 
 ### Fuente única de verdad
 
-Los pesos de instrumentos, los perfiles de modalidad (`normal` / `ejecutivo` / `inglés`) y las categorías de desempeño viven en `src/services/scoring.ts`. No se duplican en SQL ni en los dashboards; `src/services/calificaciones.ts` actúa como punto único de entrada para leer y recalcular calificaciones.
+Los pesos de instrumentos, los perfiles de modalidad (`normal` / `ejecutivo` / `inglés`) viven en `src/services/scoring.ts`; las categorías 360 viven en `src/lib/categoria360.ts`. Las materias con planeación NP o en Corrección usan un perfil de 4 instrumentos (40 % estudiantil, 25 % coordinación, 0 % planeación, 30 % observación, 5 % autodiagnóstico). No se duplican en SQL ni en los dashboards; `src/services/calificaciones.ts` actúa como punto único de entrada para leer y recalcular calificaciones.
 
 ### Recálculo
 
@@ -122,10 +122,17 @@ Los pesos de instrumentos, los perfiles de modalidad (`normal` / `ejecutivo` / `
 
 | Capa | Tecnología |
 | ------ | ----------- |
-| Framework | Astro 4.16.18 SSR |
+| Framework | Astro 5.18 SSR |
 | Estilos | Tailwind CSS 3 |
 | Base de datos | Supabase PostgreSQL |
 | Auth | Google OAuth + cookies |
 | Storage | Cloudflare R2 (bucket `planeaciones`, URLs firmadas) |
 | Validación | Zod |
-| Deploy | Vercel (@astrojs/vercel, Node 20.x) |
+| Deploy | Vercel (@astrojs/vercel, Node 22.x) |
+
+## Novedades del ciclo 27-1 (actualizado 2026-11-03)
+
+- Estados de planeación: Pendiente, Aprobado, Corrección, NP y En revisión.
+- Autodiagnóstico no realizado = 0 al cerrar la ventana (migración 122).
+- Límite de 20 % de N/A, una coordinación por docente y ciclo, borradores de coordinación (121).
+- Bloque 2: interruptor de encuesta por grupo (120). Comentarios con 4 estados (123, 124). Avance por docente (125).
