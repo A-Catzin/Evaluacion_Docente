@@ -132,3 +132,6 @@ docs-privados/
 !supabase/migrations/123_student_comment_not_authorized.sql
 !supabase/migrations/124_student_comment_no_contribution.sql
 !supabase/migrations/125_admin_teacher_survey_progress.sql
+
+# Supabase CLI local state (project link, pooler, versions)
+supabase/.temp/
