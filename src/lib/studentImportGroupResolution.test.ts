@@ -14,9 +14,9 @@ describe("student import base-group resolution source contract", () => {
     const resolutionSource = importer.slice(resolutionStart);
 
     expect(resolutionStart).toBeGreaterThan(-1);
-    expect(resolutionSource).toContain('.is("asignatura_id", null);');
+    expect(resolutionSource).toContain('.is("asignatura_id", null)');
     expect(
-      resolutionSource.indexOf('.is("asignatura_id", null);'),
+      resolutionSource.indexOf('.is("asignatura_id", null)'),
     ).toBeLessThan(resolutionSource.indexOf("const exactCandidates"));
     expect(resolutionSource).toContain("for (const group of baseGroups || [])");
     expect(resolutionSource).toContain("(baseGroups || []).filter((group) =>");
@@ -29,8 +29,8 @@ describe("student import base-group resolution source contract", () => {
     expect(resolutionSource).toContain(
       "selectCanonicalEquivalentBaseCandidate(legacyCandidates)",
     );
-    expect(resolutionSource).toContain(
-      "const retryBase = selectCanonicalEquivalentBaseCandidate(",
+    expect(resolutionSource).toMatch(
+      /const retryBase =\s*selectCanonicalEquivalentBaseCandidate\(retryCandidates\)/,
     );
     expect(resolutionSource).toContain("(baseGroups || []).push(group);");
     expect(resolutionSource).toMatch(

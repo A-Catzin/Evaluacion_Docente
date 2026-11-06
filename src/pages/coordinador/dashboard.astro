@@ -159,7 +159,7 @@ const [docentesCoordinados, docentesObservacion, coordinacionData, versionedCoor
   docentesObservacionIds.size
 ? safeQuery(
 clienteAdmin.from('planeaciones').select('id,docente_id,grupo,url_pdf,estado,asignaturas(nombre)').eq('cuatrimestre_id', cuatrimestreId).in('docente_id', [...docentesObservacionIds]),
-{ data: [], error: null } as { data: CoordinatorPlanning[]; error: null },
+{ data: [], error: null } as any,
   )
 : Promise.resolve({ data: [] as CoordinatorPlanning[] }),
 ]);
@@ -173,7 +173,7 @@ clienteAdmin.from('planeaciones').select('id,docente_id,grupo,url_pdf,estado,asi
             .eq('activo', true)
             .in('docente_id', [...docentesObservacionIds])
             .order('grupo_normalizado'),
-          { data: [], error: null } as { data: CoordinatorGroup[]; error: null },
+          { data: [], error: null } as any,
         )
       : { data: [], error: null };
 
@@ -214,8 +214,8 @@ const coordinatedPortfolio = buildCoordinatedPortfolio(
   summarizeVersionedCoordination(versionedCoordinationData.data || []),
 );
 const summary = summarizeObserverObservations(
-  versionedObservationData.data || [],
-  observacionData.data || [],
+  (versionedObservationData.data || []) as Parameters<typeof summarizeObserverObservations>[0],
+  (observacionData.data || []) as Parameters<typeof summarizeObserverObservations>[1],
   actorId,
 );
 const completedObservationTeacherIds = summary.completedTeacherIds;

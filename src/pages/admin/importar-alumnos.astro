@@ -1,5 +1,6 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import ImportFileGuide from '../../components/admin/ImportFileGuide.astro';
 import { dbAdmin } from '../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../services/catalogos';
 
@@ -24,6 +25,7 @@ const cuatrimestreId = (cicloPorQuery || cicloPorCookie || cicloActivo || cuatri
       <p class="text-slate-500">Subí el archivo completo de alumnos. El ciclo seleccionado define el alcance de grupos e inscripciones.</p>
     </div>
 
+<ImportFileGuide example="alumnos" />
     <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
       <form id="form-importar" class="space-y-5">
         <div>

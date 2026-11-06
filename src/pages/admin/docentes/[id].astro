@@ -497,7 +497,7 @@ const currentFinal = {
   expectedInstrumentCount: currentCal?.num_instrumentos_esperados ?? 0,
 };
 
-const historial: { clave: string; final: number; cat: string; inst: number; expected: number; ee: number | null; coord?: number; plan?: number; obs?: number; auto?: number; autoNotDone?: boolean }[] = [];
+const historial: { clave: string; final: number; cat: string; inst: number; expected: number; ee: number | null; coord?: number | null; plan?: number | null; obs?: number | null; auto?: number | null; autoNotDone?: boolean }[] = [];
 let sumFinals = 0;
 let bestCycle = { clave: '', final: 0 };
     
@@ -966,6 +966,7 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
 
 <script>
   import Chart from 'chart.js/auto';
+  import type { ChartItem } from 'chart.js';
   document.addEventListener('DOMContentLoaded', () => {
     const ctxBar = document.getElementById('chart-barras');
     const ctxRadar = document.getElementById('chart-radar');
@@ -973,7 +974,7 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
     const scores = JSON.parse(ctxBar?.dataset.scores || '[]');
 
     if (ctxBar) {
-      new Chart(ctxBar, {
+      new Chart(ctxBar as ChartItem, {
         type: 'bar',
         data: {
           labels: labels,
@@ -992,7 +993,7 @@ const historicalAvg = cyclesEvaluated > 0 ? roundTo2(sumFinals / cyclesEvaluated
     }
 
     if (ctxRadar) {
-      new Chart(ctxRadar, {
+      new Chart(ctxRadar as ChartItem, {
         type: 'radar',
         data: {
           labels: labels,

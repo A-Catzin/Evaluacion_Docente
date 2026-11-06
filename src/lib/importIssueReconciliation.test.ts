@@ -39,7 +39,7 @@ describe("import issue reconciliation", () => {
       grupo_normalizado: "A 1",
       grado: "1",
       num_alumnos: 24,
-      importacion_key: "4|PLAN A|1|A 1|MAT-01",
+      importacion_key: "4|PLAN A|A 1|MAT-01",
     });
   });
 
@@ -73,7 +73,7 @@ describe("import issue reconciliation", () => {
     });
   });
 
-  it("resolves equivalent duplicate bases and retains every source ID", () => {
+  it("rejects duplicate base rows for the same cycle/plan/group identity instead of picking one", () => {
     const target = resolveImportIssueTarget(
       4,
       issue,
@@ -81,9 +81,8 @@ describe("import issue reconciliation", () => {
       [{ id: 8, clave: "MAT-01" }],
     );
     expect(target).toMatchObject({
-      ok: true,
-      base: { id: 11 },
-      baseIds: [11, 12],
+      ok: false,
+      code: "import_issue_assignment_base_ambiguous",
     });
   });
 

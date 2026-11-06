@@ -57,7 +57,7 @@ const [activeCycleResult, cycleListResult] = await Promise.all([
   safeQuery(cl.from('cuatrimestres').select('*').order('id', { ascending: false }), 'cycle list query'),
 ]);
 const cuatrimestreActivo = activeCycleResult.data;
-const cuatrimestres = cycleListResult.data || [];
+const cuatrimestres: any[] = cycleListResult.data || [];
 const cycleDataAvailable = !activeCycleResult.error && !cycleListResult.error;
 if (activeCycleResult.error || cycleListResult.error) {
   dataLoadWarnings.push('No pudimos cargar la información del cuatrimestre. La carga y el historial de planeaciones no están disponibles por el momento.');
@@ -89,7 +89,7 @@ const teacherResult = planningQueries?.[2];
 const planeacionesResult = planningQueries?.[3];
 const subjectNpResult = planningQueries?.[4];
 const planningWindow = planningWindowResult?.error ? null : planningWindowFromRpc(planningWindowResult?.data);
-const gruposDocente = groupsResult?.data || [];
+const gruposDocente: any[] = groupsResult?.data || [];
 const docente = teacherResult?.data || null;
 const planeacionesRaw = planeacionesResult?.data || [];
 const npSubjectRecords = subjectNpResult?.data || [];
@@ -117,7 +117,7 @@ const materiasIds = !groupsResult?.error && !groupNpResult?.error
 const subjectsResult = materiasIds.length > 0
   ? await safeQuery(cl.from('asignaturas').select('id,clave,nombre').in('id', materiasIds).order('nombre'), 'assigned subjects query')
   : null;
-const misAsignaturas = subjectsResult?.data || [];
+const misAsignaturas: any[] = subjectsResult?.data || [];
 if (subjectsResult?.error) dataLoadWarnings.push('No pudimos cargar las asignaturas de tus grupos. La carga no está disponible por el momento.');
 const asignaturasPorId = new Map(misAsignaturas.map(a => [a.id, a]));
 const subjectScopes = groupPlanningAssignmentsBySubjectName(gruposDocenteElegibles.flatMap((grupo) => {

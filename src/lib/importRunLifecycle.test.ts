@@ -5,6 +5,10 @@ const importer = readFileSync(
   new URL("../pages/api/admin/importar-asignaciones.ts", import.meta.url),
   "utf8",
 );
+const sync = readFileSync(
+  new URL("./assignmentImportSync.ts", import.meta.url),
+  "utf8",
+);
 const adminImport = readFileSync(
   new URL("./adminImport.ts", import.meta.url),
   "utf8",
@@ -40,30 +44,29 @@ describe("assignment import run lifecycle source contracts", () => {
     expect(migration).not.toContain("service_role");
   });
 
-  it("finalizes the run even if open-issue revalidation fails", () => {
-    expect(importer).toContain("let issuesResolvedByRevalidation = 0");
-    expect(importer).toContain("try {");
-    expect(importer).toContain("revalidateOpenAssignmentIssues(");
-    expect(importer).toContain("[Importar asignaciones] revalidation failed");
-    expect(importer).toContain("revalidationWarning");
+  it("creates and finalizes the run atomically inside the sync RPC, and surfaces RPC failures", () => {
+    expect(importer).toContain('"apply_assignment_import_sync"');
+    expect(importer).toContain("p_filas_leidas: resolved.proposal.rowsRead");
+    expect(importer).toContain("p_resumen:");
     expect(importer).toMatch(
-      /catch \(error\) \{[\s\S]*?revalidationWarning[\s\S]*?\}[\s\S]*?await finishImportRun\(client, run\.id, summary\);/,
+      /if \(error\)\s*return rpcApplyFailure\(error, \{/,
     );
+    expect(importer).toContain("issuesResolved: result.issuesCleaned ?? 0");
+    expect(importer).toContain('applyStatus: "committed"');
+    expect(importer).not.toContain("revalidateOpenAssignmentIssues(");
   });
 
-  it("records matching diagnostics for unresolved or ambiguous groups", () => {
-    expect(importer).toContain("function groupDiagnosticDetails(");
-    expect(importer).toContain("cycleId,");
-    expect(importer).toContain("normalizedPlan: plan");
-    expect(importer).toContain("normalizedGroup: group");
-    expect(importer).toContain("activeGroupListCount: groupList.length");
-    expect(importer).toContain("candidateIds:");
-    expect(importer).toContain("candidateCount:");
-    expect(importer).toContain("baseCandidateIds:");
-    expect(importer).toContain("baseCandidateCount:");
-    expect(importer).toContain("fallbackUsed,");
-    expect(importer).toContain('"grupo_base_no_encontrado"');
-    expect(importer).toContain('"grupo_ambiguo"');
+  it("blocks apply and reports matching diagnostics for unresolved or ambiguous groups", () => {
+    expect(importer).toContain("blockers: resolved.proposal.blockers");
+    expect(importer).toContain("if (resolved.proposal.blockers.length)");
+    expect(importer).toContain(
+      "La propuesta tiene bloqueadores y no puede aplicarse.",
+    );
+    expect(importer).toMatch(
+      /blockers\.length\)\s*return json\([\s\S]*?409,/,
+    );
+    expect(sync).toContain('"grupo_base_ambiguo"');
+    expect(sync).toContain("details: { ids: baseCandidates.map(");
   });
 
   it("does not send the legacy status column when finalizing a run", () => {

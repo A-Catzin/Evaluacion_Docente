@@ -1,3 +1,4 @@
+import { fetchAllRows } from "../../../lib/fetchAllRows";
 import type { APIRoute } from "astro";
 import {
   authorizeSuperadmin,
@@ -18,6 +19,8 @@ import {
   startImportAudit,
   type ImportAudit,
 } from "../../../lib/auditChangeSet";
+
+import { exampleCsv, IMPORT_EXAMPLES } from "../../../lib/importExamples";
 
 type Issue = Record<string, unknown>;
 
@@ -55,11 +58,7 @@ function issue(
 export const GET: APIRoute = async ({ cookies }) => {
   const auth = await authorizeSuperadmin(cookies);
   if (auth.error) return auth.error;
-  const content = [
-    "NOMBRE COMPLETO,CORREO,NUM EMPLEADO",
-    "APELLIDO PATERNO APELLIDO MATERNO NOMBRE,tup-d0000@ejemplo.edu.mx,0000",
-  ].join("\r\n");
-  return new Response(`\uFEFF${content}\r\n`, {
+  return new Response(exampleCsv(IMPORT_EXAMPLES.docentes), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": 'attachment; filename="plantilla_docentes.csv"',
@@ -225,9 +224,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     const value = (values: string[], column: number) =>
       column >= 0 ? (values[column] || "").trim() : "";
-    const { data: existing, error: existingError } = await client
-      .from("docentes")
-      .select("id,nombre,apellidos,email,num_empleado,activo");
+    const { data: existing, error: existingError } = await fetchAllRows<any>(
+      (from, to) =>
+        client
+          .from("docentes")
+          .select("id,nombre,apellidos,email,num_empleado,activo")
+          .order("id")
+          .range(from, to),
+    );
     if (existingError)
       throw new Error(`No se pudo leer docentes: ${existingError.message}`);
     const byEmail = new Map<string, any[]>();

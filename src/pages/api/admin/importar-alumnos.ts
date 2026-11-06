@@ -1,3 +1,4 @@
+import { fetchAllRows } from "../../../lib/fetchAllRows";
 import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
 import { ImportFormSchema } from "../../../lib/validation/apiSchemas";
@@ -382,9 +383,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       (row) => !incomingAmbiguousRows.has(row.rowNumber),
     );
 
-    const { data: existingStudents, error: studentsError } = await client
-      .from("estudiantes")
-      .select("id,nombre,apellidos,email,matricula,activo");
+    const { data: existingStudents, error: studentsError } = await fetchAllRows<any>(
+      (from, to) =>
+        client
+          .from("estudiantes")
+          .select("id,nombre,apellidos,email,matricula,activo")
+          .order("id")
+          .range(from, to),
+    );
     if (studentsError) {
       await audit.fail("lectura_estudiantes_fallida");
       return json(
@@ -577,12 +583,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       }
     }
 
-    const { data: baseGroups, error: groupsError } = await client
-      .from("grupos")
-      .select(GROUP_FIELDS)
-      .eq("cuatrimestre_id", cycleId)
-      .eq("activo", true)
-      .is("asignatura_id", null);
+    const { data: baseGroups, error: groupsError } = await fetchAllRows<any>(
+      (from, to) =>
+        client
+          .from("grupos")
+          .select(GROUP_FIELDS)
+          .eq("cuatrimestre_id", cycleId)
+          .eq("activo", true)
+          .is("asignatura_id", null)
+          .order("id")
+          .range(from, to),
+    );
     if (groupsError) {
       await audit.fail("lectura_grupos_fallida");
       return json(

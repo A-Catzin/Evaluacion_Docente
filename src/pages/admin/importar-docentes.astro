@@ -1,5 +1,6 @@
 ---
 import LayoutAdmin from '../../layouts/LayoutAdmin.astro';
+import ImportFileGuide from '../../components/admin/ImportFileGuide.astro';
 
 const cuatrimestre = Astro.url.searchParams.get('cuatrimestre');
 const back = `/admin/importar${cuatrimestre ? `?cuatrimestre=${encodeURIComponent(cuatrimestre)}` : ''}`;
@@ -9,6 +10,7 @@ const back = `/admin/importar${cuatrimestre ? `?cuatrimestre=${encodeURIComponen
   <div class="animate-flotar-entrada max-w-3xl mx-auto">
     <a href={back} class="text-sm text-slate-400 hover:text-tup">← Importaciones</a>
     <div class="mb-6 mt-6"><p class="text-sm font-medium text-amber-700 mb-2">Catálogo de identidad</p><h1 class="text-3xl font-bold text-slate-800 mb-2">Importar docentes</h1><p class="text-slate-500">Este flujo solo mantiene identidades docentes. La carga académica se importa por separado desde el reporte de clases.</p></div>
+<ImportFileGuide example="docentes" />
     <div class="bg-white rounded-2xl p-6 shadow-tarjeta mb-6">
       <form id="form-importar" class="space-y-5">
         <div><label for="archivo" class="block text-sm font-medium text-slate-700 mb-1">Archivo CSV *</label><input id="archivo" type="file" accept=".csv,text/csv" required class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-tup file:text-white" /><p class="text-xs text-slate-400 mt-2">Contrato flexible: <code>CORREO</code> o <code>NUM EMPLEADO</code> y <code>NOMBRE COMPLETO</code>, o <code>NOMBRE</code> + <code>APELLIDO PATERNO</code> + <code>APELLIDO MATERNO</code>. Se acepta BOM, CRLF y campos entre comillas.</p></div>

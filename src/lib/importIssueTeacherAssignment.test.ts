@@ -57,7 +57,7 @@ describe("import issue teacher assignment source contracts", () => {
       /\.in\("id", existingGroupIds\)\s*\.eq\("cuatrimestre_id", cycleId\)\s*\.eq\("activo", true\)\s*\.select\("id"\);/,
     );
     expect(importer).toMatch(
-      /\.from\("grupos"\)[\s\S]*?\.eq\("cuatrimestre_id", cycleId\)\s*\.eq\("activo", true\);/,
+      /\.from\("grupos"\)[\s\S]*?\.eq\("cuatrimestre_id", cycleId\)\s*\.eq\("activo", true\)\s*\.order\("id"\)/,
     );
     expect(reconciliation).toMatch(
       /\.from\("grupos"\)[\s\S]*?\.eq\("cuatrimestre_id", cycleId\)\s*\.eq\("activo", true\);/,
@@ -116,7 +116,11 @@ describe("import issue teacher assignment source contracts", () => {
   it("keeps reports historical while page and imports reconcile only open corrected targets", () => {
     expect(page).toContain(".eq('resolution_status', 'open')");
     expect(page).toContain("assignedSubjectGroupForIssue");
-    expect(importer).toContain("revalidateOpenAssignmentIssues(");
+    expect(importer).toMatch(
+      /\.from\("import_issues"\)[\s\S]*?\.eq\("resolution_status", "open"\)\s*\.eq\("import_runs\.tipo", "asignaciones"\)/,
+    );
+    expect(importer).toContain("openIssues: openIssues || []");
+    expect(importer).toContain('"apply_assignment_import_sync"');
     expect(reconciliation).toContain(
       'resolution_kind: "assignment_import_revalidation"',
     );

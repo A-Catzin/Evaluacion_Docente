@@ -313,14 +313,15 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
 
 <script>
   import Chart from 'chart.js/auto';
+  import type { ChartItem } from 'chart.js';
   document.addEventListener('DOMContentLoaded', () => {
     const ctxCat = document.getElementById('chart-cat');
     if (ctxCat) {
       const catData = JSON.parse(ctxCat.dataset.chart || '{}');
       const labels = Object.keys(catData);
-      const values = Object.values(catData);
+      const values = Object.values(catData) as number[];
       const bgColors = ['#22c55e','#3b82f6','#a855f7','#f97316','#ef4444','#fbbf24','#94a3b8'];
-      new Chart(ctxCat, {
+      new Chart(ctxCat as ChartItem, {
         type: 'bar',
         data: { labels: labels, datasets: [{ data: values, backgroundColor: bgColors, borderRadius: 6, borderWidth: 0 }] },
         options: {
@@ -335,7 +336,7 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
     const ctxBarras = document.getElementById('chart-barras');
     if (ctxBarras) {
       const avgData = JSON.parse(ctxBarras.dataset.chart || '[]');
-      new Chart(ctxBarras, {
+      new Chart(ctxBarras as ChartItem, {
         type: 'bar',
         data: {
           labels: ['Estudiante','Coordinación','Planeación','Observación','Autodiagnóstico'],

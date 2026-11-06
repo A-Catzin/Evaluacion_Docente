@@ -21,7 +21,7 @@ describe("teacher candidate eligibility UI", () => {
     expect(page).toContain("admin_assignment_teacher_candidate_diagnostics");
     expect(page).toContain("No hay docentes elegibles en el cuatrimestre; no es un error de carga.");
     expect(page).toContain("include_all_active: type === 'coordinated' ? coordinatedAll : observationAll");
-    expect(api).toContain("typeof include_all_active !== 'boolean'");
+    expect(api).toContain('typeof include_all_active !== "boolean"');
     expect(api).toContain("p_include_all_active: include_all_active");
   });
 });

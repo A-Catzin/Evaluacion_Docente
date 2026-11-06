@@ -1,5 +1,5 @@
 ---
-import LayoutAdmin from '/src/layouts/LayoutAdmin.astro';
+import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 
 const runIdParam = Astro.url.searchParams.get('run_id');
 const runId = runIdParam ? parseInt(runIdParam, 10) : NaN;

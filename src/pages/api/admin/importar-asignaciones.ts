@@ -1,3 +1,4 @@
+import { fetchAllRows } from "../../../lib/fetchAllRows";
 import { createHash, randomUUID } from "node:crypto";
 import type { APIRoute } from "astro";
 import { authorizeSuperadmin, json } from "../../../lib/adminImport";
@@ -117,23 +118,41 @@ async function proposalFor(client: any, cycleId: number, text: string) {
       .select("id,clave,nombre")
       .eq("id", cycleId)
       .maybeSingle(),
-    client
-      .from("docentes")
-      .select("id,nombre,apellidos,email,num_empleado,activo"),
-    client.from("asignaturas").select("id,clave,nombre"),
-    client
-      .from("grupos")
-      .select(
-        "id,clave,cuatrimestre_id,docente_id,asignatura_id,num_alumnos,plan_normalizado,grado,grupo_normalizado,importacion_key",
-      )
-      .eq("cuatrimestre_id", cycleId)
-      .eq("activo", true),
-    client
-      .from("import_issues")
-      .select("id,plan,grupo,clave_asignatura,import_runs!inner(tipo)")
-      .eq("cuatrimestre_id", cycleId)
-      .eq("resolution_status", "open")
-      .eq("import_runs.tipo", "asignaciones"),
+    fetchAllRows<any>((from, to) =>
+      client
+        .from("docentes")
+        .select("id,nombre,apellidos,email,num_empleado,activo")
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllRows<any>((from, to) =>
+      client
+        .from("asignaturas")
+        .select("id,clave,nombre")
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllRows<any>((from, to) =>
+      client
+        .from("grupos")
+        .select(
+          "id,clave,cuatrimestre_id,docente_id,asignatura_id,num_alumnos,plan_normalizado,grado,grupo_normalizado,importacion_key",
+        )
+        .eq("cuatrimestre_id", cycleId)
+        .eq("activo", true)
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllRows<any>((from, to) =>
+      client
+        .from("import_issues")
+        .select("id,plan,grupo,clave_asignatura,import_runs!inner(tipo)")
+        .eq("cuatrimestre_id", cycleId)
+        .eq("resolution_status", "open")
+        .eq("import_runs.tipo", "asignaciones")
+        .order("id")
+        .range(from, to),
+    ),
   ]);
   const error =
     cycleError || teachersError || subjectsError || groupsError || issuesError;

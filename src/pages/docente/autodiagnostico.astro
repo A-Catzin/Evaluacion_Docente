@@ -71,7 +71,7 @@ const [cuatrimestreActivo, cuatrimestres] = await (async () => {
     return [activo, ciclos] as const;
   } catch (error) {
     logAutodiagnosticoAccess("cycle_lookup_failed", {
-      authUserId: sesion.user.id,
+      authUserId: sesion.user!.id,
       role: usuario.rol,
       cycleError: safeErrorDetails(error),
     });
