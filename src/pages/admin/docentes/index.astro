@@ -7,6 +7,7 @@ import { formatScore } from '../../../services/scoring';
 import { obtenerCalificacionesPorCuatrimestre } from '../../../services/calificaciones';
 
 const busqueda = Astro.url.searchParams.get('q') || '';
+const mostrarInactivos = Astro.url.searchParams.get('inactivos') === '1';
 const page = parseInt(Astro.url.searchParams.get('page')||'1');
 const limit = 20;
 const cliente = dbAdmin();
@@ -40,6 +41,7 @@ const aggData = await obtenerCalificacionesPorCuatrimestre(cliente, cuatrimestre
 
 const filasBase = aggData
   .filter((row) => row.num_instrumentos_completados > 0)
+  .filter((row) => mostrarInactivos || row.docente_activo !== false)
   .map((row) => ({
     id: row.docente_id,
     nombre: String(row.docente_nombre ?? ''),
@@ -79,6 +81,7 @@ function buildPageUrl(p:number) {
       <div><h1 class="text-3xl font-bold text-tup">Docentes</h1><span class="text-sm text-slate-400">{totalFilas} docentes · {cuatrimestreSel?.clave || ''}</span></div>
       <form method="GET" class="flex items-center gap-2">
         {busqueda && <input type="hidden" name="q" value={busqueda} />}
+        {mostrarInactivos && <input type="hidden" name="inactivos" value="1" />}
         <input type="hidden" name="page" value={page} />
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
           {cuatrimestres.map(c => (<option value={c.id} selected={c.id===cuatrimestreId}>{c.clave}</option>))}
@@ -89,6 +92,7 @@ function buildPageUrl(p:number) {
       <form method="GET" class="flex gap-3">
         <input type="hidden" name="cuatrimestre" value={cuatrimestreId} />
         <input type="text" name="q" value={busqueda} placeholder="Buscar por nombre o email..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-tup focus:outline-none" />
+        <label class="flex items-center gap-1.5 text-sm text-slate-600 whitespace-nowrap"><input type="checkbox" name="inactivos" value="1" checked={mostrarInactivos} onchange="this.form.submit()" /> Mostrar inactivos</label>
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
         {busqueda && (<a href={`/admin/docentes${qsWithoutSearch}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>

@@ -13,6 +13,8 @@ const RUTAS_PUBLICAS = [
   "/api/coordinador/planeacion",
   "/api/coordinador/evaluacion-coordinacion",
   "/api/auth/solicitar-acceso",
+  // Vercel Cron has no session; the endpoint authenticates itself with CRON_SECRET.
+  "/api/cron/recalcular-calificaciones",
   "/pendiente",
   "/auth",
   "/",

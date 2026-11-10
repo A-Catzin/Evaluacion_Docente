@@ -1,5 +1,8 @@
 {
   "buildCommand": "npm run build",
   "installCommand": "npm install --legacy-peer-deps",
-  "framework": "astro"
+  "framework": "astro",
+  "crons": [
+    { "path": "/api/cron/recalcular-calificaciones", "schedule": "0 11 * * *" }
+  ]
 }

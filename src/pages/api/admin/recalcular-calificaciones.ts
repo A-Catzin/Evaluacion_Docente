@@ -14,7 +14,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 /** Teachers whose final grade belongs to the cycle: stored grades plus anyone with an observation. */
-async function cycleTeacherIds(cycleId: number): Promise<number[]> {
+export async function cycleTeacherIds(cycleId: number): Promise<number[]> {
   const admin = dbAdmin();
   const ids = new Set<number>();
   for (const [table, extra] of [["calificaciones_finales", null], ["instrument_submissions", "observation"]] as const) {

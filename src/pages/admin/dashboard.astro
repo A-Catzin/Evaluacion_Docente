@@ -11,6 +11,7 @@ import { formatPersonName } from '../../lib/personName';
 
     const busqueda = Astro.url.searchParams.get('q') || '';
     const categoriaFiltro = Astro.url.searchParams.get('categoria') || '';
+    const mostrarInactivos = Astro.url.searchParams.get('inactivos') === '1';
     const pathname = Astro.url.pathname;
     const dashboardWarnings: string[] = [];
     function reportDashboardFailure(operation: string, error: unknown): void {
@@ -131,6 +132,7 @@ interface FilaDashboard {
 
 const filasTodas: FilaDashboard[] = aggData
   .filter((row) => row.num_instrumentos_completados > 0)
+  .filter((row) => mostrarInactivos || row.docente_activo !== false)
   .map((row) => {
     const progresoNativo = progresoEENativa.find((p) => p.docente_id === row.docente_id);
     return {
@@ -232,6 +234,7 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
       <form method="GET" class="flex items-center gap-2">
         {busqueda && <input type="hidden" name="q" value={busqueda} />}
         {categoriaFiltro && <input type="hidden" name="categoria" value={categoriaFiltro} />}
+        {mostrarInactivos && <input type="hidden" name="inactivos" value="1" />}
         <select name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cuatrimestres.map(c => (<option value={c.id} selected={c.id === cuatrimestreId}>{c.clave}</option>))}</select>
       </form>
     </div>
@@ -264,6 +267,7 @@ No se pudieron cargar algunos datos del dashboard. La página sigue disponible; 
           <option value="">Todas las categorías</option>
           {categoriasFiltro.map(c => (<option value={c} selected={c === categoriaFiltro}>{c} ({catCounts[c]})</option>))}
         </select>
+        <label class="flex items-center gap-1.5 text-sm text-slate-600 whitespace-nowrap"><input type="checkbox" name="inactivos" value="1" checked={mostrarInactivos} onchange="this.form.submit()" /> Mostrar inactivos</label>
         <button type="submit" class="px-4 py-2.5 rounded-xl bg-tup text-white text-sm font-medium">Buscar</button>
         {(busqueda || categoriaFiltro) && (<a href={`/admin/dashboard${qsWithoutSearch}`} class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500">Limpiar</a>)}
       </form>
