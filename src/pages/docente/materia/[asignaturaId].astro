@@ -3,6 +3,7 @@ import LayoutDocente from '../../../layouts/LayoutDocente.astro';
 import { db } from '../../../lib/db';
 import { obtenerCuatrimestreActivo, obtenerCuatrimestres } from '../../../services/catalogos';
 import { obtenerCalificacionDocente } from '../../../services/calificaciones';
+import { loadTeacherStudentScoreVisibility, teacherVisibleStudentScore } from '../../../lib/teacherStudentScoreVisibility';
 import { fetchNativeStudentEvaluationScores, formatScore } from '../../../services/scoring';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
@@ -45,12 +46,14 @@ const { data: grupos } = await cl.from('grupos').select('id,clave,modalidad').eq
 const grupoMap = new Map<number, string>();
 (grupos || []).forEach((g) => grupoMap.set(g.id, g.clave));
 
-const eeRows = (await fetchNativeStudentEvaluationScores(cl, cuatrimestreId))
-  .filter((row) => row.docente_id === entidadId && row.asignatura_id === asignaturaId);
+const teacherEeRows = await fetchNativeStudentEvaluationScores(cl, cuatrimestreId);
+const studentVisibility = await loadTeacherStudentScoreVisibility(entidadId, cuatrimestreId, teacherEeRows);
+const eeRows = teacherEeRows.filter((row) => row.docente_id === entidadId && row.asignatura_id === asignaturaId);
 const eeResponses = eeRows.reduce((total, row) => total + row.respuestas_validas, 0);
-const eeAvg = eeResponses > 0
+const eeAvgRaw = eeResponses > 0
   ? eeRows.reduce((total, row) => total + row.score_normalizado * row.respuestas_validas, 0) / eeResponses
   : null;
+const eeAvg = teacherVisibleStudentScore(studentVisibility, calificacionFinal?.score_encuesta_estudiantil, eeAvgRaw);
 
 const { data: planData } = await cl.from('planeaciones').select('asignatura_id,grupo,puntaje_promedio,estado,comentario_retroalimentacion,observaciones_generales').eq('docente_id', entidadId).eq('cuatrimestre_id', cuatrimestreId).eq('asignatura_id', asignaturaId).order('fecha_subida', { ascending: false });
 const planAprob = (planData||[]).filter(p => p.estado === 'Aprobado');
@@ -80,7 +83,14 @@ const cuatri = cuatrimestres.find(c => c.id === cuatrimestreId) || cuatrimestreA
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
         <p class="text-xs uppercase text-slate-400 font-semibold">Encuesta estudiantil de la materia</p>
         <p class="text-3xl font-bold text-tup mt-2">{formatScore(eeAvg)}</p>
-        <p class="text-xs text-slate-500 mt-1">Promedio nativo de {eeResponses} respuesta{eeResponses === 1 ? '' : 's'} válida{eeResponses === 1 ? '' : 's'}</p>
+        {!studentVisibility.canShowScore ? (
+          <div class="mt-2 text-sm text-amber-800" role="status">
+            <p class="font-medium">{studentVisibility.message}</p>
+            <p class="mt-1">{studentVisibility.description}</p>
+          </div>
+        ) : (
+          <p class="text-xs text-slate-500 mt-1">Promedio nativo de {eeResponses} respuesta{eeResponses === 1 ? '' : 's'} válida{eeResponses === 1 ? '' : 's'}</p>
+        )}
       </div>
       <div class="bg-white rounded-2xl p-5 shadow-tarjeta">
         <p class="text-xs uppercase text-slate-400 font-semibold">Planeación materia</p>

@@ -6,6 +6,7 @@ import { buildVersionedObservationFeedback } from '../../lib/versionedObservatio
 import { obtenerCalificacionDocente } from '../../services/calificaciones';
 import { formatScore } from '../../services/scoring';
 import { buildStudentSurveySummaries, type StudentSurveySummary } from '../../lib/studentSurveyQuestions';
+import { loadTeacherStudentScoreVisibility, teacherVisibleStudentScore } from '../../lib/teacherStudentScoreVisibility';
 
 const token = Astro.cookies.get('sb-access-token')?.value;
 const refresh = Astro.cookies.get('sb-refresh-token')?.value;
@@ -78,6 +79,8 @@ if (calificacionFinal) {
   scores.instrumentos = calificacionFinal.num_instrumentos_completados;
   scores.instrumentosEsperados = calificacionFinal.num_instrumentos_esperados;
 }
+const studentVisibility = await loadTeacherStudentScoreVisibility(docenteIdParaScore, cuatrimestreId);
+scores.promEst = teacherVisibleStudentScore(studentVisibility, scores.promEst) ?? undefined;
 let nombreDocente = '';
 let diagInfo: any = null;
 let coordInfo: any = null;
@@ -137,7 +140,9 @@ let evaluacionEstudiantil: StudentSurveySummary[] = [];
 if (cuatrimestreId) {
   const [comentariosResult, evaluacionResult] = await Promise.all([
     cl.rpc('obtener_comentarios_estudiantiles_validados', { p_cuatrimestre_id: cuatrimestreId }),
-    cl.rpc('obtener_evaluacion_estudiantil_docente', { p_cuatrimestre_id: cuatrimestreId }),
+    studentVisibility.canShowScore && scores.promEst != null
+      ? cl.rpc('obtener_evaluacion_estudiantil_docente', { p_cuatrimestre_id: cuatrimestreId })
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (comentariosResult.error) {
     console.error('[teacher dashboard] validated student comments unavailable', { code: comentariosResult.error.code });
@@ -322,6 +327,7 @@ function planningMiniFeedback(category: PlanningCategory, detail: PlanningDetail
           <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
             <p class="text-xs text-slate-400 uppercase">Estudiantil</p>
             <p class={`text-2xl font-bold mt-1 ${colorN(scores.promEst)}`}>{fmt(scores.promEst)}</p>
+            {!studentVisibility.canShowScore && <p class="mt-2 text-sm font-medium text-amber-800" role="status">{studentVisibility.message}</p>}
           </div>
           <div class="bg-white rounded-2xl p-4 shadow-tarjeta text-center">
             <p class="text-xs text-slate-400 uppercase">Coordinación</p>
@@ -394,7 +400,12 @@ function planningMiniFeedback(category: PlanningCategory, detail: PlanningDetail
         <h2 class="text-2xl font-bold text-slate-800 mt-1">Tu evaluación estudiantil</h2>
         <p class="text-sm text-slate-500 mt-1">Resultado general de todos tus grupos. Cada instrumento se muestra por separado.</p>
       </div>
-      {evaluacionEstudiantil.length === 0 ? (
+      {!studentVisibility.canShowScore ? (
+        <div class="rounded-2xl bg-amber-50 p-6 text-amber-900" role="status">
+          <p class="font-semibold">{studentVisibility.message}</p>
+          <p class="mt-2 text-sm">{studentVisibility.description}</p>
+        </div>
+      ) : evaluacionEstudiantil.length === 0 ? (
         <div class="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-slate-400">
           Aún no hay respuestas de estudiantes para este ciclo.
         </div>

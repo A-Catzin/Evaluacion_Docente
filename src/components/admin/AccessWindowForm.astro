@@ -1,0 +1,45 @@
+---
+import { formatCancunDateTimeLocal } from '../../lib/instrumentSubmissionWindow';
+
+interface Props {
+  title: string;
+  description: string;
+  endpoint: string;
+  cuatrimestreId: number;
+  /** Sent as `purpose` when the endpoint serves several instruments. */
+  purpose?: string;
+  window?: { mode?: string; opens_at?: string | null; closes_at?: string | null } | null;
+  /** Mode preselected when no window is configured; `null` leaves every option unchecked. */
+  defaultMode?: 'manual_closed' | null;
+  openLabel?: string;
+  closedLabel?: string;
+  note?: string;
+}
+
+const {
+  title, description, endpoint, cuatrimestreId, purpose, window,
+  defaultMode = 'manual_closed',
+  openLabel = 'Permite nuevos envíos finales.',
+  closedLabel = 'Bloquea nuevos envíos y conserva el historial.',
+  note,
+} = Astro.props;
+const mode = window?.mode || defaultMode;
+---
+
+<form class="instrument-window-form space-y-5 rounded-2xl bg-white p-6 shadow-tarjeta" data-endpoint={endpoint} data-purpose={purpose}>
+  <input type="hidden" name="cuatrimestre_id" value={cuatrimestreId} />
+  <div><h2 class="text-lg font-semibold text-tup">{title}</h2><p class="mt-1 text-sm text-slate-500">{description}</p>{note && <p class="mt-2 text-xs text-slate-500">{note}</p>}</div>
+  <fieldset><legend class="text-sm font-semibold text-slate-800">Modalidad de recepción</legend><div class="mt-3 space-y-3 text-sm text-slate-700">
+    <label class="selection-card flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4"><input type="radio" name="mode" value="manual_open" checked={mode === 'manual_open'} /><span><strong>Apertura manual</strong><br /><span class="text-slate-500">{openLabel}</span></span></label>
+    <label class="selection-card flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4"><input type="radio" name="mode" value="manual_closed" checked={mode === 'manual_closed'} /><span><strong>Cierre manual</strong><br /><span class="text-slate-500">{closedLabel}</span></span></label>
+    <label class="selection-card flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4"><input type="radio" name="mode" value="scheduled" checked={mode === 'scheduled'} /><span><strong>Ventana programada</strong><br /><span class="text-slate-500">Se abre exactamente al inicio y se cierra exactamente al final.</span></span></label>
+  </div></fieldset>
+  <div class:list={['scheduled-fields grid gap-4 rounded-xl border border-slate-200 p-4 sm:grid-cols-2', { hidden: mode !== 'scheduled' }]}>
+    <label class="text-sm font-medium text-slate-700">Inicio<input name="opens_at" type="datetime-local" value={formatCancunDateTimeLocal(window?.opens_at ?? null)} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+    <label class="text-sm font-medium text-slate-700">Cierre<input name="closes_at" type="datetime-local" value={formatCancunDateTimeLocal(window?.closes_at ?? null)} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+    <p class="sm:col-span-2 text-xs text-slate-500">Las fechas se interpretan siempre en America/Cancun, sin usar la zona horaria del navegador.</p>
+  </div>
+  <p class="window-error hidden rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert"></p>
+  <p class="window-success hidden rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800" role="status"></p>
+  <button class="rounded-xl bg-tup px-5 py-2.5 text-sm font-semibold text-white">Guardar acceso</button>
+</form>

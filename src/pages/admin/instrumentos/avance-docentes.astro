@@ -7,6 +7,7 @@ import {
   summarizeTeacherProgress, TEACHER_PROGRESS_STATES, type TeacherProgress,
 } from '../../../lib/studentSurveyTeacherProgress';
 import InactiveBadge from '../../../components/admin/InactiveBadge.astro';
+import { teacherProgressCsv } from '../../../lib/studentSurveyTeacherProgressCsv';
 
 const auth = await requireRole(Astro.cookies, ['superadmin']);
 Astro.response.headers.set('Cache-Control', 'private, no-store');
@@ -35,6 +36,28 @@ try {
 }
 const teachers = filterTeacherProgress(allTeachers, filters);
 const summary = summarizeTeacherProgress(allTeachers);
+
+if (Astro.url.searchParams.get('formato') === 'csv') {
+  if (loadError || !cuatrimestreId) {
+    return new Response('No se pudo generar el archivo de avance.', {
+      status: loadError ? 503 : 400,
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
+  }
+  const cycleLabel = cycleList.find((cycle) => cycle.id === cuatrimestreId)?.clave || String(cuatrimestreId);
+  return new Response(teacherProgressCsv(teachers, cycleLabel), {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="avance-docentes-ciclo-${cuatrimestreId}.csv"`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+const csvParams = new URLSearchParams({
+  cuatrimestre: String(cuatrimestreId), q: filters.q, estado: filters.state, formato: 'csv',
+});
+const csvDownloadUrl = `/admin/instrumentos/avance-docentes?${csvParams.toString()}`;
 
 const pct = (value: number) => `${value.toLocaleString('es-MX', { maximumFractionDigits: 1 })}%`;
 const barColor = (value: number) => (value >= 80 ? 'bg-emerald-500' : value >= 40 ? 'bg-amber-500' : 'bg-red-500');
@@ -93,8 +116,9 @@ const barColor = (value: number) => (value >= 80 ? 'bg-emerald-500' : value >= 4
               {Object.entries(TEACHER_PROGRESS_STATES).map(([value, label]) => <option value={value} selected={value === filters.state}>{label}</option>)}
             </select>
           </label>
-          <div class="flex items-end">
+          <div class="flex flex-wrap items-end gap-2">
             <button type="submit" class="rounded-xl bg-tup px-4 py-2 font-semibold text-white">Filtrar</button>
+            {cuatrimestreId > 0 && <a href={csvDownloadUrl} download class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-tup hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tup">Descargar CSV</a>}
           </div>
         </form>
 

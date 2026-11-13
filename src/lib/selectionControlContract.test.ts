@@ -26,7 +26,7 @@ describe("selection card accessibility contract", () => {
       "../pages/docente/autodiagnostico.astro",
       "../pages/admin/evaluar-docentes/coordinacion.astro",
       "../pages/admin/planeaciones/evaluar/[id].astro",
-      "../pages/admin/planeaciones/acceso.astro",
+      "../components/admin/AccessWindowForm.astro",
       "../pages/admin/asignaciones.astro",
       "../pages/admin/avisos.astro",
       "../pages/admin/usuarios.astro",

@@ -865,3 +865,14 @@ describe("scoring", () => {
     });
   });
 });
+
+describe('instruments closed without a capture', () => {
+  it('counts a closed missing coordination and observation as 0 and leaves the Parcial category', () => {
+    const open = calcFinalScore({ ee: 90, plan: 100, auto: 80 }, 'Escolarizado');
+    expect(open.category).toBe('Parcial');
+    const closed = calcFinalScore({ ee: 90, coord: 0, plan: 100, obs: 0, auto: 80 }, 'Escolarizado');
+    expect(closed.instrumentCount).toBe(5);
+    expect(closed.final).toBe(50.5);
+    expect(closed.category).not.toBe('Parcial');
+  });
+});

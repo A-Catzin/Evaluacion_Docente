@@ -14,7 +14,7 @@ const { count: planeacionesAprobadas } = await cliente.from('planeaciones').sele
 const { count: coordinacion } = await cliente.from('evaluacion_coordinacion').select('*', { count: 'exact', head: true });
 const nativeScores = cuatrimestre ? await fetchNativeStudentEvaluationScores(dbAdmin(), cuatrimestre.id) : [];
 const encuestas = nativeScores.reduce((count, row) => count + row.respuestas_validas, 0);
-const autodiagnosticoAccess = cuatrimestre ? `/admin/autodiagnostico/acceso?cuatrimestre=${cuatrimestre.id}` : '/admin/autodiagnostico/acceso';
+const autodiagnosticoAccess = cuatrimestre ? `/admin/instrumentos/acceso?cuatrimestre=${cuatrimestre.id}` : '/admin/instrumentos/acceso';
 
 const instrumentos = [
   { nombre: 'Autoevaluación Docente', peso: '5%', total: autodiag || 0, reactivos: 24, escala: '1-5', ruta: '/docente/autodiagnostico', editar: '/admin/instrumentos/editar?inst=autodiagnostico', acceso: autodiagnosticoAccess, color: 'border-l-purple-500' },

@@ -24,6 +24,8 @@ El mismo perfil de 4 instrumentos se usa en las modalidades ejecutiva e inglés.
 
 Los pesos y las categorías viven en `src/services/scoring.ts` y `src/lib/categoria360.ts`.
 
+En el portal docente, la calificación estudiantil se muestra a partir del **50 % de participación** del docente en el ciclo seleccionado (respuestas nativas válidas respecto de inscripciones elegibles). Por debajo se muestra **“Participación estudiantil baja”**, sin nota, gráfica estudiantil ni promedios por reactivo, tanto en el dashboard como en el detalle de materia. Esta regla de visualización no modifica la calificación 360 guardada ni el umbral de cálculo de los reportes administrativos.
+
 ## Stack
 
 | Capa | Tecnología |
@@ -49,6 +51,8 @@ Los pesos y las categorías viven en `src/services/scoring.ts` y `src/lib/catego
 | Pendiente | Acceso no resuelto; no habilita ningún portal |
 
 El acceso se resuelve contra coincidencias exactas, únicas y activas del correo institucional en el padrón. Los roles explícitos de personal se conservan; las coincidencias ambiguas o ausentes quedan en `pendiente`.
+
+En **Avance de encuesta por docente** (`/admin/instrumentos/avance-docentes`), el superadmin puede usar **Descargar CSV** para exportar el ciclo y los filtros aplicados. El archivo incluye los totales por docente y el detalle por materia y grupos, una fila por materia, sin respuestas individuales. Conserva el orden de menor a mayor avance y es compatible con Excel.
 
 ## Estructura del proyecto
 

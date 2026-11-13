@@ -10,6 +10,8 @@ import {
   verificarLimiteEnviosEstudiante,
 } from "../../../lib/rateLimit";
 import { specializedInstrumentFromCode } from "../../../lib/studentEvaluations";
+import { readCycleWindows } from "../../../lib/instrumentNotDone";
+import { studentSurveyAcceptsSubmissions } from "../../../lib/instrumentWindowState";
 import {
   EstudianteEvaluacionSchema,
   InstrumentoEspecializadoSchema,
@@ -97,6 +99,23 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const comment = moderacion.valorNormalizado;
 
   try {
+    // A configured student-survey window blocks submissions while it is not open.
+    const { data: grupoVentana } = await client
+      .from("grupos")
+      .select("cuatrimestre_id")
+      .eq("id", grupo_id)
+      .maybeSingle();
+    if (grupoVentana?.cuatrimestre_id) {
+      const windows = await readCycleWindows(client, grupoVentana.cuatrimestre_id);
+      const surveyWindow = windows.find((item) => item.purpose === "student_survey");
+      if (!studentSurveyAcceptsSubmissions(surveyWindow)) {
+        return json(
+          { error: "La encuesta estudiantil no está disponible en este momento.", code: "survey_closed" },
+          403,
+        );
+      }
+    }
+
     // Verificar límite de frecuencia usando la tabla de control de envíos.
     const { data: perfil, error: perfilError } = await client
       .from("usuarios")

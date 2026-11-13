@@ -9,6 +9,8 @@ import {
 } from "../lib/planningSubjectScope";
 import { categoryForScore } from "../lib/categoria360";
 import { isAutodiagnosticoClosedForCycle } from "../lib/autodiagnosticoSubmissionWindow";
+import { eligibleEnrollmentsByTeacher, loadClosedInstruments, teachersWithAssignment } from "../lib/instrumentNotDone";
+import { meetsStudentParticipation } from "../lib/studentParticipation";
 import {
   getPlanningSubjectStatus,
   type PlanningSubjectStatus,
@@ -128,6 +130,14 @@ export interface InstrumentScores {
   auto?: number;
   /** The self-assessment window closed without a submission: it counts as 0 and is shown as "No realizado". */
   autoNotDone?: boolean;
+  /** The coordination window closed without a capture for an assigned teacher: it counts as 0. */
+  coordNotDone?: boolean;
+  /** The observation window closed without a capture for an assigned teacher: it counts as 0. */
+  obsNotDone?: boolean;
+  /** The student survey closed without a response for a teacher with eligible students: it counts as 0. */
+  eeNotDone?: boolean;
+  /** Fewer eligible students answered than the minimum participation: the student score is left out. */
+  eeBelowThreshold?: boolean;
   /** Whether the aggregate planning score represents at least one delivered plan. */
   planCompleted?: boolean;
   invalidPurposes?: Array<"coordination" | "planning" | "observation">;
@@ -381,10 +391,10 @@ export async function fetchCuatrimestreScores(
     if (!latestVersioned.has(row.purpose))
       latestVersioned.set(row.purpose, row);
 
-  const ee = aggregateNativeScoresByTeacher(eeData).get(docenteId);
+  let ee = aggregateNativeScoresByTeacher(eeData).get(docenteId);
   const coordValue = (coordData as any[])?.[0]?.score_normalizado;
   const coordCapture = latestVersioned.get("coordination");
-  const coord =
+  let coord =
     coordCapture?.validity_status === "valid"
       ? Number(coordCapture.normalized_score)
       : coordCapture
@@ -423,10 +433,45 @@ export async function fetchCuatrimestreScores(
     obs = Number(observationCapture.normalized_score);
   if (observationCapture?.validity_status === "invalid_excessive_na")
     obs = undefined;
+
+  // A closed capture window turns a missing evaluation of an assigned teacher into a 0.
+  const closed = await loadClosedInstruments(cl, cuatrimestreId);
+  const coordNotDone =
+    coord === undefined &&
+    !coordCapture &&
+    closed.coordination &&
+    (await teachersWithAssignment(cl, "coordination", [docenteId], cuatrimestreId)).has(docenteId);
+  if (coordNotDone) coord = 0;
+  const obsNotDone =
+    obs === undefined &&
+    !observationCapture &&
+    closed.observation &&
+    (await teachersWithAssignment(cl, "observation", [docenteId], cuatrimestreId)).has(docenteId);
+  if (obsNotDone) obs = 0;
+  // The student score enters the result only with enough participation; a closed survey
+  // without any response of a teacher with eligible students counts as 0.
+  const eligible = await eligibleEnrollmentsByTeacher(cl, [docenteId], cuatrimestreId)
+    .then((counts) => counts.get(docenteId) ?? 0)
+    .catch(() => 0);
+  const eeResponses = ((eeData || []) as NativeStudentEvaluationScore[])
+    .filter((row) => Number(row.docente_id) === docenteId && Number(row.respuestas_validas) > 0)
+    .reduce((sum, row) => sum + Number(row.respuestas_validas), 0);
+  const eeBelowThreshold = ee !== undefined && eligible > 0 && !meetsStudentParticipation(eeResponses, eligible);
+  if (eeBelowThreshold) ee = undefined;
+  const eeNotDone = !eeBelowThreshold && ee === undefined && closed.student_survey && eligible > 0;
+  if (eeNotDone) ee = 0;
   const invalidPurposes = [...latestVersioned.values()]
     .filter((row) => row.validity_status === "invalid_excessive_na")
     .map((row) => row.purpose);
-  return { ee, coord, plan, obs, auto, autoNotDone: autoNotDone || undefined, invalidPurposes };
+  return {
+    ee, coord, plan, obs, auto,
+    autoNotDone: autoNotDone || undefined,
+    coordNotDone: coordNotDone || undefined,
+    obsNotDone: obsNotDone || undefined,
+    eeNotDone: eeNotDone || undefined,
+    eeBelowThreshold: eeBelowThreshold || undefined,
+    invalidPurposes,
+  };
 }
 
 export type SubjectInstrumentScores = InstrumentScores & {
@@ -628,9 +673,9 @@ export function calculateSubjectAwareFinal(
     // fetchCuatrimestreScores supplies these teacher-level values in production.
     // The first available fallback keeps direct callers from double-averaging
     // subject detail rows when they do not have that snapshot.
-    ee:
-      teacherScores?.ee ??
-      firstAvailable(calculated.map((subject) => subject.ee)),
+    ee: teacherScores?.eeBelowThreshold
+      ? undefined
+      : (teacherScores?.ee ?? firstAvailable(calculated.map((subject) => subject.ee))),
     coord:
       teacherScores?.coord ??
       firstAvailable(calculated.map((subject) => subject.coord)),
@@ -649,6 +694,10 @@ export function calculateSubjectAwareFinal(
       teacherScores?.auto ??
       firstAvailable(calculated.map((subject) => subject.auto)),
     autoNotDone: teacherScores?.autoNotDone,
+    coordNotDone: teacherScores?.coordNotDone,
+    obsNotDone: teacherScores?.obsNotDone,
+    eeNotDone: teacherScores?.eeNotDone,
+    eeBelowThreshold: teacherScores?.eeBelowThreshold,
     invalidPurposes,
   };
   const hasApprovedPlan = calculated.some(
@@ -950,6 +999,22 @@ export async function fetchBatchScoresPorDocente(
   const expectedSelfAssess = autoClosed
     ? await teachersExpectedToSelfAssess(cl, docenteIds.filter((id) => !diagMap.has(id)), cuatrimestreId)
     : new Set<number>();
+  const closedInstruments = await loadClosedInstruments(cl, cuatrimestreId);
+  const coordAssigned = closedInstruments.coordination
+    ? await teachersWithAssignment(cl, "coordination", docenteIds, cuatrimestreId)
+    : new Set<number>();
+  const obsAssigned = closedInstruments.observation
+    ? await teachersWithAssignment(cl, "observation", docenteIds, cuatrimestreId)
+    : new Set<number>();
+  const eligibleByTeacher = await eligibleEnrollmentsByTeacher(cl, docenteIds, cuatrimestreId).catch(
+    () => new Map<number, number>(),
+  );
+  const responsesByTeacher = new Map<number, number>();
+  for (const row of (eeData || []) as NativeStudentEvaluationScore[]) {
+    if (Number(row.respuestas_validas) > 0) {
+      responsesByTeacher.set(row.docente_id, (responsesByTeacher.get(row.docente_id) ?? 0) + Number(row.respuestas_validas));
+    }
+  }
   const result = new Map<number, InstrumentScores>();
   for (const id of docenteIds) {
     const planAcc = planMap.get(id);
@@ -964,13 +1029,25 @@ export async function fetchBatchScoresPorDocente(
           : undefined
         : fallback;
     };
+    const coordScore = validScore("coordination", coordMap.get(id));
+    const obsScore = validScore("observation", obsMap.get(id));
+    const coordNotDone = coordScore === undefined && !versioned?.has("coordination") && coordAssigned.has(id);
+    const obsNotDone = obsScore === undefined && !versioned?.has("observation") && obsAssigned.has(id);
+    const eligible = eligibleByTeacher.get(id) ?? 0;
+    const eeBelowThreshold =
+      eeMap.get(id) !== undefined && eligible > 0 && !meetsStudentParticipation(responsesByTeacher.get(id) ?? 0, eligible);
+    const eeNotDone = !eeBelowThreshold && eeMap.get(id) === undefined && closedInstruments.student_survey && eligible > 0;
     result.set(id, {
-      ee: eeMap.get(id),
-      coord: validScore("coordination", coordMap.get(id)),
+      ee: eeBelowThreshold ? undefined : eeNotDone ? 0 : eeMap.get(id),
+      eeNotDone: eeNotDone || undefined,
+      eeBelowThreshold: eeBelowThreshold || undefined,
+      coord: coordNotDone ? 0 : coordScore,
       plan: validScore("planning", plan),
-      obs: validScore("observation", obsMap.get(id)),
+      obs: obsNotDone ? 0 : obsScore,
       auto: autoNotDone ? 0 : diagMap.get(id),
       autoNotDone: autoNotDone || undefined,
+      coordNotDone: coordNotDone || undefined,
+      obsNotDone: obsNotDone || undefined,
       invalidPurposes: [...(versioned?.values() || [])]
         .filter((capture) => capture.validity_status === "invalid_excessive_na")
         .map((capture) => capture.purpose),

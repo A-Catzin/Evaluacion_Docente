@@ -1,3 +1,4 @@
+import { visibleStudentScore } from "../../../lib/studentParticipation";
 import type { APIRoute } from "astro";
 import { requireRole, AuthError } from "../../../lib/auth";
 import { dbAdmin } from "../../../lib/db";
@@ -108,7 +109,7 @@ function buildTeacherRows(
     teacher.email,
     group,
     subject,
-    formatScoreCsv(ee),
+    formatScoreCsv(visibleStudentScore(score.score_encuesta_estudiantil, ee)),
     formatScoreCsv(score.score_coordinacion),
     planning,
     planningState,

@@ -1,7 +1,7 @@
 ---
 import LayoutAdmin from '../../../layouts/LayoutAdmin.astro';
 import { requireRole } from '../../../lib/auth';
-import { formatCancunDateTimeLocal } from '../../../lib/instrumentSubmissionWindow';
+import AccessWindowForm from '../../../components/admin/AccessWindowForm.astro';
 
 const auth = await requireRole(Astro.cookies, ['superadmin']);
 const { data: cycleData, error: cyclesError } = await auth.client
@@ -15,41 +15,28 @@ const activeCycle = cycles.find((cycle) => cycle.activo);
 const cuatrimestreId = requestedCycle?.id || activeCycle?.id || cycles[0]?.id || 0;
 const { data: windowsData, error: windowsError } = await auth.client.rpc('instrument_submission_window_admin_list');
 const windows = windowsError ? [] : windowsData || [];
-const purposes = [
-  { value: 'coordination', title: 'Evaluación por coordinación', description: 'Las personas coordinadoras pueden enviar evaluaciones finales.' },
-  { value: 'observation', title: 'Observación de clase', description: 'Coordinadores y observadores pueden enviar observaciones finales.' },
-] as const;
+const { data: planningData, error: planningError } = await auth.client.rpc('planning_submission_window_admin_list');
+const { data: selfData, error: selfError } = await auth.client.rpc('autodiagnostico_submission_window_admin_list');
+const planningWindow = (planningError ? [] : planningData || []).find((item: any) => Number(item.cuatrimestre_id) === cuatrimestreId) as any;
+const selfWindow = (selfError ? [] : selfData || []).find((item: any) => Number(item.cuatrimestre_id) === cuatrimestreId) as any;
+const instrumentWindow = (purpose: string) => windows.find((item: any) => Number(item.cuatrimestre_id) === cuatrimestreId && item.purpose === purpose) as any;
+const INSTRUMENT_ENDPOINT = '/api/admin/instrumentos/acceso';
 const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
 ---
 
 <LayoutAdmin titulo="Acceso a instrumentos — Admin">
   <section class="animate-flotar-entrada mx-auto max-w-3xl">
     <a href={`/admin/instrumentos${qs}`} class="text-sm text-tup hover:underline">← Volver a instrumentos</a>
-    <div class="mt-4 mb-6"><h1 class="text-3xl font-bold text-tup">Acceso a instrumentos</h1><p class="mt-1 text-sm text-slate-500">La configuración aplica únicamente al cuatrimestre seleccionado. Sin configuración, los envíos finales permanecen cerrados y los historiales se conservan.</p></div>
+    <div class="mt-4 mb-6"><h1 class="text-3xl font-bold text-tup">Acceso a instrumentos</h1><p class="mt-1 text-sm text-slate-500">La configuración aplica únicamente al cuatrimestre seleccionado. Sin configuración, los envíos finales permanecen cerrados (la encuesta estudiantil permanece abierta) y los historiales se conservan. Al cerrar un instrumento, la evaluación faltante de un docente esperado cuenta como 0.</p><a href="/admin/planeaciones/diagnostico" class="mt-2 inline-block text-sm text-tup hover:underline">Diagnosticar carga y almacenamiento de planeaciones</a></div>
     {cyclesError ? <p class="mb-6 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">No fue posible cargar los cuatrimestres disponibles.</p> : <form method="GET" class="mb-6 flex items-center gap-3"><label class="text-sm font-medium text-slate-700" for="cycle">Cuatrimestre</label><select id="cycle" name="cuatrimestre" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">{cycles.map((cycle) => <option value={cycle.id} selected={cycle.id === cuatrimestreId}>{cycle.clave}</option>)}</select></form>}
     {windowsError && cuatrimestreId ? <p class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="alert">No fue posible cargar la configuración actual. El acceso se muestra cerrado por seguridad.</p> : null}
-    {cuatrimestreId ? <div class="space-y-6">{purposes.map((purpose) => {
-      const window = windows.find((item: any) => Number(item.cuatrimestre_id) === cuatrimestreId && item.purpose === purpose.value) as any;
-      const mode = window?.mode || 'manual_closed';
-      return <form class="instrument-window-form space-y-5 rounded-2xl bg-white p-6 shadow-tarjeta" data-purpose={purpose.value}>
-        <input type="hidden" name="cuatrimestre_id" value={cuatrimestreId} />
-        <input type="hidden" name="purpose" value={purpose.value} />
-        <div><h2 class="text-lg font-semibold text-tup">{purpose.title}</h2><p class="mt-1 text-sm text-slate-500">{purpose.description}</p></div>
-        <fieldset><legend class="text-sm font-semibold text-slate-800">Modalidad de recepción</legend><div class="mt-3 space-y-3 text-sm text-slate-700">
-          <label class="selection-card flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4"><input type="radio" name="mode" value="manual_open" checked={mode === 'manual_open'} /><span><strong>Apertura manual</strong><br /><span class="text-slate-500">Permite nuevos envíos finales.</span></span></label>
-          <label class="selection-card flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4"><input type="radio" name="mode" value="manual_closed" checked={mode === 'manual_closed'} /><span><strong>Cierre manual</strong><br /><span class="text-slate-500">Bloquea nuevos envíos y conserva el historial.</span></span></label>
-          <label class="selection-card flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4"><input type="radio" name="mode" value="scheduled" checked={mode === 'scheduled'} /><span><strong>Ventana programada</strong><br /><span class="text-slate-500">Se abre exactamente al inicio y se cierra exactamente al final.</span></span></label>
-        </div></fieldset>
-        <div class:list={['scheduled-fields grid gap-4 rounded-xl border border-slate-200 p-4 sm:grid-cols-2', { hidden: mode !== 'scheduled' }]}>
-          <label class="text-sm font-medium text-slate-700">Inicio<input name="opens_at" type="datetime-local" value={formatCancunDateTimeLocal(window?.opens_at)} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
-          <label class="text-sm font-medium text-slate-700">Cierre<input name="closes_at" type="datetime-local" value={formatCancunDateTimeLocal(window?.closes_at)} class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
-          <p class="sm:col-span-2 text-xs text-slate-500">Las fechas se interpretan siempre en America/Cancun, sin usar la zona horaria del navegador.</p>
-        </div>
-        <p class="window-error hidden rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert"></p>
-        <p class="window-success hidden rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800" role="status"></p>
-        <button class="rounded-xl bg-tup px-5 py-2.5 text-sm font-semibold text-white">Guardar acceso</button>
-      </form>;
-    })}</div> : <p class="rounded-2xl bg-white p-6 text-sm text-slate-500 shadow-tarjeta">No hay cuatrimestres disponibles.</p>}
+    {cuatrimestreId ? <div class="space-y-6">
+      <AccessWindowForm title="Encuesta estudiantil" description="Los estudiantes pueden responder la encuesta de sus docentes. Al cerrar, un docente con estudiantes elegibles y sin respuestas queda en 0." note="Sin configuración la encuesta permanece abierta, como hasta ahora. Una vez configurada, solo recibe respuestas mientras la ventana esté abierta." endpoint={INSTRUMENT_ENDPOINT} purpose="student_survey" cuatrimestreId={cuatrimestreId} window={instrumentWindow('student_survey')} defaultMode={null} openLabel="Los estudiantes pueden enviar su encuesta." closedLabel="Bloquea nuevas respuestas y conserva las enviadas." />
+      <AccessWindowForm title="Evaluación por coordinación" description="Las personas coordinadoras pueden enviar evaluaciones finales. Al cerrar, un docente asignado y sin evaluación queda en 0." endpoint={INSTRUMENT_ENDPOINT} purpose="coordination" cuatrimestreId={cuatrimestreId} window={instrumentWindow('coordination')} />
+      <AccessWindowForm title="Observación de clase" description="Coordinadores y observadores pueden enviar observaciones finales. Al cerrar, un docente asignado y sin observación queda en 0." endpoint={INSTRUMENT_ENDPOINT} purpose="observation" cuatrimestreId={cuatrimestreId} window={instrumentWindow('observation')} />
+      <AccessWindowForm title="Planeaciones didácticas" description="Los docentes pueden enviar y reenviar sus planeaciones. Sin configuración, las entregas permanecen cerradas." endpoint="/api/admin/planeaciones/acceso" cuatrimestreId={cuatrimestreId} window={planningWindow} openLabel="Los docentes pueden enviar y reenviar planeaciones." closedLabel="Los docentes conservan la consulta de sus PDFs y retroalimentación." />
+      <AccessWindowForm title="Autoevaluación docente" description="Los docentes pueden enviar su autoevaluación. Sin configuración, las nuevas autoevaluaciones permanecen cerradas." endpoint="/api/admin/autodiagnostico/acceso" cuatrimestreId={cuatrimestreId} window={selfWindow} openLabel="Los docentes pueden enviar su autoevaluación." closedLabel="Conserva el historial completado y bloquea únicamente nuevos envíos." />
+    </div> : <p class="rounded-2xl bg-white p-6 text-sm text-slate-500 shadow-tarjeta">No hay cuatrimestres disponibles.</p>}
   </section>
 </LayoutAdmin>
 
@@ -63,9 +50,13 @@ const qs = cuatrimestreId ? `?cuatrimestre=${cuatrimestreId}` : '';
     form.addEventListener('submit', async function(event) {
       event.preventDefault(); error.classList.add('hidden'); success.classList.add('hidden');
       var data = new FormData(form); var unavailableMessage = 'El servicio de configuración de acceso no está disponible. Inténtalo de nuevo.';
+      var mode = data.get('mode');
+      if (!mode) { error.textContent = 'Selecciona una modalidad de recepción.'; error.classList.remove('hidden'); return; }
       try {
-        var mode = data.get('mode'); var isScheduled = mode === 'scheduled';
-        var response = await fetch('/api/admin/instrumentos/acceso', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cuatrimestre_id: Number(data.get('cuatrimestre_id')), purpose: data.get('purpose'), mode: mode, opens_at: isScheduled ? data.get('opens_at') : null, closes_at: isScheduled ? data.get('closes_at') : null }) });
+        var isScheduled = mode === 'scheduled';
+        var payload = { cuatrimestre_id: Number(data.get('cuatrimestre_id')), mode: mode, opens_at: isScheduled ? data.get('opens_at') : null, closes_at: isScheduled ? data.get('closes_at') : null };
+        if (form.dataset.purpose) payload.purpose = form.dataset.purpose;
+        var response = await fetch(form.dataset.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         var result = await response.json().catch(function() { return {}; });
         if (!response.ok) { error.textContent = result.error || unavailableMessage; error.classList.remove('hidden'); return; }
         success.textContent = 'La configuración de acceso fue guardada.'; success.classList.remove('hidden');

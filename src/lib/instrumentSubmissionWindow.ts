@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const INSTRUMENT_SUBMISSION_TIME_ZONE = "America/Cancun";
 
 export type InstrumentSubmissionPurpose = "coordination" | "observation";
+/** Purposes with a configurable window; the student survey is gated only once a window is configured. */
+export type InstrumentWindowPurpose = InstrumentSubmissionPurpose | "student_survey";
 export type InstrumentSubmissionMode =
   | "manual_open"
   | "manual_closed"
@@ -200,7 +202,7 @@ export function parseInstrumentSubmissionWindowInput(
   const mode = body.mode;
   if (
     !cuatrimestreId ||
-    !["coordination", "observation"].includes(String(purpose)) ||
+    !["coordination", "observation", "student_survey"].includes(String(purpose)) ||
     !["manual_open", "manual_closed", "scheduled"].includes(String(mode))
   ) {
     return {
@@ -213,7 +215,7 @@ export function parseInstrumentSubmissionWindowInput(
       ok: true as const,
       value: {
         cuatrimestreId,
-        purpose: purpose as InstrumentSubmissionPurpose,
+        purpose: purpose as InstrumentWindowPurpose,
         mode: mode as InstrumentSubmissionMode,
         opensAt: null,
         closesAt: null,
@@ -233,7 +235,7 @@ export function parseInstrumentSubmissionWindowInput(
     ok: true as const,
     value: {
       cuatrimestreId,
-      purpose: purpose as InstrumentSubmissionPurpose,
+      purpose: purpose as InstrumentWindowPurpose,
       mode: "scheduled" as const,
       opensAt: opensAt.toISOString(),
       closesAt: closesAt.toISOString(),
