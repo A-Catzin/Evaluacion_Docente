@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { AuthError, requireRole } from "../../../lib/auth";
+import { dbAdmin } from "../../../lib/db";
 import {
   MAX_COMENTARIO_LONGITUD,
   validarComentarioOpcional,
@@ -197,8 +198,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         if (grupo?.docente_id && grupo?.cuatrimestre_id) {
           recalcDocenteId = Number(grupo.docente_id);
           recalcCuatrimestreId = Number(grupo.cuatrimestre_id);
+          // Score RPCs require a staff role, so the student's own client cannot run them.
           await recalcularCalificacionDocente(
-            client,
+            dbAdmin(),
             recalcDocenteId,
             recalcCuatrimestreId,
           );
